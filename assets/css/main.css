@@ -1,0 +1,52 @@
+/* Base background gradient */
+body {
+  background: radial-gradient(circle at top, #104e54 0%, #041f21 100%);
+  min-height: 100vh;
+}
+
+/* Glass effect utilities */
+.glass {
+  background: rgba(13, 92, 99, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.glass-input {
+  background: rgba(31, 108, 117, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Primary gradient button */
+.btn-primary {
+  background: linear-gradient(135deg, #fc4a1a, #f7b733);
+  transition: transform 0.2s ease-out;
+}
+
+.btn-primary:hover {
+  transform: scale(1.02);
+}
+
+/* Eyebrow text style */
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  font-size: 0.55rem;
+  opacity: 0.65;
+}
+
+/* Smooth fade-in animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
