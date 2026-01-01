@@ -6,14 +6,28 @@
           Unhooked
         </NuxtLink>
         <div class="space-x-4">
-          <NuxtLink
-            to="/dashboard"
-            class="text-white-85 hover:text-white transition"
-          >
-            Dashboard
-          </NuxtLink>
+          <template v-if="user">
+            <NuxtLink
+              to="/dashboard"
+              class="text-white-85 hover:text-white transition"
+            >
+              Dashboard
+            </NuxtLink>
+          </template>
+          <template v-else>
+            <NuxtLink
+              to="/login"
+              class="text-white-85 hover:text-white transition"
+            >
+              Continue your journey
+            </NuxtLink>
+          </template>
         </div>
       </nav>
     </div>
   </header>
 </template>
+
+<script setup lang="ts">
+const user = useSupabaseUser()
+</script>

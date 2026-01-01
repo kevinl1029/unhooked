@@ -3,8 +3,17 @@ export default defineNuxtConfig({
 
   modules: [
     '@nuxtjs/tailwindcss',
-    '@nuxtjs/google-fonts'
+    '@nuxtjs/google-fonts',
+    '@nuxtjs/supabase'
   ],
+
+  supabase: {
+    redirectOptions: {
+      login: '/login',
+      callback: '/auth/callback',
+      exclude: ['/', '/login'],
+    }
+  },
 
   googleFonts: {
     families: {
