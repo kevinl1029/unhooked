@@ -1,0 +1,310 @@
+interface WordTiming {
+  word: string
+  startMs: number
+  endMs: number
+}
+
+interface TTSResponse {
+  audio: string // base64
+  contentType: string
+  wordTimings: WordTiming[]
+  estimatedDurationMs: number
+  voice: string
+}
+
+interface TranscribeResponse {
+  text: string
+  duration: number | null
+  language: string | null
+}
+
+export const useVoiceSession = () => {
+  // State
+  const isAISpeaking = ref(false)
+  const isRecording = ref(false)
+  const isProcessing = ref(false)
+  const currentWordIndex = ref(-1)
+  const currentTranscript = ref('')
+  const error = ref<string | null>(null)
+
+  // Audio playback refs
+  let audioElement: HTMLAudioElement | null = null
+  let wordTimings: WordTiming[] = []
+  let playbackStartTime = 0
+  let wordTimingInterval: ReturnType<typeof setInterval> | null = null
+
+  // Audio recorder
+  const recorder = useAudioRecorder()
+
+  // Synthesize text to speech and play it
+  const playAIResponse = async (text: string): Promise<boolean> => {
+    if (!text.trim()) return false
+
+    error.value = null
+    isProcessing.value = true
+    currentTranscript.value = text
+    currentWordIndex.value = -1
+
+    try {
+      // Call TTS API
+      const response = await $fetch<TTSResponse>('/api/voice/synthesize', {
+        method: 'POST',
+        body: { text }
+      })
+
+      wordTimings = response.wordTimings
+      isProcessing.value = false
+
+      // Create audio element and play
+      const audioBlob = base64ToBlob(response.audio, response.contentType)
+      const audioUrl = URL.createObjectURL(audioBlob)
+
+      // Clean up previous audio
+      if (audioElement) {
+        audioElement.pause()
+        URL.revokeObjectURL(audioElement.src)
+      }
+
+      audioElement = new Audio(audioUrl)
+
+      return new Promise((resolve) => {
+        audioElement!.onplay = () => {
+          isAISpeaking.value = true
+          playbackStartTime = Date.now()
+          startWordTracking()
+        }
+
+        audioElement!.onended = () => {
+          isAISpeaking.value = false
+          currentWordIndex.value = wordTimings.length - 1 // Show last word
+          stopWordTracking()
+          URL.revokeObjectURL(audioUrl)
+          resolve(true)
+        }
+
+        audioElement!.onerror = (e) => {
+          console.error('[useVoiceSession] Audio playback error:', e)
+          error.value = 'Failed to play audio'
+          isAISpeaking.value = false
+          stopWordTracking()
+          URL.revokeObjectURL(audioUrl)
+          resolve(false)
+        }
+
+        audioElement!.play().catch((e) => {
+          console.error('[useVoiceSession] Audio play() failed:', e)
+          error.value = 'Failed to start audio playback'
+          isAISpeaking.value = false
+          resolve(false)
+        })
+      })
+    } catch (e: any) {
+      console.error('[useVoiceSession] TTS error:', e)
+      error.value = e.data?.message || e.message || 'Failed to synthesize speech'
+      isProcessing.value = false
+      return false
+    }
+  }
+
+  // Start word tracking during playback
+  const startWordTracking = () => {
+    stopWordTracking() // Clear any existing interval
+
+    wordTimingInterval = setInterval(() => {
+      if (!isAISpeaking.value || !audioElement) {
+        stopWordTracking()
+        return
+      }
+
+      const currentTime = audioElement.currentTime * 1000 // Convert to ms
+
+      // Find the current word based on playback time
+      for (let i = wordTimings.length - 1; i >= 0; i--) {
+        if (currentTime >= wordTimings[i].startMs) {
+          if (currentWordIndex.value !== i) {
+            currentWordIndex.value = i
+          }
+          break
+        }
+      }
+    }, 50) // Update every 50ms for smooth tracking
+  }
+
+  const stopWordTracking = () => {
+    if (wordTimingInterval) {
+      clearInterval(wordTimingInterval)
+      wordTimingInterval = null
+    }
+  }
+
+  // Pause audio playback
+  const pauseAudio = () => {
+    if (audioElement && isAISpeaking.value) {
+      audioElement.pause()
+      isAISpeaking.value = false
+      stopWordTracking()
+    }
+  }
+
+  // Resume audio playback
+  const resumeAudio = () => {
+    if (audioElement && !isAISpeaking.value) {
+      audioElement.play().then(() => {
+        isAISpeaking.value = true
+        startWordTracking()
+      }).catch((e) => {
+        console.error('[useVoiceSession] Resume failed:', e)
+        error.value = 'Failed to resume audio'
+      })
+    }
+  }
+
+  // Stop audio completely
+  const stopAudio = () => {
+    if (audioElement) {
+      audioElement.pause()
+      audioElement.currentTime = 0
+      isAISpeaking.value = false
+      stopWordTracking()
+    }
+  }
+
+  // Start recording user's voice
+  const recordUserResponse = async (): Promise<boolean> => {
+    error.value = null
+
+    // Stop any playing audio first
+    stopAudio()
+
+    const started = await recorder.start()
+    if (started) {
+      isRecording.value = true
+    } else {
+      error.value = recorder.error.value || 'Failed to start recording'
+    }
+    return started
+  }
+
+  // Stop recording and transcribe
+  const stopUserRecording = async (): Promise<string | null> => {
+    if (!isRecording.value) return null
+
+    isRecording.value = false
+    isProcessing.value = true
+    error.value = null
+
+    try {
+      const blob = await recorder.stop()
+      if (!blob) {
+        error.value = 'No audio recorded'
+        isProcessing.value = false
+        return null
+      }
+
+      // Send to transcription API
+      const formData = new FormData()
+      formData.append('audio', blob, 'recording.webm')
+
+      const response = await $fetch<TranscribeResponse>('/api/voice/transcribe', {
+        method: 'POST',
+        body: formData
+      })
+
+      isProcessing.value = false
+
+      if (!response.text || response.text.trim() === '') {
+        error.value = 'Could not understand audio. Please try again.'
+        return null
+      }
+
+      return response.text
+    } catch (e: any) {
+      console.error('[useVoiceSession] Transcription error:', e)
+      error.value = e.data?.message || e.message || 'Failed to transcribe audio'
+      isProcessing.value = false
+      return null
+    }
+  }
+
+  // Get current word for highlighting
+  const getCurrentWord = computed(() => {
+    if (currentWordIndex.value < 0 || currentWordIndex.value >= wordTimings.length) {
+      return null
+    }
+    return wordTimings[currentWordIndex.value]?.word || null
+  })
+
+  // Get words array for display
+  const getWords = computed(() => {
+    return currentTranscript.value.split(/\s+/).filter(w => w.length > 0)
+  })
+
+  // Get audio level from recorder (for visualizations)
+  const getAudioLevel = (): number => {
+    return recorder.getAudioLevel()
+  }
+
+  // Cleanup
+  const cleanup = () => {
+    stopAudio()
+    recorder.cleanup()
+    if (audioElement) {
+      URL.revokeObjectURL(audioElement.src)
+      audioElement = null
+    }
+    wordTimings = []
+    currentWordIndex.value = -1
+    currentTranscript.value = ''
+  }
+
+  onUnmounted(() => {
+    cleanup()
+  })
+
+  return {
+    // State
+    isAISpeaking: readonly(isAISpeaking),
+    isRecording: readonly(isRecording),
+    isProcessing: readonly(isProcessing),
+    currentWordIndex: readonly(currentWordIndex),
+    currentTranscript: readonly(currentTranscript),
+    error: readonly(error),
+    getCurrentWord,
+    getWords,
+
+    // Recorder state passthrough
+    permissionState: recorder.permissionState,
+    isSupported: recorder.isSupported,
+
+    // Methods
+    playAIResponse,
+    pauseAudio,
+    resumeAudio,
+    stopAudio,
+    recordUserResponse,
+    stopUserRecording,
+    getAudioLevel,
+    checkPermission: recorder.checkPermission,
+    requestPermission: recorder.requestPermission,
+    cleanup
+  }
+}
+
+// Helper to convert base64 to Blob
+function base64ToBlob(base64: string, contentType: string): Blob {
+  const byteCharacters = atob(base64)
+  const byteArrays: Uint8Array[] = []
+
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512)
+    const byteNumbers = new Array(slice.length)
+
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i)
+    }
+
+    byteArrays.push(new Uint8Array(byteNumbers))
+  }
+
+  return new Blob(byteArrays, { type: contentType })
+}

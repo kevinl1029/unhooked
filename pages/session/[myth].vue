@@ -15,7 +15,20 @@
 
     <div class="flex-1 flex flex-col space-y-6 min-h-0">
       <div class="flex-1 min-h-0">
+        <!-- Voice Session View (default) -->
+        <VoiceSessionView
+          v-if="!isTranscriptView && !useTextMode"
+          :myth-number="mythNumber"
+          :read-only="sessionComplete"
+          :existing-conversation-id="existingConversationId"
+          :existing-messages="existingMessages"
+          @session-complete="handleVoiceSessionComplete"
+          @error="handleError"
+        />
+
+        <!-- Text-based Chat (transcript view or fallback) -->
         <ChatWindow
+          v-else
           :messages="displayMessages"
           :is-loading="isLoading"
           :error="error"
@@ -55,6 +68,7 @@ const { completeSession, fetchProgress } = useProgress()
 const mythNumber = computed(() => parseInt(route.params.myth as string))
 const mythName = computed(() => MYTH_NAMES[mythNumber.value] || 'Unknown Myth')
 const isTranscriptView = computed(() => route.query.view === 'transcript')
+const useTextMode = computed(() => route.query.mode === 'text')
 
 const messages = ref<ClientMessage[]>([])
 const conversationId = ref<string | null>(null)
@@ -62,6 +76,10 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const sessionComplete = ref(false)
 const nextMyth = ref<number | null>(null)
+
+// For voice session view
+const existingConversationId = ref<string | null>(null)
+const existingMessages = ref<ClientMessage[]>([])
 
 const displayMessages = computed(() => {
   return messages.value.map(msg => ({
@@ -71,11 +89,14 @@ const displayMessages = computed(() => {
 })
 
 onMounted(async () => {
+  // Voice session view handles its own initialization
+  // Only initialize for transcript view or text mode
   if (isTranscriptView.value) {
     await loadTranscript()
-  } else {
+  } else if (useTextMode.value) {
     await initializeSession()
   }
+  // Otherwise, VoiceSessionView component handles initialization
 })
 
 async function initializeSession() {
@@ -333,6 +354,17 @@ async function handleSessionComplete() {
   } catch (err) {
     console.error('Error completing session:', err)
   }
+}
+
+// Voice session handlers
+async function handleVoiceSessionComplete(nextMythNum: number | null) {
+  nextMyth.value = nextMythNum
+  sessionComplete.value = true
+  await fetchProgress()
+}
+
+function handleError(message: string) {
+  error.value = message
 }
 
 async function handleContinue(nextMythNumber: number) {

@@ -16,13 +16,15 @@ export default defineEventHandler(async (event) => {
     conversationId,
     mythNumber,
     model = DEFAULT_MODEL,
-    stream = false
+    stream = false,
+    inputModality = 'text'
   } = body as {
     messages: Message[]
     conversationId?: string
     mythNumber?: number
     model?: ModelType
     stream?: boolean
+    inputModality?: 'text' | 'voice'
   }
 
   if (!messages || !Array.isArray(messages)) {
@@ -104,7 +106,8 @@ export default defineEventHandler(async (event) => {
         role: 'user',
         content: lastUserMessage.content,
         message_length: lastUserMessage.content.length,
-        time_since_last_message: timeSinceLast
+        time_since_last_message: timeSinceLast,
+        input_modality: inputModality
       })
     }
   }
