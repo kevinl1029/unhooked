@@ -43,3 +43,32 @@ export function buildSystemPrompt(mythNumber: number, userContext?: UserContext)
 export function buildPersonalizationContext(userContext: UserContext): string {
   return buildPersonalization(userContext)
 }
+
+// Opening messages for each myth session
+// These are shown immediately when user enters a session, creating the first exchange
+export const MYTH_OPENING_MESSAGES: Record<number, string> = {
+  1: `Hey there. I want to explore something with you that might feel really true right now: the idea that nicotine helps with stress.
+
+Before we dive in, I'm curious—what made you want to start with this one? When you think about nicotine and stress, what comes to mind?`,
+
+  2: `Welcome. Let's talk about pleasure and enjoyment.
+
+A lot of people feel like nicotine genuinely gives them something pleasurable—like it's a reward or a treat. I want to understand your experience with that. When you think about "enjoying" nicotine, what does that actually feel like for you?`,
+
+  3: `Hey. So this session is about the idea that quitting requires massive willpower and is incredibly hard.
+
+I'm guessing you've either tried before and it felt brutal, or you've been putting it off because you're dreading how hard it'll be. Tell me—what's your relationship with that belief? What makes quitting feel so difficult?`,
+
+  4: `Welcome. Let's dig into something a lot of people tell me: "I need nicotine to focus" or "I can't function without it."
+
+Does that resonate with you? When you're working, studying, or trying to get something done, what role does nicotine play for you?`,
+
+  5: `Hey. This session is a bit different—it's about identity. About beliefs like "I have an addictive personality" or "I'm just wired differently" or "I'm not like other people who can quit easily."
+
+Do any of those thoughts sound familiar? What do you believe about yourself when it comes to nicotine and quitting?`
+}
+
+// Get the opening greeting for a specific myth
+export function getMythOpening(mythNumber: number): string {
+  return MYTH_OPENING_MESSAGES[mythNumber] || `Let's explore ${MYTH_NAMES[mythNumber]} together. What brings you to this session?`
+}

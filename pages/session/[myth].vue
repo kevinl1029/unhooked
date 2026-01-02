@@ -39,9 +39,9 @@
 
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
-import { MYTH_NAMES } from '~/server/utils/prompts'
+import { MYTH_NAMES, getMythOpening } from '~/server/utils/prompts'
 
-type ClientMessage = Message & { hidden?: boolean }
+type ClientMessage = Message
 
 definePageMeta({
   middleware: 'auth',
@@ -64,108 +64,82 @@ const sessionComplete = ref(false)
 const nextMyth = ref<number | null>(null)
 
 const displayMessages = computed(() => {
-  return messages.value
-    .filter(msg => !msg.hidden)
-    .map(msg => ({
-      ...msg,
-      content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
-    }))
+  return messages.value.map(msg => ({
+    ...msg,
+    content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
+  }))
 })
 
 onMounted(async () => {
   if (isTranscriptView.value) {
     await loadTranscript()
   } else {
-    await sendInitialGreeting()
+    await initializeSession()
   }
 })
 
-async function sendInitialGreeting() {
-  isLoading.value = true
-  error.value = null
-  const seedMessage = 'Hi'
-
-  if (!messages.value.some(msg => msg.hidden && msg.role === 'user')) {
-    messages.value.push({
-      role: 'user',
-      content: seedMessage,
-      hidden: true
-    })
-  }
-
+async function initializeSession() {
   try {
-    const response = await fetch('/api/chat', {
+    isLoading.value = true
+
+    // Check if there's an existing incomplete conversation for this myth
+    const { data: existingConversations } = await useFetch('/api/conversations', {
+      query: { mythNumber: mythNumber.value }
+    })
+
+    if (existingConversations.value && existingConversations.value.length > 0) {
+      // Find the most recent incomplete conversation
+      const incompleteConv = existingConversations.value.find((c: any) => !c.session_completed)
+
+      if (incompleteConv) {
+        // Load existing conversation
+        conversationId.value = incompleteConv.id
+
+        const { data: conversationData } = await useFetch(`/api/conversations/${incompleteConv.id}`)
+
+        if (conversationData.value) {
+          messages.value = (conversationData.value.messages || []) as ClientMessage[]
+          return
+        }
+      }
+    }
+
+    // No existing conversation - create new one with pre-populated opening exchange
+    const userReadyMessage = `I'm ready to explore ${mythName.value}.`
+    const aiOpeningMessage = getMythOpening(mythNumber.value)
+
+    messages.value = [
+      {
+        role: 'user',
+        content: userReadyMessage
+      },
+      {
+        role: 'assistant',
+        content: aiOpeningMessage
+      }
+    ]
+
+    // Save these initial messages to the database
+    const response = await fetch('/api/conversations', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        messages: messages.value,
-        conversationId: conversationId.value,
         mythNumber: mythNumber.value,
-        stream: true
+        initialMessages: messages.value
       })
     })
 
     if (!response.ok) {
-      throw new Error('Failed to start conversation')
+      throw new Error('Failed to initialize session')
     }
 
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-
-    const assistantMessageIndex = messages.value.length
-    messages.value.push({
-      role: 'assistant',
-      content: ''
-    })
-
-    let buffer = ''
-    let streamEndedWithError = false
-
-    while (reader && !streamEndedWithError) {
-      const { done, value } = await reader.read()
-
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-
-        const data = JSON.parse(line.slice(6))
-
-        if (data.error) {
-          if (reader) {
-            await reader.cancel()
-          }
-          handleStreamError({
-            message: data.error,
-            status: data.status,
-            assistantIndex: assistantMessageIndex,
-            resetSeedMessage: true
-          })
-          streamEndedWithError = true
-          break
-        }
-
-        if (data.token) {
-          messages.value[assistantMessageIndex].content += data.token
-        }
-
-        if (data.conversationId && !conversationId.value) {
-          conversationId.value = data.conversationId
-        }
-      }
-    }
-
-    if (streamEndedWithError) return
+    const data = await response.json()
+    conversationId.value = data.conversationId
   } catch (err: any) {
-    console.error('Error starting conversation:', err)
-    error.value = 'Failed to start conversation. Please refresh the page.'
-    messages.value = messages.value.filter(msg => !msg.hidden)
+    console.error('Error initializing session:', err)
+    error.value = 'Failed to start session. Please refresh the page.'
   } finally {
     isLoading.value = false
   }
@@ -311,12 +285,18 @@ async function handleSessionComplete() {
   }
 }
 
-function handleContinue(nextMythNumber: number) {
-  router.push(`/session/${nextMythNumber}`)
+async function handleContinue(nextMythNumber: number) {
+  // Reset state
   messages.value = []
   conversationId.value = null
   sessionComplete.value = false
   nextMyth.value = null
+
+  // Navigate to next session
+  await router.push(`/session/${nextMythNumber}`)
+
+  // Initialize the new session
+  await initializeSession()
 }
 
 function handleDashboard() {
@@ -330,22 +310,16 @@ function handleFinish() {
 function handleStreamError({
   message,
   status,
-  assistantIndex,
-  resetSeedMessage = false
+  assistantIndex
 }: {
   message: string
   status?: number
   assistantIndex?: number
-  resetSeedMessage?: boolean
 }) {
   error.value = getFriendlyErrorMessage(message, status)
 
   if (typeof assistantIndex === 'number') {
     removeAssistantPlaceholder(assistantIndex)
-  }
-
-  if (resetSeedMessage) {
-    messages.value = messages.value.filter(msg => !msg.hidden)
   }
 }
 
