@@ -2,6 +2,16 @@
 body {
   background: radial-gradient(circle at top, #104e54 0%, #041f21 100%);
   min-height: 100vh;
+  /* Prevent iOS Safari from bouncing when scrolling */
+  overscroll-behavior: none;
+}
+
+/* Mobile safe area container for chat screens */
+.mobile-safe-container {
+  height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height on supported browsers */
+  /* Ensure content respects safe areas */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Glass effect utilities */
