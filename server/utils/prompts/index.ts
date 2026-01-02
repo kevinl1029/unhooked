@@ -25,7 +25,7 @@ const MYTH_PROMPTS: Record<number, string> = {
   5: MYTH_5_IDENTITY_PROMPT,
 }
 
-export function buildSystemPrompt(mythNumber: number, userContext?: UserContext): string {
+export function buildSystemPrompt(mythNumber: number, userContext?: UserContext, isNewConversation = false): string {
   let prompt = BASE_SYSTEM_PROMPT
 
   if (userContext) {
@@ -35,6 +35,17 @@ export function buildSystemPrompt(mythNumber: number, userContext?: UserContext)
   const mythPrompt = MYTH_PROMPTS[mythNumber]
   if (mythPrompt) {
     prompt += '\n\n' + mythPrompt
+  }
+
+  // Add opening instruction for new conversations
+  if (isNewConversation) {
+    const openingMessage = MYTH_OPENING_MESSAGES[mythNumber]
+    if (openingMessage) {
+      prompt += '\n\n## Starting This Session\n\n'
+      prompt += 'This is the beginning of this myth session. Start the conversation with this opening:\n\n'
+      prompt += `"${openingMessage}"\n\n`
+      prompt += 'Use this as your first message to welcome them and begin exploring this myth.'
+    }
   }
 
   return prompt

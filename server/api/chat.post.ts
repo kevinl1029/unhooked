@@ -25,15 +25,20 @@ export default defineEventHandler(async (event) => {
     stream?: boolean
   }
 
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+  if (!messages || !Array.isArray(messages)) {
     throw createError({ statusCode: 400, message: 'Messages array is required' })
   }
+
+  // Allow empty messages array for assistant-first conversations
+  // This lets the AI start the conversation
 
   const router = getModelRouter()
   const supabase = serverSupabaseServiceRole(event)
 
   // If mythNumber provided, fetch user intake for personalization and build system prompt
   let processedMessages = messages
+  const isNewConversation = messages.length === 0
+
   if (mythNumber) {
     const { data: intake } = await supabase
       .from('user_intake')
@@ -49,7 +54,7 @@ export default defineEventHandler(async (event) => {
       triggers: intake.triggers
     } : undefined
 
-    const systemPrompt = buildSystemPrompt(mythNumber, userContext)
+    const systemPrompt = buildSystemPrompt(mythNumber, userContext, isNewConversation)
 
     // Prepend system message
     processedMessages = [
@@ -67,7 +72,7 @@ export default defineEventHandler(async (event) => {
       .insert({
         user_id: user.sub,
         model,
-        title: mythNumber ? MYTH_NAMES[mythNumber] : (messages[0]?.content.slice(0, 50) || 'New conversation'),
+        title: mythNumber ? MYTH_NAMES[mythNumber] : (messages.length > 0 ? messages[0]?.content.slice(0, 50) : 'New conversation'),
         myth_number: mythNumber || null
       })
       .select('id')
@@ -77,29 +82,31 @@ export default defineEventHandler(async (event) => {
     convId = newConv.id
   }
 
-  // Save user message with metadata
-  const lastUserMessage = messages[messages.length - 1]
-  if (lastUserMessage.role === 'user') {
-    // Calculate time since last message
-    const { data: lastMessage } = await supabase
-      .from('messages')
-      .select('created_at')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+  // Save user message with metadata (only if there are messages)
+  if (messages.length > 0) {
+    const lastUserMessage = messages[messages.length - 1]
+    if (lastUserMessage.role === 'user') {
+      // Calculate time since last message
+      const { data: lastMessage } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
 
-    const timeSinceLast = lastMessage
-      ? Math.floor((Date.now() - new Date(lastMessage.created_at).getTime()) / 1000)
-      : null
+      const timeSinceLast = lastMessage
+        ? Math.floor((Date.now() - new Date(lastMessage.created_at).getTime()) / 1000)
+        : null
 
-    await supabase.from('messages').insert({
-      conversation_id: convId,
-      role: 'user',
-      content: lastUserMessage.content,
-      message_length: lastUserMessage.content.length,
-      time_since_last_message: timeSinceLast
-    })
+      await supabase.from('messages').insert({
+        conversation_id: convId,
+        role: 'user',
+        content: lastUserMessage.content,
+        message_length: lastUserMessage.content.length,
+        time_since_last_message: timeSinceLast
+      })
+    }
   }
 
   if (stream) {

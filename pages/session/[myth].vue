@@ -104,42 +104,92 @@ async function initializeSession() {
       }
     }
 
-    // No existing conversation - create new one with pre-populated opening exchange
-    const userReadyMessage = `I'm ready to explore ${mythName.value}.`
-    const aiOpeningMessage = getMythOpening(mythNumber.value)
+    // No existing conversation - let the AI start the conversation
+    // Simply initialize with empty messages and trigger the AI to speak first
+    conversationId.value = null
+    messages.value = []
 
-    messages.value = [
-      {
-        role: 'user',
-        content: userReadyMessage
-      },
-      {
-        role: 'assistant',
-        content: aiOpeningMessage
-      }
-    ]
+    // Trigger the AI to send the opening message
+    await sendOpeningMessage()
+  } catch (err: any) {
+    console.error('Error initializing session:', err)
+    error.value = 'Failed to start session. Please refresh the page.'
+  } finally {
+    isLoading.value = false
+  }
+}
 
-    // Save these initial messages to the database
-    const response = await fetch('/api/conversations', {
+async function sendOpeningMessage() {
+  try {
+    isLoading.value = true
+
+    // Send empty messages array to trigger AI to speak first
+    const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
+        messages: [], // Empty array - no user message to start
         mythNumber: mythNumber.value,
-        initialMessages: messages.value
+        stream: true
       })
     })
 
     if (!response.ok) {
-      throw new Error('Failed to initialize session')
+      throw new Error('Failed to get opening message')
     }
 
-    const data = await response.json()
-    conversationId.value = data.conversationId
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    const assistantMessageIndex = messages.value.length
+    messages.value.push({
+      role: 'assistant',
+      content: ''
+    })
+
+    let buffer = ''
+    let streamEndedWithError = false
+
+    while (reader && !streamEndedWithError) {
+      const { done, value } = await reader.read()
+
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = JSON.parse(line.slice(6))
+
+        if (data.error) {
+          if (reader) {
+            await reader.cancel()
+          }
+          handleStreamError({
+            message: data.error,
+            status: data.status,
+            assistantIndex: assistantMessageIndex
+          })
+          streamEndedWithError = true
+          break
+        }
+
+        if (data.token) {
+          messages.value[assistantMessageIndex].content += data.token
+        }
+
+        if (data.conversationId && !conversationId.value) {
+          conversationId.value = data.conversationId
+        }
+      }
+    }
   } catch (err: any) {
-    console.error('Error initializing session:', err)
-    error.value = 'Failed to start session. Please refresh the page.'
+    console.error('Error getting opening message:', err)
+    error.value = 'Failed to start conversation. Please try again.'
   } finally {
     isLoading.value = false
   }

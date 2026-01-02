@@ -17,6 +17,17 @@ export class GeminiProvider implements LLMProvider {
     const systemMessage = messages.find(m => m.role === 'system')
     const chatMessages = messages.filter(m => m.role !== 'system')
 
+    // For empty chat messages (assistant speaks first), we need to add the AI's
+    // first message to history so the chat can continue normally
+    if (chatMessages.length === 0) {
+      // Return empty history - we'll handle this with generateContent
+      return {
+        systemInstruction: systemMessage?.content,
+        history: [],
+        lastMessage: ''
+      }
+    }
+
     const history = chatMessages.slice(0, -1).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content }]
@@ -62,10 +73,10 @@ export class GeminiProvider implements LLMProvider {
       systemInstruction
     })
 
-    const chat = model.startChat({ history })
-
     try {
+      const chat = model.startChat({ history })
       const result = await chat.sendMessageStream(lastMessage)
+
       let fullResponse = ''
 
       for await (const chunk of result.stream) {
