@@ -3,7 +3,7 @@ import { DEFAULT_MODEL } from '../../utils/llm'
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
-  if (!user) {
+  if (!user || !user.sub) {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
   }
 
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const { data, error } = await supabase
     .from('conversations')
     .insert({
-      user_id: user.id,
+      user_id: user.sub,
       title: title || 'New conversation',
       model
     })

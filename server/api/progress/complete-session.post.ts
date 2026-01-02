@@ -7,7 +7,7 @@ interface CompleteSessionBody {
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
-  if (!user) {
+  if (!user || !user.sub) {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
   }
 
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
       updated_at: new Date().toISOString()
     })
     .eq('id', body.conversationId)
-    .eq('user_id', user.id)
+    .eq('user_id', user.sub)
 
   if (convError) {
     throw createError({ statusCode: 500, message: convError.message })
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
   const { data: currentProgress, error: fetchError } = await supabase
     .from('user_progress')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', user.sub)
     .single()
 
   if (fetchError) {
@@ -71,7 +71,7 @@ export default defineEventHandler(async (event) => {
       total_sessions: (currentProgress.total_sessions || 0) + 1,
       updated_at: new Date().toISOString()
     })
-    .eq('user_id', user.id)
+    .eq('user_id', user.sub)
     .select()
     .single()
 

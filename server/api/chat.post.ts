@@ -6,7 +6,7 @@ import { buildSystemPrompt, MYTH_NAMES } from '../utils/prompts'
 export default defineEventHandler(async (event) => {
   // Verify authentication
   const user = await serverSupabaseUser(event)
-  if (!user) {
+  if (!user || !user.sub) {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
   }
 
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     const { data: intake } = await supabase
       .from('user_intake')
       .select('product_types, usage_frequency, years_using, previous_attempts, triggers')
-      .eq('user_id', user.id)
+      .eq('user_id', user.sub)
       .single()
 
     const userContext = intake ? {
@@ -62,16 +62,10 @@ export default defineEventHandler(async (event) => {
   let convId = conversationId
   if (!convId) {
     // Create new conversation
-    const userId = user.id || user.sub // Try both id and sub (JWT subject claim)
-
-    if (!userId) {
-      throw createError({ statusCode: 500, message: 'User ID not found in session' })
-    }
-
     const { data: newConv, error: convError } = await supabase
       .from('conversations')
       .insert({
-        user_id: userId,
+        user_id: user.sub,
         model,
         title: mythNumber ? MYTH_NAMES[mythNumber] : (messages[0]?.content.slice(0, 50) || 'New conversation'),
         myth_number: mythNumber || null
@@ -150,8 +144,12 @@ export default defineEventHandler(async (event) => {
             },
             onError: (error) => {
               // Improved: Stream error details to client
+              const status = (error as any)?.status
+              const statusText = (error as any)?.statusText
               const data = JSON.stringify({
                 error: error.message,
+                status,
+                statusText,
                 conversationId: convId
               })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
@@ -186,7 +184,8 @@ export default defineEventHandler(async (event) => {
         sessionComplete
       }
     } catch (error: any) {
-      throw createError({ statusCode: 500, message: error.message })
+      const statusCode = error?.status || error?.statusCode || 500
+      throw createError({ statusCode, message: error.message })
     }
   }
 })

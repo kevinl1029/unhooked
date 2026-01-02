@@ -17,6 +17,21 @@ body {
   -webkit-backdrop-filter: blur(12px);
 }
 
+.composer-shell {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.composer-shell:focus-within {
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.09);
+}
+
 /* Primary gradient button */
 .btn-primary {
   background: linear-gradient(135deg, #fc4a1a, #f7b733);

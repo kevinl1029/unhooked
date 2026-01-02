@@ -2,7 +2,7 @@ import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
-  if (!user) {
+  if (!user || !user.sub) {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
   }
 
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     .from('conversations')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', user.sub)
     .single()
 
   if (convError) {

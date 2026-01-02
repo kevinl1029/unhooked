@@ -28,8 +28,15 @@ function getMythOrder(primaryReason: string): number[] {
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
+
   if (!user) {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
+  }
+
+  // JWT claims have 'sub' field for user ID, not 'id'
+  const userId = user.sub
+  if (!userId) {
+    throw createError({ statusCode: 401, message: 'User ID not found' })
   }
 
   const body = await readBody<IntakeBody>(event)
@@ -51,7 +58,7 @@ export default defineEventHandler(async (event) => {
   const { data: intakeData, error: intakeError } = await supabase
     .from('user_intake')
     .upsert({
-      user_id: user.id,
+      user_id: userId,
       product_types: body.productTypes,
       usage_frequency: body.usageFrequency,
       years_using: body.yearsUsing || null,
@@ -75,7 +82,7 @@ export default defineEventHandler(async (event) => {
   const { data: progressData, error: progressError } = await supabase
     .from('user_progress')
     .upsert({
-      user_id: user.id,
+      user_id: userId,
       program_status: 'in_progress',
       myth_order: mythOrder,
       current_myth: mythOrder[0],

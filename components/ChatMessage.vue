@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex gap-4 p-4"
+    class="flex gap-3 px-3 py-2 md:px-4"
     :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
   >
     <div
