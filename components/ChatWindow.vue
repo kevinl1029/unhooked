@@ -4,6 +4,7 @@
     <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border">
       <h2 class="text-white font-semibold">Chat</h2>
       <button
+        v-if="showNewChat"
         @click="$emit('newChat')"
         class="text-white-65 hover:text-white text-sm transition"
       >
@@ -42,7 +43,7 @@
     </div>
 
     <!-- Input -->
-    <div class="p-4 border-t border-brand-border">
+    <div v-if="!readOnly" class="p-4 border-t border-brand-border">
       <ChatInput
         :disabled="isLoading"
         @submit="$emit('send', $event)"
@@ -54,11 +55,16 @@
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   messages: Message[]
   isLoading: boolean
   error: string | null
-}>()
+  showNewChat?: boolean
+  readOnly?: boolean
+}>(), {
+  showNewChat: true,
+  readOnly: false
+})
 
 defineEmits<{
   send: [message: string]

@@ -62,7 +62,6 @@ export default defineEventHandler(async (event) => {
   let convId = conversationId
   if (!convId) {
     // Create new conversation
-    console.log('User object:', user) // Debug log
     const userId = user.id || user.sub // Try both id and sub (JWT subject claim)
 
     if (!userId) {
