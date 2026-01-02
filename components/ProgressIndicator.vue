@@ -1,49 +1,69 @@
 <template>
-  <div class="flex items-center justify-center gap-3 md:gap-4">
-    <template v-for="(myth, index) in mythOrder" :key="myth">
-      <!-- Myth circle -->
-      <div class="relative">
-        <NuxtLink
-          v-if="isMythClickable(myth)"
-          :to="getMythLink(myth)"
-          class="block w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex items-center justify-center transition-all duration-300 hover:scale-105"
-          :class="getMythClasses(myth)"
-        >
-          <!-- Checkmark for completed -->
-          <svg
-            v-if="isMythCompleted(myth)"
-            class="w-6 h-6 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+  <div class="flex flex-col items-center">
+    <!-- Progress circles -->
+    <div class="flex items-center justify-center gap-2 md:gap-3 mb-3">
+      <template v-for="(myth, index) in mythOrder" :key="myth">
+        <!-- Myth circle -->
+        <div class="flex flex-col items-center gap-1.5">
+          <NuxtLink
+            v-if="isMythClickable(myth)"
+            :to="getMythLink(myth)"
+            class="block w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300 hover:scale-110"
+            :class="getMythClasses(myth)"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-          </svg>
-          <!-- Number for incomplete -->
-          <span v-else class="font-semibold">{{ myth }}</span>
-        </NuxtLink>
+            <!-- Checkmark for completed -->
+            <svg
+              v-if="isMythCompleted(myth)"
+              class="w-5 h-5 md:w-6 md:h-6 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+            <!-- Dot for current -->
+            <div v-else-if="isCurrent(myth)" class="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
+            <!-- Lock icon for future -->
+            <svg
+              v-else
+              class="w-4 h-4 md:w-5 md:h-5 text-white-65"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </NuxtLink>
+          <div
+            v-else
+            class="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300"
+            :class="getMythClasses(myth)"
+          >
+            <!-- Lock icon for future non-clickable -->
+            <svg
+              class="w-4 h-4 md:w-5 md:h-5 text-white-65"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+
+          <!-- Myth name below circle -->
+          <span class="text-xs md:text-sm text-center transition-all duration-300" :class="getMythTextClasses(myth)">
+            {{ getAbbreviatedMythName(myth) }}
+          </span>
+        </div>
+
+        <!-- Connecting line -->
         <div
-          v-else
-          class="w-12 h-12 md:w-14 md:h-14 rounded-full border-2 flex items-center justify-center transition-all duration-300"
-          :class="getMythClasses(myth)"
-        >
-          <!-- Number for incomplete non-clickable -->
-          <span class="font-semibold">{{ myth }}</span>
-        </div>
-
-        <!-- Myth name tooltip (optional, shown on hover) -->
-        <div class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
-          <span class="text-xs text-white-65">{{ getMythName(myth) }}</span>
-        </div>
-      </div>
-
-      <!-- Connecting line -->
-      <div
-        v-if="index < mythOrder.length - 1"
-        class="h-0.5 w-6 md:w-8 transition-colors duration-300"
-        :class="isMythCompleted(myth) ? 'bg-brand-accent' : 'bg-brand-border'"
-      />
-    </template>
+          v-if="index < mythOrder.length - 1"
+          class="h-0.5 w-4 md:w-6 transition-colors duration-300 mb-6"
+          :class="isMythCompleted(myth) ? 'bg-brand-accent' : 'bg-brand-border'"
+        />
+      </template>
+    </div>
   </div>
 </template>
 
@@ -90,5 +110,26 @@ const getMythLink = (mythNumber: number): string => {
 
 const getMythName = (mythNumber: number): string => {
   return MYTH_NAMES[mythNumber] || `Myth ${mythNumber}`
+}
+
+const getAbbreviatedMythName = (mythNumber: number): string => {
+  const abbreviations: Record<number, string> = {
+    1: 'Stress',
+    2: 'Pleasure',
+    3: 'Willpower',
+    4: 'Focus',
+    5: 'Identity',
+  }
+  return abbreviations[mythNumber] || `Myth ${mythNumber}`
+}
+
+const getMythTextClasses = (mythNumber: number): string => {
+  if (isMythCompleted(mythNumber)) {
+    return 'text-white-85 font-medium'
+  } else if (isCurrent(mythNumber)) {
+    return 'text-brand-accent font-semibold'
+  } else {
+    return 'text-white-65 font-normal'
+  }
 }
 </script>
