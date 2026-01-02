@@ -86,6 +86,7 @@ defineEmits<{
 const messagesContainer = ref<HTMLElement>()
 const chatInputRef = ref<{ focusTextarea: () => void } | null>(null)
 const isScrolledAway = ref(false)
+const scrollDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 const composerMode = computed<ComposerMode>(() => {
   if (isScrolledAway.value) {
@@ -122,7 +123,21 @@ const updateScrollState = () => {
   if (!el) return
   const threshold = 80
   const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight)
-  isScrolledAway.value = distanceFromBottom > threshold
+
+  // Clear any existing debounce timer
+  if (scrollDebounceTimer.value) {
+    clearTimeout(scrollDebounceTimer.value)
+  }
+
+  // If we're near the bottom, immediately show default mode
+  if (distanceFromBottom <= threshold) {
+    isScrolledAway.value = false
+  } else {
+    // Otherwise, debounce the collapse to avoid glitchy transitions during scrolling
+    scrollDebounceTimer.value = setTimeout(() => {
+      isScrolledAway.value = true
+    }, 300)
+  }
 }
 
 watchEffect((onCleanup) => {
