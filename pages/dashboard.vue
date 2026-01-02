@@ -1,20 +1,6 @@
 <template>
   <div class="min-h-screen px-0 py-4 md:p-4">
     <div class="max-w-4xl mx-auto">
-      <!-- User info bar -->
-      <div class="flex items-center justify-between mb-8 px-4 md:px-0">
-        <div>
-          <p class="text-white-65 text-sm">Signed in as</p>
-          <p class="text-white font-medium">{{ user?.email }}</p>
-        </div>
-        <button
-          @click="handleSignOut"
-          class="text-white-65 hover:text-white transition text-sm"
-        >
-          Sign out
-        </button>
-      </div>
-
       <!-- Loading state -->
       <div v-if="isLoadingData" class="flex items-center justify-center py-20">
         <div class="text-white-65">Loading...</div>
@@ -106,7 +92,6 @@ definePageMeta({
 })
 
 const router = useRouter()
-const { user, signOut } = useAuth()
 const { intake, fetchIntake } = useIntake()
 const { progress, fetchProgress } = useProgress()
 
@@ -127,14 +112,6 @@ onMounted(async () => {
 
   isLoadingData.value = false
 })
-
-const handleSignOut = async () => {
-  try {
-    await signOut()
-  } catch (error) {
-    console.error('Sign out error:', error)
-  }
-}
 
 const nextSessionTitle = computed(() => {
   if (!progress.value) return 'Session 1: The Stress Myth'

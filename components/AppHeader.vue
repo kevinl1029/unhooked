@@ -5,7 +5,7 @@
         <NuxtLink to="/" class="text-xl font-bold text-white">
           Unhooked
         </NuxtLink>
-        <div class="space-x-4">
+        <div class="flex items-center gap-4">
           <template v-if="user">
             <NuxtLink
               to="/dashboard"
@@ -13,6 +13,14 @@
             >
               Dashboard
             </NuxtLink>
+            <span class="text-white-65 hidden sm:inline">|</span>
+            <span class="text-white-85 text-sm hidden sm:inline">{{ user.email }}</span>
+            <button
+              @click="handleSignOut"
+              class="text-white-65 hover:text-white transition text-sm"
+            >
+              Sign out
+            </button>
           </template>
           <template v-else>
             <NuxtLink
@@ -30,4 +38,13 @@
 
 <script setup lang="ts">
 const user = useSupabaseUser()
+const { signOut } = useAuth()
+
+const handleSignOut = async () => {
+  try {
+    await signOut()
+  } catch (error) {
+    console.error('Sign out error:', error)
+  }
+}
 </script>

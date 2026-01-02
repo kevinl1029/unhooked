@@ -8,14 +8,21 @@
       Break free from nicotine — not through willpower, but by eliminating the desire.
     </p>
     <NuxtLink
-      :to="user ? '/dashboard' : '/login'"
+      to="/login"
       class="btn-primary inline-block text-white px-8 py-3 rounded-pill font-semibold shadow-card"
     >
-      {{ user ? 'Go to Dashboard' : 'Get Started' }}
+      Get Started
     </NuxtLink>
   </div>
 </template>
 
 <script setup lang="ts">
 const user = useSupabaseUser()
+
+// Redirect authenticated users to dashboard
+watch(user, (newUser) => {
+  if (newUser) {
+    navigateTo('/dashboard')
+  }
+}, { immediate: true })
 </script>
