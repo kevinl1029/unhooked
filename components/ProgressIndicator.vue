@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col items-center">
     <!-- Progress circles -->
-    <div class="flex items-center justify-center gap-2 md:gap-3 mb-3">
+    <div class="flex items-center justify-center gap-1.5 md:gap-3 mb-3">
       <template v-for="(myth, index) in mythOrder" :key="myth">
         <!-- Myth circle -->
         <div class="flex flex-col items-center gap-1.5">
@@ -51,7 +51,7 @@
           </div>
 
           <!-- Myth name below circle -->
-          <span class="text-xs md:text-sm text-center transition-all duration-300" :class="getMythTextClasses(myth)">
+          <span class="text-[0.625rem] md:text-sm text-center transition-all duration-300 max-w-[50px] md:max-w-none leading-tight" :class="getMythTextClasses(myth)">
             {{ getAbbreviatedMythName(myth) }}
           </span>
         </div>
@@ -116,7 +116,7 @@ const getAbbreviatedMythName = (mythNumber: number): string => {
   const abbreviations: Record<number, string> = {
     1: 'Stress',
     2: 'Pleasure',
-    3: 'Willpower',
+    3: 'Will-power',
     4: 'Focus',
     5: 'Identity',
   }
