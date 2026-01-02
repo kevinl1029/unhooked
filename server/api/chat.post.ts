@@ -1,6 +1,7 @@
 import { getModelRouter, DEFAULT_MODEL } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
+import { buildSystemPrompt, MYTH_NAMES } from '../utils/prompts'
 
 export default defineEventHandler(async (event) => {
   // Verify authentication
@@ -13,11 +14,13 @@ export default defineEventHandler(async (event) => {
   const {
     messages,
     conversationId,
+    mythNumber,
     model = DEFAULT_MODEL,
     stream = false
   } = body as {
     messages: Message[]
     conversationId?: string
+    mythNumber?: number
     model?: ModelType
     stream?: boolean
   }
@@ -28,6 +31,32 @@ export default defineEventHandler(async (event) => {
 
   const router = getModelRouter()
   const supabase = serverSupabaseServiceRole(event)
+
+  // If mythNumber provided, fetch user intake for personalization and build system prompt
+  let processedMessages = messages
+  if (mythNumber) {
+    const { data: intake } = await supabase
+      .from('user_intake')
+      .select('product_types, usage_frequency, years_using, previous_attempts, triggers')
+      .eq('user_id', user.id)
+      .single()
+
+    const userContext = intake ? {
+      productTypes: intake.product_types,
+      usageFrequency: intake.usage_frequency,
+      yearsUsing: intake.years_using,
+      previousAttempts: intake.previous_attempts,
+      triggers: intake.triggers
+    } : undefined
+
+    const systemPrompt = buildSystemPrompt(mythNumber, userContext)
+
+    // Prepend system message
+    processedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ]
+  }
 
   // Get or create conversation
   let convId = conversationId
@@ -45,7 +74,8 @@ export default defineEventHandler(async (event) => {
       .insert({
         user_id: userId,
         model,
-        title: messages[0]?.content.slice(0, 50) || 'New conversation'
+        title: mythNumber ? MYTH_NAMES[mythNumber] : (messages[0]?.content.slice(0, 50) || 'New conversation'),
+        myth_number: mythNumber || null
       })
       .select('id')
       .single()
@@ -54,13 +84,28 @@ export default defineEventHandler(async (event) => {
     convId = newConv.id
   }
 
-  // Save user message
+  // Save user message with metadata
   const lastUserMessage = messages[messages.length - 1]
   if (lastUserMessage.role === 'user') {
+    // Calculate time since last message
+    const { data: lastMessage } = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    const timeSinceLast = lastMessage
+      ? Math.floor((Date.now() - new Date(lastMessage.created_at).getTime()) / 1000)
+      : null
+
     await supabase.from('messages').insert({
       conversation_id: convId,
       role: 'user',
-      content: lastUserMessage.content
+      content: lastUserMessage.content,
+      message_length: lastUserMessage.content.length,
+      time_since_last_message: timeSinceLast
     })
   }
 
@@ -76,7 +121,7 @@ export default defineEventHandler(async (event) => {
         let fullResponse = ''
 
         await router.chatStream(
-          { messages, model },
+          { messages: processedMessages, model },
           {
             onToken: (token) => {
               fullResponse += token
@@ -84,14 +129,23 @@ export default defineEventHandler(async (event) => {
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             },
             onComplete: async (response) => {
-              // Save assistant message
+              // Check for session complete token
+              const sessionComplete = response.includes('[SESSION_COMPLETE]')
+
+              // Save assistant message with metadata
               await supabase.from('messages').insert({
                 conversation_id: convId,
                 role: 'assistant',
-                content: response
+                content: response,
+                message_length: response.length,
+                time_since_last_message: null
               })
 
-              const data = JSON.stringify({ done: true, conversationId: convId })
+              const data = JSON.stringify({
+                done: true,
+                conversationId: convId,
+                sessionComplete
+              })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               controller.close()
             },
@@ -113,18 +167,24 @@ export default defineEventHandler(async (event) => {
   } else {
     // Non-streaming response
     try {
-      const response = await router.chat({ messages, model })
+      const response = await router.chat({ messages: processedMessages, model })
 
-      // Save assistant message
+      // Check for session complete token
+      const sessionComplete = response.content.includes('[SESSION_COMPLETE]')
+
+      // Save assistant message with metadata
       await supabase.from('messages').insert({
         conversation_id: convId,
         role: 'assistant',
-        content: response.content
+        content: response.content,
+        message_length: response.content.length,
+        time_since_last_message: null
       })
 
       return {
         ...response,
-        conversationId: convId
+        conversationId: convId,
+        sessionComplete
       }
     } catch (error: any) {
       throw createError({ statusCode: 500, message: error.message })
