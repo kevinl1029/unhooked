@@ -28,10 +28,19 @@ export class GeminiProvider implements LLMProvider {
       }
     }
 
-    const history = chatMessages.slice(0, -1).map(msg => ({
+    let history = chatMessages.slice(0, -1).map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content }]
     }))
+
+    // Gemini requires history to start with 'user' role
+    // If assistant spoke first, prepend an empty user message
+    if (history.length > 0 && history[0].role === 'model') {
+      history = [
+        { role: 'user', parts: [{ text: '' }] },
+        ...history
+      ]
+    }
 
     const lastMessage = chatMessages[chatMessages.length - 1]
 
