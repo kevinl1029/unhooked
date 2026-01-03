@@ -10,6 +10,8 @@ interface TTSResponse {
   wordTimings: WordTiming[]
   estimatedDurationMs: number
   voice: string
+  provider: 'openai' | 'elevenlabs'
+  timingSource: 'actual' | 'estimated'
 }
 
 interface TranscribeResponse {
@@ -55,6 +57,7 @@ export const useVoiceSession = () => {
       })
 
       wordTimings = response.wordTimings
+      const hasActualTimings = response.timingSource === 'actual'
       isProcessing.value = false
 
       // Create audio element and play
@@ -71,17 +74,20 @@ export const useVoiceSession = () => {
 
       return new Promise((resolve) => {
         audioElement!.onloadedmetadata = () => {
-          // Scale word timings to match actual audio duration
-          const actualDurationMs = audioElement!.duration * 1000
-          if (wordTimings.length > 0 && actualDurationMs > 0) {
-            const estimatedDurationMs = wordTimings[wordTimings.length - 1].endMs
-            if (estimatedDurationMs > 0) {
-              const scaleFactor = actualDurationMs / estimatedDurationMs
-              wordTimings = wordTimings.map(timing => ({
-                word: timing.word,
-                startMs: Math.round(timing.startMs * scaleFactor),
-                endMs: Math.round(timing.endMs * scaleFactor)
-              }))
+          // Only scale word timings if they were estimated (not actual from ElevenLabs)
+          // ElevenLabs provides actual word timings that don't need rescaling
+          if (!hasActualTimings) {
+            const actualDurationMs = audioElement!.duration * 1000
+            if (wordTimings.length > 0 && actualDurationMs > 0) {
+              const estimatedDurationMs = wordTimings[wordTimings.length - 1].endMs
+              if (estimatedDurationMs > 0) {
+                const scaleFactor = actualDurationMs / estimatedDurationMs
+                wordTimings = wordTimings.map(timing => ({
+                  word: timing.word,
+                  startMs: Math.round(timing.startMs * scaleFactor),
+                  endMs: Math.round(timing.endMs * scaleFactor)
+                }))
+              }
             }
           }
           // Audio is now ready to play

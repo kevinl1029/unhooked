@@ -41,6 +41,14 @@ export default defineNuxtConfig({
     geminiModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
+
+    // TTS Provider Configuration
+    ttsProvider: process.env.TTS_PROVIDER || 'openai', // 'openai' | 'elevenlabs'
+    elevenlabsApiKey: process.env.ELEVENLABS_API_KEY,
+    elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL', // Bella
+    elevenlabsModel: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',
+    openaiTtsVoice: process.env.OPENAI_TTS_VOICE || 'nova',
+
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
 
