@@ -64,11 +64,13 @@
                 <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3 overflow-hidden">
                   <!-- Show word-by-word if this is the current speaking message -->
                   <VoiceWordByWordTranscript
-                    v-if="isAISpeaking && idx === messages.length - 1"
+                    v-if="isAISpeaking && idx === displayMessages.length - 1"
                     :transcript="msg.content"
                     :current-word-index="currentWordIndex"
+                    :auto-scroll="true"
                     container-class="text-base leading-relaxed break-words"
                   />
+                  <!-- Show plain text for past messages or after speaking is done -->
                   <p v-else class="text-white whitespace-pre-wrap break-words">{{ msg.content }}</p>
                 </div>
               </div>
@@ -93,15 +95,15 @@
         <p class="text-red-200 text-sm">{{ error }}</p>
       </div>
 
-      <!-- Voice Controls -->
-      <div v-if="!readOnly" class="px-4 py-6 border-t border-brand-border">
+      <!-- Voice Controls - fixed min-height to prevent layout jumps between states -->
+      <div v-if="!readOnly" class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center">
         <!-- AI Speaking State -->
-        <div v-if="isAISpeaking" class="text-center space-y-4">
+        <div v-if="isAISpeaking" class="text-center space-y-3">
           <VoiceAudioWaveform
             :is-active="true"
             :audio-level="0.6"
             :bar-count="isMobile ? 12 : 20"
-            container-class="h-12"
+            container-class="h-10"
           />
           <div class="flex justify-center gap-4">
             <button
@@ -120,28 +122,28 @@
         </div>
 
         <!-- Recording State -->
-        <div v-else-if="isRecording" class="text-center space-y-4">
+        <div v-else-if="isRecording" class="text-center space-y-3">
           <VoiceAudioWaveform
             :is-active="true"
             :audio-level="audioLevel"
             :bar-count="isMobile ? 12 : 20"
-            container-class="h-12"
+            container-class="h-10"
             active-bar-class="bg-gradient-to-t from-red-500 to-red-400"
           />
           <VoiceMicButton
             :is-recording="true"
-            size="lg"
+            size="md"
             :show-text-fallback="false"
             @stop="handleStopRecording"
           />
         </div>
 
         <!-- Ready State -->
-        <div v-else-if="!isProcessing" class="text-center space-y-4">
+        <div v-else-if="!isProcessing" class="text-center space-y-3">
           <VoiceMicButton
             :is-recording="false"
             :disabled="isProcessing"
-            size="lg"
+            size="md"
             :show-text-fallback="!textMode"
             @start="handleStartRecording"
             @text-fallback="textMode = true"
@@ -149,7 +151,7 @@
         </div>
 
         <!-- Processing State -->
-        <div v-else class="text-center py-4">
+        <div v-else class="text-center">
           <p class="text-white-65">Processing...</p>
         </div>
 
@@ -212,6 +214,7 @@ const {
   isProcessing,
   isAISpeaking,
   isRecording,
+  isAudioReady,
   currentWordIndex,
   error,
   permissionState,
@@ -253,11 +256,21 @@ onMounted(() => {
 })
 
 // Display messages with [SESSION_COMPLETE] stripped
+// Also hide the latest assistant message while audio is loading
 const displayMessages = computed(() => {
-  return messages.value.map(msg => ({
+  const allMessages = messages.value.map(msg => ({
     ...msg,
     content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
   }))
+
+  // If the latest message is from assistant and audio isn't ready yet, don't show it
+  // (the loading indicator will show instead)
+  const lastMsg = allMessages[allMessages.length - 1]
+  if (lastMsg?.role === 'assistant' && isProcessing.value && !isAudioReady.value) {
+    return allMessages.slice(0, -1)
+  }
+
+  return allMessages
 })
 
 // Initialize on mount

@@ -23,6 +23,7 @@ export const useVoiceSession = () => {
   const isAISpeaking = ref(false)
   const isRecording = ref(false)
   const isProcessing = ref(false)
+  const isAudioReady = ref(false)
   const currentWordIndex = ref(-1)
   const currentTranscript = ref('')
   const error = ref<string | null>(null)
@@ -42,6 +43,7 @@ export const useVoiceSession = () => {
 
     error.value = null
     isProcessing.value = true
+    isAudioReady.value = false
     currentTranscript.value = text
     currentWordIndex.value = -1
 
@@ -68,6 +70,24 @@ export const useVoiceSession = () => {
       audioElement = new Audio(audioUrl)
 
       return new Promise((resolve) => {
+        audioElement!.onloadedmetadata = () => {
+          // Scale word timings to match actual audio duration
+          const actualDurationMs = audioElement!.duration * 1000
+          if (wordTimings.length > 0 && actualDurationMs > 0) {
+            const estimatedDurationMs = wordTimings[wordTimings.length - 1].endMs
+            if (estimatedDurationMs > 0) {
+              const scaleFactor = actualDurationMs / estimatedDurationMs
+              wordTimings = wordTimings.map(timing => ({
+                word: timing.word,
+                startMs: Math.round(timing.startMs * scaleFactor),
+                endMs: Math.round(timing.endMs * scaleFactor)
+              }))
+            }
+          }
+          // Audio is now ready to play
+          isAudioReady.value = true
+        }
+
         audioElement!.onplay = () => {
           isAISpeaking.value = true
           playbackStartTime = Date.now()
@@ -266,6 +286,7 @@ export const useVoiceSession = () => {
     isAISpeaking: readonly(isAISpeaking),
     isRecording: readonly(isRecording),
     isProcessing: readonly(isProcessing),
+    isAudioReady: readonly(isAudioReady),
     currentWordIndex: readonly(currentWordIndex),
     currentTranscript: readonly(currentTranscript),
     error: readonly(error),

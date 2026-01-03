@@ -3,6 +3,7 @@
     <span
       v-for="(word, idx) in words"
       :key="idx"
+      :ref="el => setWordRef(el, idx)"
       class="transition-all duration-150"
       :class="getWordClass(idx)"
     >{{ word }}{{ idx < words.length - 1 ? ' ' : '' }}</span>
@@ -18,6 +19,7 @@ interface Props {
   activeClass?: string
   spokenClass?: string
   unspokenClass?: string
+  autoScroll?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,13 +27,39 @@ const props = withDefaults(defineProps<Props>(), {
   currentWordIndex: -1,
   containerClass: 'text-lg leading-relaxed',
   baseClass: '',
-  activeClass: 'text-brand-accent font-semibold scale-105',
+  activeClass: 'text-brand-accent font-semibold',
   spokenClass: 'text-white',
-  unspokenClass: 'text-white-65'
+  unspokenClass: 'text-white-65',
+  autoScroll: false
 })
 
 const words = computed(() => {
   return props.transcript.split(/\s+/).filter(w => w.length > 0)
+})
+
+// Track refs to word elements for auto-scrolling
+const wordRefs = ref<Map<number, HTMLElement>>(new Map())
+
+const setWordRef = (el: HTMLElement | null, idx: number) => {
+  if (el) {
+    wordRefs.value.set(idx, el)
+  } else {
+    wordRefs.value.delete(idx)
+  }
+}
+
+// Auto-scroll to keep current word in view
+watch(() => props.currentWordIndex, (newIndex) => {
+  if (!props.autoScroll || newIndex < 0) return
+
+  const wordEl = wordRefs.value.get(newIndex)
+  if (wordEl) {
+    wordEl.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest'
+    })
+  }
 })
 
 const getWordClass = (index: number): string => {

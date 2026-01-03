@@ -34,19 +34,16 @@
       </svg>
     </button>
 
-    <!-- Label -->
+    <!-- Label with optional text fallback on same line -->
     <p v-if="showLabel" class="text-white-65 text-sm">
-      {{ labelText }}
+      {{ labelText }}<template v-if="showTextFallback && !isRecording">
+        <span class="mx-1">·</span>
+        <button
+          class="underline hover:text-white transition-colors"
+          @click.stop="$emit('text-fallback')"
+        >Type instead</button>
+      </template>
     </p>
-
-    <!-- Text fallback link -->
-    <button
-      v-if="showTextFallback && !isRecording"
-      class="text-white-65 text-sm underline hover:text-white transition-colors"
-      @click="$emit('text-fallback')"
-    >
-      Type instead
-    </button>
   </div>
 </template>
 
@@ -83,7 +80,7 @@ const buttonClasses = computed(() => {
 
   const sizeClasses = {
     sm: 'w-14 h-14',
-    md: 'w-18 h-18',
+    md: 'w-20 h-20',
     lg: 'w-24 h-24'
   }
 
