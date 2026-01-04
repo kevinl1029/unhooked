@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
   currentWordIndex: -1,
   containerClass: 'text-lg leading-relaxed',
   baseClass: '',
-  activeClass: 'text-brand-accent font-semibold',
+  activeClass: 'text-brand-accent',
   spokenClass: 'text-white',
   unspokenClass: 'text-white-65',
   autoScroll: false
