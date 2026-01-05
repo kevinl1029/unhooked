@@ -30,3 +30,6 @@ Thumbs.db
 /blob-report/
 /playwright/.cache/
 coverage/
+
+# Internal specs and planning docs
+/docs/
