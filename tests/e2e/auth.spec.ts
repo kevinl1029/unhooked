@@ -25,6 +25,15 @@ test.describe('Authentication', () => {
 
   test.describe('Authenticated Access', () => {
     // These tests use the storageState auth from setup
+    test('authenticated user visiting home is redirected to dashboard', async ({ page }) => {
+      await mockUserInProgress(page)
+
+      await page.goto('/')
+
+      // Authenticated users should be redirected away from marketing page
+      await expect(page).toHaveURL('/dashboard')
+    })
+
     test('authenticated user can access dashboard', async ({ page }) => {
       // Mock API responses for a user in progress
       await mockUserInProgress(page)
