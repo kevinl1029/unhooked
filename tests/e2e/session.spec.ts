@@ -1,11 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { mockAuth, mockUserInProgress, mockChatAPI, mockAllAPIs } from './utils'
+import { mockUserInProgress, mockChatAPI, mockAllAPIs } from './utils'
 import { getFullResponse } from './fixtures/llm-responses'
 
 test.describe('Myth Sessions', () => {
   test.describe('Session Start', () => {
     test('session page loads for authenticated user', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockAllAPIs(page, 'greeting')
 
@@ -18,7 +17,6 @@ test.describe('Myth Sessions', () => {
     })
 
     test('AI sends greeting message to start conversation', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockChatAPI(page, { scenario: 'greeting' })
 
@@ -33,7 +31,6 @@ test.describe('Myth Sessions', () => {
 
   test.describe('Chat Interaction', () => {
     test('user can send a text message', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockChatAPI(page, { scenario: 'normal' })
 
@@ -52,7 +49,6 @@ test.describe('Myth Sessions', () => {
     })
 
     test('AI responds to user message', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockChatAPI(page, { scenario: 'normal' })
 
@@ -68,7 +64,6 @@ test.describe('Myth Sessions', () => {
     })
 
     test('chat input is cleared after sending', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockChatAPI(page, { scenario: 'normal' })
 
@@ -85,7 +80,6 @@ test.describe('Myth Sessions', () => {
 
   test.describe('Session Completion', () => {
     test('shows completion card when session ends', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1, mythsCompleted: [] })
       await mockChatAPI(page, { scenario: 'session-complete' })
 
@@ -101,7 +95,6 @@ test.describe('Myth Sessions', () => {
     })
 
     test('SESSION_COMPLETE token is not shown to user', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockChatAPI(page, { scenario: 'session-complete' })
 
@@ -120,7 +113,6 @@ test.describe('Myth Sessions', () => {
     })
 
     test('completion card has continue button', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1, mythsCompleted: [] })
       await mockChatAPI(page, { scenario: 'session-complete' })
 
@@ -138,7 +130,6 @@ test.describe('Myth Sessions', () => {
 
   test.describe('Free Myth Access', () => {
     test('user can access any myth session directly', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1, mythsCompleted: [] })
       await mockAllAPIs(page, 'greeting')
 
@@ -152,7 +143,6 @@ test.describe('Myth Sessions', () => {
 
   test.describe('Navigation', () => {
     test('has link to exit/return to dashboard', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1 })
       await mockAllAPIs(page, 'normal')
 

@@ -1,10 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { mockAuth, mockNewUser, mockIntakeAPI } from './utils'
+import { mockNewUser, mockIntakeAPI } from './utils'
 
 test.describe('Onboarding', () => {
   test.describe('Welcome Screen', () => {
     test('shows welcome message and Let\'s Go button', async ({ page }) => {
-      await mockAuth(page)
       await mockNewUser(page)
 
       await page.goto('/onboarding')
@@ -14,7 +13,6 @@ test.describe('Onboarding', () => {
     })
 
     test('clicking Let\'s Go shows intake form', async ({ page }) => {
-      await mockAuth(page)
       await mockNewUser(page)
 
       await page.goto('/onboarding')
@@ -28,7 +26,6 @@ test.describe('Onboarding', () => {
 
   test.describe('Intake Form Steps', () => {
     test.beforeEach(async ({ page }) => {
-      await mockAuth(page)
       await mockNewUser(page)
       await mockIntakeAPI(page)
 
@@ -114,7 +111,6 @@ test.describe('Onboarding', () => {
 
   test.describe('Form Submission', () => {
     test('completing all steps redirects to dashboard', async ({ page }) => {
-      await mockAuth(page)
       await mockNewUser(page)
       await mockIntakeAPI(page)
 

@@ -1,37 +1,32 @@
 import { test, expect } from '@playwright/test'
-import { mockAuth, mockNoAuth, getMockUser } from './utils'
+import { getMockUser } from './utils'
 import { mockUserInProgress, mockNewUser } from './utils'
 
 test.describe('Authentication', () => {
   test.describe('Protected Routes', () => {
+    // These tests need to bypass the storageState auth
+    test.use({ storageState: { cookies: [], origins: [] } })
+
     test('unauthenticated user is redirected from dashboard to login', async ({ page }) => {
-      await mockNoAuth(page)
-
       await page.goto('/dashboard')
-
       await expect(page).toHaveURL('/login')
     })
 
     test('unauthenticated user is redirected from onboarding to login', async ({ page }) => {
-      await mockNoAuth(page)
-
       await page.goto('/onboarding')
-
       await expect(page).toHaveURL('/login')
     })
 
     test('unauthenticated user is redirected from session page to login', async ({ page }) => {
-      await mockNoAuth(page)
-
       await page.goto('/session/1')
-
       await expect(page).toHaveURL('/login')
     })
   })
 
   test.describe('Authenticated Access', () => {
+    // These tests use the storageState auth from setup
     test('authenticated user can access dashboard', async ({ page }) => {
-      await mockAuth(page)
+      // Mock API responses for a user in progress
       await mockUserInProgress(page)
 
       await page.goto('/dashboard')
@@ -41,7 +36,6 @@ test.describe('Authentication', () => {
     })
 
     test('authenticated user sees their email in header', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page)
 
       await page.goto('/dashboard')
@@ -51,7 +45,6 @@ test.describe('Authentication', () => {
     })
 
     test('authenticated user can see sign out button', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page)
 
       await page.goto('/dashboard')
@@ -62,7 +55,7 @@ test.describe('Authentication', () => {
 
   test.describe('New User Flow', () => {
     test('new user without intake is redirected to onboarding', async ({ page }) => {
-      await mockAuth(page)
+      // Mock API to return null for intake/progress (new user)
       await mockNewUser(page)
 
       await page.goto('/dashboard')

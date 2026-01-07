@@ -1,22 +1,19 @@
 import { test, expect } from '@playwright/test'
-import { mockAuth, mockUserInProgress, mockProgressAPI } from './utils'
+import { mockUserInProgress, mockProgressAPI, mockIntakeAPI } from './utils'
 
 test.describe('Dashboard', () => {
   test.describe('Progress Display', () => {
     test('shows progress indicator with 5 myth circles', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 1, mythsCompleted: [] })
 
       await page.goto('/dashboard')
 
       // Should show 5 progress indicators
-      const progressCircles = page.locator('[data-testid="myth-circle"], .myth-circle, [class*="progress"] button, [class*="progress"] div[role="button"]')
       // Fallback: just check for progress section existing
       await expect(page.locator('text=/session|progress|myth/i').first()).toBeVisible()
     })
 
     test('shows 0 of 5 sessions completed for new user', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, {
         currentMyth: 1,
         mythsCompleted: [],
@@ -29,7 +26,6 @@ test.describe('Dashboard', () => {
     })
 
     test('shows correct progress for user with 2 completed myths', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, {
         currentMyth: 3,
         mythsCompleted: [1, 2],
@@ -44,7 +40,6 @@ test.describe('Dashboard', () => {
 
   test.describe('Next Session Card', () => {
     test('shows continue button for user in progress', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 2, mythsCompleted: [1] })
 
       await page.goto('/dashboard')
@@ -54,7 +49,6 @@ test.describe('Dashboard', () => {
     })
 
     test('continue button links to current myth session', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page, { currentMyth: 3, mythsCompleted: [1, 2] })
 
       await page.goto('/dashboard')
@@ -66,13 +60,13 @@ test.describe('Dashboard', () => {
 
   test.describe('Completed Program', () => {
     test('shows completion message when all myths done', async ({ page }) => {
-      await mockAuth(page)
       await mockProgressAPI(page, {
         programStatus: 'completed',
         currentMyth: 5,
         mythsCompleted: [1, 2, 3, 4, 5],
         totalSessions: 5,
       })
+      await mockIntakeAPI(page)
 
       await page.goto('/dashboard')
 
@@ -81,12 +75,12 @@ test.describe('Dashboard', () => {
     })
 
     test('shows 5 of 5 sessions completed', async ({ page }) => {
-      await mockAuth(page)
       await mockProgressAPI(page, {
         programStatus: 'completed',
         mythsCompleted: [1, 2, 3, 4, 5],
         totalSessions: 5,
       })
+      await mockIntakeAPI(page)
 
       await page.goto('/dashboard')
 
@@ -96,7 +90,6 @@ test.describe('Dashboard', () => {
 
   test.describe('Navigation', () => {
     test('clicking brand logo navigates to home', async ({ page }) => {
-      await mockAuth(page)
       await mockUserInProgress(page)
 
       await page.goto('/dashboard')

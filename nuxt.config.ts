@@ -22,7 +22,7 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: '/login',
       callback: '/auth/callback',
-      exclude: ['/', '/login'],
+      exclude: ['/', '/login', '/test-login'],
     }
   },
 
@@ -51,6 +51,10 @@ export default defineNuxtConfig({
 
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+
+    // E2E Test credentials (only used in development)
+    e2eTestEmail: process.env.E2E_TEST_EMAIL,
+    e2eTestPassword: process.env.E2E_TEST_PASSWORD,
 
     // Client-side (public)
     public: {
