@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 import { mockNewUser, mockIntakeAPI } from './utils'
 
 test.describe('Onboarding', () => {
+  // Run onboarding tests serially to avoid race conditions with route mocking
+  test.describe.configure({ mode: 'serial' })
   test.describe('Welcome Screen', () => {
     test('shows welcome message and Let\'s Go button', async ({ page }) => {
       await mockNewUser(page)
@@ -31,6 +33,9 @@ test.describe('Onboarding', () => {
 
       await page.goto('/onboarding')
       await page.getByRole('button', { name: /let's go/i }).click()
+
+      // Wait for intake form to appear (step 1: product type selection)
+      await page.waitForSelector('text=/what nicotine products/i')
     })
 
     test('Step 1: can select product type and continue', async ({ page }) => {
@@ -48,10 +53,10 @@ test.describe('Onboarding', () => {
 
     test('Step 1: can select multiple product types', async ({ page }) => {
       // Select multiple products
-      await page.getByText(/vape|vaping/i).first().click()
-      await page.getByText(/cigarette/i).first().click()
+      await page.getByText('Vape / E-cigarette').click()
+      await page.getByText('Cigarettes').click()
 
-      // Both should be selected (visual check - they should have selected state)
+      // Both should be selected - continue button should be enabled
       const continueButton = page.getByRole('button', { name: /continue|next/i })
       await expect(continueButton).toBeEnabled()
     })

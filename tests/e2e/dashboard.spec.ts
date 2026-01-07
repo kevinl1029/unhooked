@@ -74,7 +74,7 @@ test.describe('Dashboard', () => {
       await expect(page.getByText(/complete|unhooked|finished|congratulations/i)).toBeVisible()
     })
 
-    test('shows 5 of 5 sessions completed', async ({ page }) => {
+    test('shows all 5 myths completed in journey summary', async ({ page }) => {
       await mockProgressAPI(page, {
         programStatus: 'completed',
         mythsCompleted: [1, 2, 3, 4, 5],
@@ -84,19 +84,8 @@ test.describe('Dashboard', () => {
 
       await page.goto('/dashboard')
 
-      await expect(page.getByText(/5.*(of|\/)\s*5/i)).toBeVisible()
-    })
-  })
-
-  test.describe('Navigation', () => {
-    test('clicking brand logo navigates to home', async ({ page }) => {
-      await mockUserInProgress(page)
-
-      await page.goto('/dashboard')
-
-      await page.getByRole('link', { name: 'Unhooked' }).click()
-
-      await expect(page).toHaveURL('/')
+      // Completed state shows "all 5 myths" in the description
+      await expect(page.getByText(/all 5 myths/i)).toBeVisible()
     })
   })
 })

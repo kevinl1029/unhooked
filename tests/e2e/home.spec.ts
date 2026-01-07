@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('Home Page', () => {
+  // Home page tests need to bypass auth - authenticated users get redirected to dashboard
+  test.use({ storageState: { cookies: [], origins: [] } })
+
   test('displays the landing page with correct content', async ({ page }) => {
     await page.goto('/')
 
