@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run test:unit 2>&1 | head -30",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

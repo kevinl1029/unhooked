@@ -237,6 +237,72 @@ Automatically runs after `npm install` to generate Nuxt types
 
 ---
 
+## Testing
+
+### Test Framework
+- **Unit/Component Tests:** Vitest with @nuxt/test-utils
+- **E2E Tests:** Playwright
+- **Test Environment:** Uses `.env.test` for mocked credentials
+
+### Test Commands
+```bash
+npm run test:unit          # Run unit tests once
+npm run test:unit:watch    # Run unit tests in watch mode
+npm run test:unit:coverage # Run with coverage report
+npm run test:e2e           # Run Playwright E2E tests
+npm run test:e2e:ui        # Run E2E with interactive UI
+```
+
+### Test File Structure
+```
+tests/
+├── setup.ts                      # Global test setup and mocks
+├── unit/
+│   ├── components/               # Component tests (*.test.ts)
+│   └── composables/              # Composable tests (*.test.ts)
+└── e2e/                          # Playwright E2E tests (*.spec.ts)
+```
+
+### Testing Guidelines
+
+**When to Write Tests:**
+- After implementing a new component or composable
+- After adding or modifying API endpoints
+- After fixing a bug (add regression test)
+- Before marking a feature as complete
+
+**Unit Test Conventions:**
+- Place in `tests/unit/` mirroring source structure
+- Use `.test.ts` extension
+- Mock external dependencies (Supabase, APIs) in `tests/setup.ts`
+- Test component rendering with `mountSuspended` from @nuxt/test-utils
+
+**E2E Test Conventions:**
+- Place in `tests/e2e/`
+- Use `.spec.ts` extension
+- Group by feature area (auth, onboarding, sessions, etc.)
+- Test critical user flows end-to-end
+
+**Running Tests Before Commits:**
+- Always run `npm run test:unit` before committing
+- Run `npm run test:e2e` for changes affecting user flows
+- Fix failing tests before pushing
+
+### Current Test Coverage Areas
+- **Components:** AppHeader
+- **Composables:** useProgress
+- **E2E:** Home page, navigation, health API
+
+### Priority E2E Tests Needed
+See `tests/e2e/` for implemented tests. Key areas still needing coverage:
+1. Authentication flow (login, logout, protected routes)
+2. Onboarding/intake form (all 5 steps)
+3. Dashboard (progress display, navigation)
+4. Myth sessions (chat, completion, transitions)
+5. Voice interface (recording, playback, STT/TTS)
+
+---
+
 ## API Endpoints
 
 ### Health Check
