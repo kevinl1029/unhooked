@@ -265,10 +265,21 @@ tests/
 
 ### Testing Guidelines
 
+**IMPORTANT - Testing is Part of Implementation:**
+- When creating implementation plans, ALWAYS include a "Testing" section that identifies:
+  - Key user flows requiring E2E coverage
+  - Complex logic requiring unit tests
+  - What mocks are needed (API responses, auth states)
+- When implementing features, write unit tests alongside the code for:
+  - Composables with non-trivial logic
+  - Utility functions with edge cases
+  - State management logic
+- E2E tests should be written after the UI is stable, covering critical user flows
+
 **When to Write Tests:**
-- After implementing a new component or composable
-- After adding or modifying API endpoints
-- After fixing a bug (add regression test)
+- During implementation (unit tests for logic)
+- After UI is stable (E2E tests for user flows)
+- After fixing a bug (regression test)
 - Before marking a feature as complete
 
 **Unit Test Conventions:**
@@ -281,6 +292,7 @@ tests/
 - Place in `tests/e2e/`
 - Use `.spec.ts` extension
 - Group by feature area (auth, onboarding, sessions, etc.)
+- Use route mocking (`page.route()`) to avoid hitting real APIs
 - Test critical user flows end-to-end
 
 **Running Tests Before Commits:**
@@ -288,18 +300,16 @@ tests/
 - Run `npm run test:e2e` for changes affecting user flows
 - Fix failing tests before pushing
 
-### Current Test Coverage Areas
-- **Components:** AppHeader
-- **Composables:** useProgress
-- **E2E:** Home page, navigation, health API
+### E2E Mock Utilities
+Located in `tests/e2e/utils/`:
+- `mockUserInProgress(page, options)` - Mock authenticated user with progress
+- `mockNewUser(page)` - Mock new user (no intake/progress)
+- `mockProgressAPI(page, options)` - Mock /api/progress endpoint
+- `mockIntakeAPI(page, options)` - Mock /api/intake endpoint
 
-### Priority E2E Tests Needed
-See `tests/e2e/` for implemented tests. Key areas still needing coverage:
-1. Authentication flow (login, logout, protected routes)
-2. Onboarding/intake form (all 5 steps)
-3. Dashboard (progress display, navigation)
-4. Myth sessions (chat, completion, transitions)
-5. Voice interface (recording, playback, STT/TTS)
+### Current Test Coverage
+- **E2E (30 tests):** Auth flows, dashboard, onboarding, home page, navigation
+- **Unit:** Components (AppHeader), Composables (useProgress)
 
 ---
 
