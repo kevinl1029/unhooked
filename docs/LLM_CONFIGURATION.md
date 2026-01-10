@@ -1,6 +1,6 @@
 # LLM Configuration Guide
 
-**Last Updated:** 2026-01-10 (Groq Integration)
+**Last Updated:** 2026-01-10 (Reverted to Gemini defaults)
 
 ---
 
@@ -47,14 +47,14 @@ Response (streaming or non-streaming)
 #### 1. Main Conversation Chat
 - **Purpose**: Real-time user conversations
 - **Endpoint**: `/api/chat.post.ts`, `/api/support/chat.post.ts`
-- **Default Provider**: Groq (`llama-3.1-8b-instant`)
+- **Default Provider**: Gemini (`gemini-2.0-flash`)
 - **Override**: Set `DEFAULT_LLM_PROVIDER` env var
 - **Supports**: Streaming and non-streaming responses
 
 #### 2. Background Tasks
 - **Purpose**: Analysis, assessment, structured extraction
 - **Execution**: Via `TaskExecutor.executeTask()`
-- **Default Provider**: Groq (various models based on task)
+- **Default Provider**: Gemini (`gemini-pro` or `gemini-flash` based on task)
 - **Override**: Set task-specific env vars (see below)
 - **Examples**: Moment detection, conviction assessment, story summarization
 
@@ -66,26 +66,26 @@ Response (streaming or non-streaming)
 
 | Task ID | When It Runs | Purpose | Default Model | Config |
 |---------|--------------|---------|---------------|--------|
-| **conversation** | Every user message | Main therapeutic dialogue | `groq:llama-3.1-8b-instant` | temp: 0.7 |
-| **moment.detect** | During user messages (20+ words) | Detect capture-worthy moments (insights, breakthroughs) | `groq:llama-3.1-8b-instant` | temp: 0.3, max: 500 |
-| **conviction.assess** | After session completes | Measure belief shift (0-10), extract triggers/stakes | `groq:llama-3.3-70b-versatile` | temp: 0.3, max: 1000 |
-| **checkin.personalize** | Before daily check-ins | Tailor check-in questions to user's story | `groq:llama-3.1-8b-instant` | temp: 0.7, max: 300 |
-| **story.summarize** | After conviction assessment | Update user's evolving story | `groq:llama-3.3-70b-versatile` | temp: 0.5, max: 500 |
-| **ceremony.narrative** | Before layer transitions | Generate personalized ceremony script | `groq:llama-3.3-70b-versatile` | temp: 0.8, max: 2000 |
-| **ceremony.select** | When selecting ceremony type | Choose appropriate ceremony (smoke, burn, bury) | `groq:llama-3.1-8b-instant` | temp: 0.3, max: 1000 |
-| **key_insight.select** | After session completes | Pick most significant moment from session | `groq:llama-3.1-8b-instant` | temp: 0.3, max: 500 |
+| **conversation** | Every user message | Main therapeutic dialogue | `gemini-pro` | temp: 0.7 |
+| **moment.detect** | During user messages (20+ words) | Detect capture-worthy moments (insights, breakthroughs) | `gemini-flash` | temp: 0.3, max: 500 |
+| **conviction.assess** | After session completes | Measure belief shift (0-10), extract triggers/stakes | `gemini-pro` | temp: 0.3, max: 1000 |
+| **checkin.personalize** | Before daily check-ins | Tailor check-in questions to user's story | `gemini-flash` | temp: 0.7, max: 300 |
+| **story.summarize** | After conviction assessment | Update user's evolving story | `gemini-pro` | temp: 0.5, max: 500 |
+| **ceremony.narrative** | Before layer transitions | Generate personalized ceremony script | `gemini-pro` | temp: 0.8, max: 2000 |
+| **ceremony.select** | When selecting ceremony type | Choose appropriate ceremony (smoke, burn, bury) | `gemini-pro` | temp: 0.3, max: 1000 |
+| **key_insight.select** | After session completes | Pick most significant moment from session | `gemini-pro` | temp: 0.3, max: 500 |
 
 ### Task Model Selection Rationale
 
-**Fast Model (`llama-3.1-8b-instant`):**
+**Flash Model (`gemini-flash`):**
 - Best for: Classification, selection, fast detection
-- Tasks: moment.detect, checkin.personalize, ceremony.select, key_insight.select
-- Speed: ~200-500ms response time
+- Tasks: moment.detect, checkin.personalize
+- Speed: Fast response time
 
-**Quality Model (`llama-3.3-70b-versatile`):**
+**Pro Model (`gemini-pro`):**
 - Best for: Complex analysis, creative generation, nuanced understanding
-- Tasks: conviction.assess, story.summarize, ceremony.narrative
-- Speed: ~1-2s response time (still fast due to Groq)
+- Tasks: conversation, conviction.assess, story.summarize, ceremony.narrative, ceremony.select, key_insight.select
+- Speed: Slightly slower but higher quality
 
 ---
 
@@ -95,14 +95,23 @@ Response (streaming or non-streaming)
 
 ```bash
 # === Default Provider Selection ===
-DEFAULT_LLM_PROVIDER=groq
-# Options: groq, gemini, anthropic, openai
-# Default: groq
+DEFAULT_LLM_PROVIDER=gemini
+# Options: gemini, groq, anthropic, openai
+# Default: gemini
 # Used when no model parameter is specified in API requests
 
-# === Groq Configuration (Primary) ===
+# === Gemini Configuration (Primary) ===
+GEMINI_API_KEY=AI...
+# Required: Google Gemini API key
+# Get your key: https://makersuite.google.com/app/apikey
+
+GEMINI_MODEL=gemini-2.0-flash
+# Optional: Default Gemini model
+# Default: gemini-2.0-flash
+
+# === Groq Configuration (Alternative) ===
 GROQ_API_KEY=gsk_...
-# Required: Your Groq API key from https://console.groq.com
+# Optional: Your Groq API key from https://console.groq.com
 # Get your key: https://console.groq.com/keys
 
 GROQ_MODEL=llama-3.1-8b-instant
@@ -114,15 +123,6 @@ GROQ_MODEL=llama-3.1-8b-instant
 #   - llama-3.1-70b-versatile (excellent general-purpose)
 #   - mixtral-8x7b-32768 (32k context window)
 #   - gemma2-9b-it (lightweight)
-
-# === Gemini Configuration (Fallback/Testing) ===
-GEMINI_API_KEY=AI...
-# Optional: Google Gemini API key
-# Get your key: https://makersuite.google.com/app/apikey
-
-GEMINI_MODEL=gemini-2.0-flash
-# Optional: Default Gemini model
-# Default: gemini-2.0-flash
 
 # === Anthropic Configuration (Future) ===
 ANTHROPIC_API_KEY=sk-ant-...
@@ -146,42 +146,42 @@ Override individual tasks to use different models or providers:
 
 # Main conversation
 LLM_TASK_CONVERSATION_MODEL=
-# Default: groq:llama-3.1-8b-instant
+# Default: gemini-pro
 # Example: groq:llama-3.3-70b-versatile
 
 # Moment detection (runs during conversations)
 LLM_TASK_MOMENT_DETECT_MODEL=
-# Default: groq:llama-3.1-8b-instant
+# Default: gemini-flash
 # Runs on user messages with 20+ words
 
 # Conviction assessment (runs after session completion)
 LLM_TASK_CONVICTION_ASSESS_MODEL=
-# Default: groq:llama-3.3-70b-versatile
+# Default: gemini-pro
 # Measures belief shift, extracts triggers/stakes
 
 # Check-in personalization (runs before daily check-ins)
 LLM_TASK_CHECKIN_PERSONALIZE_MODEL=
-# Default: groq:llama-3.1-8b-instant
+# Default: gemini-flash
 # Tailors questions to user's journey
 
 # Story summarization (runs after conviction assessment)
 LLM_TASK_STORY_SUMMARIZE_MODEL=
-# Default: groq:llama-3.3-70b-versatile
+# Default: gemini-pro
 # Updates user's evolving narrative
 
 # Ceremony narrative generation (runs before layer transitions)
 LLM_TASK_CEREMONY_NARRATIVE_MODEL=
-# Default: groq:llama-3.3-70b-versatile
+# Default: gemini-pro
 # Generates personalized ceremony scripts
 
 # Ceremony selection (chooses ceremony type)
 LLM_TASK_CEREMONY_SELECT_MODEL=
-# Default: groq:llama-3.1-8b-instant
+# Default: gemini-pro
 # Selects: smoke, burn, or bury ceremony
 
 # Key insight selection (runs after session completion)
 LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
-# Default: groq:llama-3.1-8b-instant
+# Default: gemini-pro
 # Picks most significant moment from session
 ```
 
@@ -189,12 +189,41 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
 
 ## Provider Configuration
 
-### Groq (Primary)
+### Gemini (Primary)
+
+**Setup:**
+1. Get API key: https://makersuite.google.com/app/apikey
+2. Set `GEMINI_API_KEY` in `.env`
+3. (Optional) Set `GEMINI_MODEL` to override default
+
+**Available Models:**
+- `gemini-2.0-flash` - Fast, high quality (default)
+- `gemini-3-flash-preview` - Latest preview version
+
+**Task Model Types:**
+- `gemini-pro` - Maps to `gemini-2.0-flash`, used for complex tasks
+- `gemini-flash` - Maps to `gemini-2.0-flash`, used for fast tasks
+
+**Strengths:**
+- High-quality responses
+- Good multilingual support
+- Free tier available
+- Reliable and consistent
+
+**Best For:**
+- Main conversation chat
+- Complex analysis tasks
+- All default LLM tasks
+
+---
+
+### Groq (Alternative)
 
 **Setup:**
 1. Get API key: https://console.groq.com/keys
 2. Set `GROQ_API_KEY` in `.env`
-3. (Optional) Set `GROQ_MODEL` to override default
+3. Set `DEFAULT_LLM_PROVIDER=groq` to use as primary
+4. (Optional) Set `GROQ_MODEL` to override default
 
 **Available Models:**
 - `llama-3.1-8b-instant` - Ultra-fast, 128k context (default)
@@ -209,32 +238,9 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
 - 🔧 OpenAI-compatible API (easy integration)
 
 **Best For:**
-- Real-time chat (main conversation)
-- Fast classification tasks (moment detection, selection)
+- Real-time chat when speed is critical
+- Fast classification tasks
 - High-throughput applications
-
----
-
-### Gemini (Fallback/Testing)
-
-**Setup:**
-1. Get API key: https://makersuite.google.com/app/apikey
-2. Set `GEMINI_API_KEY` in `.env`
-3. (Optional) Set `GEMINI_MODEL` to override default
-
-**Available Models:**
-- `gemini-2.0-flash` - Fast, high quality (default)
-- `gemini-3-flash-preview` - Latest preview version
-
-**Strengths:**
-- High-quality responses
-- Good multilingual support
-- Free tier available
-
-**Best For:**
-- Testing alternative providers
-- Specific tasks requiring Gemini capabilities
-- Fallback when Groq is unavailable
 
 ---
 
@@ -285,15 +291,12 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
 ### Override Format
 
 ```bash
-# Full format: provider:model
-LLM_TASK_CONVICTION_ASSESS_MODEL=groq:llama-3.3-70b-versatile
+# Use task model type (recommended)
+LLM_TASK_CONVICTION_ASSESS_MODEL=gemini-pro
 
-# Short format: just model (uses default provider)
-LLM_TASK_CONVICTION_ASSESS_MODEL=llama-3.3-70b-versatile
-
-# Mix providers
-LLM_TASK_CONVERSATION_MODEL=groq:llama-3.1-8b-instant
-LLM_TASK_CEREMONY_NARRATIVE_MODEL=gemini:gemini-2.0-flash
+# Mix providers by setting DEFAULT_LLM_PROVIDER
+DEFAULT_LLM_PROVIDER=groq
+LLM_TASK_CONVERSATION_MODEL=gemini-pro  # Will use Groq since it's the default provider
 ```
 
 ### Task Name Reference
@@ -313,20 +316,32 @@ LLM_TASK_CEREMONY_NARRATIVE_MODEL=gemini:gemini-2.0-flash
 
 ## Configuration Examples
 
-### Example 1: All Groq (Default, Fast)
+### Example 1: All Gemini (Default)
+```bash
+DEFAULT_LLM_PROVIDER=gemini
+GEMINI_API_KEY=AI...
+
+# All tasks use Gemini with defaults (gemini-pro and gemini-flash)
+```
+
+**Result**: High-quality responses, reliable, free tier available
+
+---
+
+### Example 2: All Groq (Fast)
 ```bash
 DEFAULT_LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_...
 GROQ_MODEL=llama-3.1-8b-instant
 
-# All tasks use Groq with defaults
+# All tasks use Groq
 ```
 
-**Result**: Ultra-fast responses, good quality, cost-effective
+**Result**: Ultra-fast responses, cost-effective
 
 ---
 
-### Example 2: Groq Fast + Quality Mix
+### Example 3: Groq with Quality Mix
 ```bash
 DEFAULT_LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_...
@@ -334,58 +349,24 @@ GROQ_API_KEY=gsk_...
 # Fast model for most tasks
 GROQ_MODEL=llama-3.1-8b-instant
 
-# Higher quality for complex tasks
-LLM_TASK_CONVICTION_ASSESS_MODEL=groq:llama-3.3-70b-versatile
-LLM_TASK_STORY_SUMMARIZE_MODEL=groq:llama-3.3-70b-versatile
-LLM_TASK_CEREMONY_NARRATIVE_MODEL=groq:llama-3.3-70b-versatile
+# Tasks will still use gemini-pro/gemini-flash types but route to Groq
 ```
 
-**Result**: Fast chat, high-quality analysis/creative tasks
+**Result**: Fast chat with Groq infrastructure
 
 ---
 
-### Example 3: Multi-Provider Testing
-```bash
-DEFAULT_LLM_PROVIDER=groq
-GROQ_API_KEY=gsk_...
-GEMINI_API_KEY=AI...
-
-# Groq for real-time chat
-LLM_TASK_CONVERSATION_MODEL=groq:llama-3.1-8b-instant
-
-# Gemini for specific tasks
-LLM_TASK_CEREMONY_NARRATIVE_MODEL=gemini:gemini-2.0-flash
-
-# Groq for analysis
-LLM_TASK_CONVICTION_ASSESS_MODEL=groq:llama-3.3-70b-versatile
-```
-
-**Result**: Test different providers for different tasks
-
----
-
-### Example 4: Gemini Fallback
+### Example 4: Multi-Provider Setup
 ```bash
 DEFAULT_LLM_PROVIDER=gemini
 GEMINI_API_KEY=AI...
-
-# Use Gemini for everything (Groq unavailable)
-```
-
-**Result**: Full fallback to Gemini
-
----
-
-### Example 5: Large Context Needs
-```bash
-DEFAULT_LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_...
 
-# Use Mixtral for tasks needing large context
-LLM_TASK_STORY_SUMMARIZE_MODEL=groq:mixtral-8x7b-32768
+# Gemini is primary, Groq available as alternative
+# Switch providers by changing DEFAULT_LLM_PROVIDER
 ```
 
-**Result**: 32k context window for story summarization
+**Result**: Flexibility to switch between providers
 
 ---
 
@@ -445,14 +426,14 @@ LLM_TASK_STORY_SUMMARIZE_MODEL=groq:mixtral-8x7b-32768
 
 ## Troubleshooting
 
-### Issue: "No provider available for model: groq"
+### Issue: "No provider available for model: gemini"
 
-**Cause**: `GROQ_API_KEY` not set or invalid
+**Cause**: `GEMINI_API_KEY` not set or invalid
 
 **Solution**:
-1. Check `.env` file has `GROQ_API_KEY=gsk_...`
+1. Check `.env` file has `GEMINI_API_KEY=AI...`
 2. Restart dev server: `npm run dev`
-3. Verify API key at https://console.groq.com/keys
+3. Verify API key at https://makersuite.google.com/app/apikey
 
 ---
 
@@ -461,9 +442,9 @@ LLM_TASK_STORY_SUMMARIZE_MODEL=groq:mixtral-8x7b-32768
 **Cause**: Using slow model or provider
 
 **Solution**:
-1. Switch to faster model: `GROQ_MODEL=llama-3.1-8b-instant`
-2. Check task config: Ensure fast tasks use 8b model
-3. Monitor Groq status: https://status.groq.com
+1. Consider switching to Groq: `DEFAULT_LLM_PROVIDER=groq`
+2. Check task config in task-executor.ts
+3. Monitor provider status pages
 
 ---
 
@@ -537,8 +518,8 @@ LLM_TASK_STORY_SUMMARIZE_MODEL=groq:mixtral-8x7b-32768
 - ✅ Use different keys for dev/prod
 
 ### 2. Model Selection
-- ⚡ Use fast models (8b) for real-time chat
-- 🎯 Use quality models (70b) for complex analysis
+- ⚡ Use `gemini-flash` for fast tasks (detection, personalization)
+- 🎯 Use `gemini-pro` for complex tasks (analysis, narrative generation)
 - 💰 Monitor costs per provider
 - 🔄 Test different models regularly
 
@@ -558,8 +539,14 @@ LLM_TASK_STORY_SUMMARIZE_MODEL=groq:mixtral-8x7b-32768
 
 ## Performance Benchmarks
 
-### Typical Response Times (Groq)
+### Typical Response Times
 
+#### Gemini (Default)
+| Model | Avg Latency | Best For |
+|-------|-------------|----------|
+| gemini-2.0-flash | 1-3s | All tasks |
+
+#### Groq (Alternative)
 | Model | Avg Latency | Tokens/sec | Best For |
 |-------|-------------|------------|----------|
 | llama-3.1-8b-instant | 200-500ms | 800-1000 | Real-time chat |
@@ -568,16 +555,16 @@ LLM_TASK_STORY_SUMMARIZE_MODEL=groq:mixtral-8x7b-32768
 
 ### Task Execution Time Targets
 
-| Task | Target Time | Model |
-|------|-------------|-------|
-| conversation | <1s | 8b instant |
-| moment.detect | <500ms | 8b instant |
-| conviction.assess | <3s | 70b versatile |
-| checkin.personalize | <500ms | 8b instant |
-| story.summarize | <2s | 70b versatile |
-| ceremony.narrative | <3s | 70b versatile |
-| ceremony.select | <1s | 8b instant |
-| key_insight.select | <1s | 8b instant |
+| Task | Target Time | Default Model |
+|------|-------------|---------------|
+| conversation | <3s | gemini-pro |
+| moment.detect | <2s | gemini-flash |
+| conviction.assess | <5s | gemini-pro |
+| checkin.personalize | <2s | gemini-flash |
+| story.summarize | <3s | gemini-pro |
+| ceremony.narrative | <5s | gemini-pro |
+| ceremony.select | <3s | gemini-pro |
+| key_insight.select | <3s | gemini-pro |
 
 ---
 
