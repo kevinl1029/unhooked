@@ -308,14 +308,29 @@ export default defineEventHandler(async (event) => {
               if (sentenceDetector && ttsSynthesizer) {
                 const remaining = sentenceDetector.flush()
                 if (remaining) {
+                  // There's remaining text - synthesize it as the final chunk
                   processSentencesForTTS([remaining], true)
-                } else if (pendingTTSPromises.length > 0) {
-                  // Mark the last queued chunk as final
-                  // Note: This is handled by isLast flag in processSentencesForTTS
                 }
 
                 // Wait for all TTS synthesis to complete
                 await Promise.all(pendingTTSPromises)
+
+                // If no remaining text but we had chunks, we need to send a final marker
+                // because the last sentence was already sent without isLast=true
+                if (!remaining && pendingTTSPromises.length > 0) {
+                  // Send a final empty audio chunk to signal completion
+                  const finalChunk: AudioChunk = {
+                    chunkIndex: ttsSynthesizer.getChunkCount(),
+                    audioBase64: '',
+                    contentType: 'audio/wav',
+                    wordTimings: [],
+                    cumulativeOffsetMs: ttsSynthesizer.getCumulativeOffset(),
+                    durationMs: 0,
+                    isLast: true,
+                    text: ''
+                  }
+                  sendAudioChunk(finalChunk)
+                }
               }
 
               // Check for session complete token
