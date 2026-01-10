@@ -39,7 +39,7 @@ export function createGroqProvider(apiKey: string, defaultVoice: string = 'troy'
           model: 'canopylabs/orpheus-v1-english',
           input: text,
           voice: voiceToUse,
-          response_format: 'mp3'
+          response_format: 'wav'
         })
       })
 
@@ -61,7 +61,7 @@ export function createGroqProvider(apiKey: string, defaultVoice: string = 'troy'
 
       return {
         audioBuffer,
-        contentType: 'audio/mpeg',
+        contentType: 'audio/wav',
         wordTimings,
         estimatedDurationMs,
         provider: 'groq',
