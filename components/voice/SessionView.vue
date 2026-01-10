@@ -65,7 +65,8 @@
                   <!-- Show word-by-word if this is the current speaking message -->
                   <VoiceWordByWordTranscript
                     v-if="isAISpeaking && idx === displayMessages.length - 1"
-                    :transcript="msg.content"
+                    :words="isStreamingMode ? getWords : undefined"
+                    :transcript="!isStreamingMode ? msg.content : undefined"
                     :current-word-index="currentWordIndex"
                     :auto-scroll="true"
                     container-class="text-base leading-relaxed break-words"
@@ -222,6 +223,8 @@ const {
   currentTranscript,
   isStreamingMode,
   isTextStreaming,
+  getWords,
+  getTranscriptText,
   error,
   permissionState,
   isSupported,
@@ -277,17 +280,24 @@ const displayMessages = computed(() => {
   const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value) && currentTranscript.value
 
   if (showStreamingTranscript) {
+    // Use getTranscriptText in streaming mode for consistency with TTS-derived words
+    // This ensures the plain text fallback matches what's shown in word-by-word highlighting
+    const transcriptContent = isStreamingMode.value && getTranscriptText.value
+      ? getTranscriptText.value
+      : currentTranscript.value
+    const displayContent = transcriptContent.replace('[SESSION_COMPLETE]', '').trim()
+
     // Check if last message is already the streaming assistant message
     const lastMsg = allMessages[allMessages.length - 1]
     if (lastMsg?.role !== 'assistant' || !isAISpeaking.value) {
       // Add streaming message
       allMessages.push({
         role: 'assistant',
-        content: currentTranscript.value.replace('[SESSION_COMPLETE]', '').trim()
+        content: displayContent
       })
     } else {
       // Update the last assistant message with current streaming content
-      lastMsg.content = currentTranscript.value.replace('[SESSION_COMPLETE]', '').trim()
+      lastMsg.content = displayContent
     }
     return allMessages
   }

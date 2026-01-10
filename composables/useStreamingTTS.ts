@@ -60,6 +60,10 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
     const decoder = new TextDecoder()
     let buffer = ''
 
+    // Reset state from any previous stream before starting new one
+    // This clears allWordTimings so ttsWords/ttsText don't accumulate across messages
+    audioQueue.reset()
+
     isStreaming.value = true
     fullText.value = ''
     error.value = null
@@ -186,6 +190,8 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
     conversationId: readonly(conversationId),
     currentWordIndex: audioQueue.currentWordIndex,
     allWordTimings: audioQueue.allWordTimings,
+    ttsWords: audioQueue.ttsWords,
+    ttsText: audioQueue.ttsText,
     error: readonly(error),
 
     // Methods

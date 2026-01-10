@@ -35,6 +35,12 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   const currentWordIndex = ref(-1)
   let wordTrackingInterval: ReturnType<typeof setInterval> | null = null
 
+  // Words derived from TTS timings (for display sync)
+  const ttsWords = computed(() => allWordTimings.value.map(t => t.word))
+
+  // Full text derived from TTS words (for final message content after streaming)
+  const ttsText = computed(() => ttsWords.value.join(' '))
+
   // Track if we received a completion marker while audio is still playing
   let pendingCompletion = false
   // Track how many chunks have finished playing
@@ -275,6 +281,8 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     currentChunkIndex: readonly(currentChunkIndex),
     currentWordIndex: readonly(currentWordIndex),
     allWordTimings: readonly(allWordTimings),
+    ttsWords,
+    ttsText,
     error: readonly(error),
 
     // Methods

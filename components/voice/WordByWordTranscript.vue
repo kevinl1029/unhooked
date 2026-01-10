@@ -1,18 +1,19 @@
 <template>
   <p :class="containerClass">
     <span
-      v-for="(word, idx) in words"
+      v-for="(word, idx) in displayWords"
       :key="idx"
       :ref="el => setWordRef(el, idx)"
       class="transition-all duration-150"
       :class="getWordClass(idx)"
-    >{{ word }}{{ idx < words.length - 1 ? ' ' : '' }}</span>
+    >{{ word }}{{ idx < displayWords.length - 1 ? ' ' : '' }}</span>
   </p>
 </template>
 
 <script setup lang="ts">
 interface Props {
-  transcript: string
+  transcript?: string
+  words?: string[] // Pre-split words array (takes precedence over transcript)
   currentWordIndex?: number
   containerClass?: string
   baseClass?: string
@@ -24,6 +25,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   transcript: '',
+  words: () => [],
   currentWordIndex: -1,
   containerClass: 'text-lg leading-relaxed',
   baseClass: '',
@@ -33,7 +35,11 @@ const props = withDefaults(defineProps<Props>(), {
   autoScroll: false
 })
 
-const words = computed(() => {
+// Use pre-split words array if provided, otherwise split transcript
+const displayWords = computed(() => {
+  if (props.words && props.words.length > 0) {
+    return props.words
+  }
   return props.transcript.split(/\s+/).filter(w => w.length > 0)
 })
 
@@ -75,4 +81,7 @@ const getWordClass = (index: number): string => {
 
   return classes.filter(Boolean).join(' ')
 }
+
+// Also expose displayWords for parent access if needed
+defineExpose({ displayWords })
 </script>
