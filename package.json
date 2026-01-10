@@ -20,7 +20,8 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@nuxtjs/supabase": "^2.0.3",
-    "nuxt": "^4.2.2"
+    "nuxt": "^4.2.2",
+    "resend": "^6.7.0"
   },
   "devDependencies": {
     "@nuxt/test-utils": "^3.19.1",

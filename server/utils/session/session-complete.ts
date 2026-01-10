@@ -1,0 +1,282 @@
+/**
+ * Session Complete Handler
+ * Orchestrates all post-session tasks when [SESSION_COMPLETE] is detected
+ */
+
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Message } from '../llm/types'
+import type { MythKey, MythLayer, CapturedMoment, UserIntakeData } from '../llm/task-types'
+import { assessConviction } from '../llm/tasks/conviction-assessment'
+import { selectKeyInsight } from '../llm/tasks/key-insight-selection'
+import { summarizeOriginStory, shouldGenerateSummary } from '../llm/tasks/story-summarization'
+
+interface SessionCompleteInput {
+  userId: string
+  conversationId: string
+  mythKey: MythKey
+  mythLayer: MythLayer
+  messages: Message[]
+  supabase: SupabaseClient
+}
+
+interface SessionCompleteResult {
+  convictionAssessment: {
+    newConviction: number
+    delta: number
+    remainingResistance: string | null
+    newTriggers: string[]
+    newStakes: string[]
+  } | null
+  keyInsightId: string | null
+  error?: string
+}
+
+/**
+ * Handle all post-session tasks after [SESSION_COMPLETE] is detected
+ *
+ * 1. Fetch user story and captured moments for context
+ * 2. Run conviction assessment
+ * 3. Store assessment in conviction_assessments table
+ * 4. Update user_story snapshot
+ * 5. Select key insight if multiple candidates
+ * 6. Update key insight in user_story
+ */
+export async function handleSessionComplete(input: SessionCompleteInput): Promise<SessionCompleteResult> {
+  const { userId, conversationId, mythKey, mythLayer, messages, supabase } = input
+
+  try {
+    // 1. Fetch user story for context
+    const { data: userStory } = await supabase
+      .from('user_story')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    // Get previous conviction for this myth
+    const previousConviction = userStory?.[`${mythKey}_conviction`] ?? 0
+
+    // Get existing triggers and stakes
+    const existingTriggers = userStory?.primary_triggers || []
+    const existingStakes = userStory?.personal_stakes || []
+
+    // 2. Fetch previous insights for this myth
+    const { data: previousInsightMoments } = await supabase
+      .from('captured_moments')
+      .select('transcript')
+      .eq('user_id', userId)
+      .eq('myth_key', mythKey)
+      .eq('moment_type', 'insight')
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    const previousInsights = previousInsightMoments?.map(m => m.transcript) || []
+
+    // 3. Run conviction assessment
+    console.log(`[session-complete] Running conviction assessment for ${mythKey}`)
+    const assessment = await assessConviction({
+      conversationTranscript: messages,
+      mythKey,
+      previousConviction,
+      previousInsights,
+      existingTriggers,
+      existingStakes,
+    })
+
+    // 4. Store assessment in conviction_assessments table
+    const { error: assessmentError } = await supabase
+      .from('conviction_assessments')
+      .insert({
+        user_id: userId,
+        conversation_id: conversationId,
+        myth_key: mythKey,
+        myth_layer: mythLayer,
+        conviction_score: assessment.newConviction,
+        delta: assessment.delta,
+        recommended_next_step: assessment.recommendedNextStep,
+        reasoning: assessment.reasoning,
+        new_triggers: assessment.newTriggers,
+        new_stakes: assessment.newStakes,
+      })
+
+    if (assessmentError) {
+      console.error('[session-complete] Failed to store assessment:', assessmentError)
+    }
+
+    // 5. Update user_story with new conviction and merge triggers/stakes
+    const storyUpdateData: Record<string, unknown> = {
+      [`${mythKey}_conviction`]: assessment.newConviction,
+      updated_at: new Date().toISOString(),
+    }
+
+    // Store resistance notes if present
+    if (assessment.remainingResistance) {
+      storyUpdateData[`${mythKey}_resistance_notes`] = assessment.remainingResistance
+    }
+
+    // Merge new triggers (deduplicate)
+    if (assessment.newTriggers.length > 0) {
+      const mergedTriggers = [...new Set([...existingTriggers, ...assessment.newTriggers])]
+      storyUpdateData.primary_triggers = mergedTriggers
+    }
+
+    // Merge new stakes (deduplicate)
+    if (assessment.newStakes.length > 0) {
+      const mergedStakes = [...new Set([...existingStakes, ...assessment.newStakes])]
+      storyUpdateData.personal_stakes = mergedStakes
+    }
+
+    await supabase
+      .from('user_story')
+      .update(storyUpdateData)
+      .eq('user_id', userId)
+
+    // 6. Select key insight if multiple candidates exist for this myth
+    const { data: insightCandidates } = await supabase
+      .from('captured_moments')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('myth_key', mythKey)
+      .eq('moment_type', 'insight')
+      .order('confidence_score', { ascending: false })
+
+    let keyInsightId: string | null = null
+
+    if (insightCandidates && insightCandidates.length > 0) {
+      // Convert to CapturedMoment type
+      const moments: CapturedMoment[] = insightCandidates.map(m => ({
+        id: m.id,
+        userId: m.user_id,
+        conversationId: m.conversation_id,
+        messageId: m.message_id,
+        momentType: m.moment_type,
+        transcript: m.transcript,
+        audioClipPath: m.audio_clip_path,
+        audioDurationMs: m.audio_duration_ms,
+        mythKey: m.myth_key,
+        sessionType: m.session_type,
+        mythLayer: m.myth_layer,
+        confidenceScore: m.confidence_score,
+        emotionalValence: m.emotional_valence,
+        isUserHighlighted: m.is_user_highlighted,
+        timesPlayedBack: m.times_played_back,
+        lastUsedAt: m.last_used_at,
+        createdAt: m.created_at,
+        updatedAt: m.updated_at,
+      }))
+
+      console.log(`[session-complete] Selecting key insight from ${moments.length} candidates`)
+
+      const selection = await selectKeyInsight({
+        insights: moments,
+        mythKey,
+        sessionContext: `Session completed for ${mythKey} at ${mythLayer} layer`,
+      })
+
+      if (selection.selectedMomentId) {
+        keyInsightId = selection.selectedMomentId
+
+        // Update user_story with key insight
+        await supabase
+          .from('user_story')
+          .update({
+            [`${mythKey}_key_insight_id`]: keyInsightId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', userId)
+      }
+    }
+
+    // 7. Generate origin story summary if we have 2+ origin fragments and no summary yet
+    const existingSummary = userStory?.origin_summary as string | null
+    const { data: originFragments } = await supabase
+      .from('captured_moments')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('moment_type', 'origin_story')
+      .order('created_at', { ascending: true })
+
+    if (shouldGenerateSummary(originFragments?.length || 0, existingSummary)) {
+      console.log(`[session-complete] Generating origin story summary from ${originFragments?.length} fragments`)
+
+      // Get user intake for context
+      const { data: intake } = await supabase
+        .from('user_intake')
+        .select('product_types, usage_frequency, years_using, previous_attempts, primary_reason, triggers, longest_quit_duration')
+        .eq('user_id', userId)
+        .single()
+
+      if (intake && originFragments) {
+        const intakeData: UserIntakeData = {
+          productTypes: intake.product_types || [],
+          usageFrequency: intake.usage_frequency || 'unknown',
+          yearsUsing: intake.years_using,
+          previousAttempts: intake.previous_attempts || 0,
+          primaryReason: intake.primary_reason || 'unknown',
+          triggers: intake.triggers,
+          longestQuitDuration: intake.longest_quit_duration,
+        }
+
+        // Convert origin fragments to CapturedMoment type
+        const originMoments: CapturedMoment[] = originFragments.map(m => ({
+          id: m.id,
+          userId: m.user_id,
+          conversationId: m.conversation_id,
+          messageId: m.message_id,
+          momentType: m.moment_type,
+          transcript: m.transcript,
+          audioClipPath: m.audio_clip_path,
+          audioDurationMs: m.audio_duration_ms,
+          mythKey: m.myth_key,
+          sessionType: m.session_type,
+          mythLayer: m.myth_layer,
+          confidenceScore: m.confidence_score,
+          emotionalValence: m.emotional_valence,
+          isUserHighlighted: m.is_user_highlighted,
+          timesPlayedBack: m.times_played_back,
+          lastUsedAt: m.last_used_at,
+          createdAt: m.created_at,
+          updatedAt: m.updated_at,
+        }))
+
+        const summary = await summarizeOriginStory({
+          originFragments: originMoments,
+          intakeData,
+        })
+
+        if (summary.summary) {
+          // Store summary and origin moment IDs in user_story
+          await supabase
+            .from('user_story')
+            .update({
+              origin_summary: summary.summary,
+              origin_moment_ids: originFragments.map(m => m.id),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId)
+
+          console.log(`[session-complete] Stored origin summary: "${summary.summary.slice(0, 50)}..."`)
+        }
+      }
+    }
+
+    console.log(`[session-complete] Completed for ${mythKey}: conviction ${previousConviction} -> ${assessment.newConviction} (delta: ${assessment.delta})`)
+
+    return {
+      convictionAssessment: {
+        newConviction: assessment.newConviction,
+        delta: assessment.delta,
+        remainingResistance: assessment.remainingResistance,
+        newTriggers: assessment.newTriggers,
+        newStakes: assessment.newStakes,
+      },
+      keyInsightId,
+    }
+  } catch (error) {
+    console.error('[session-complete] Handler failed:', error)
+    return {
+      convictionAssessment: null,
+      keyInsightId: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}

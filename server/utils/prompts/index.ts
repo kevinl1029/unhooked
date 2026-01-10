@@ -9,6 +9,17 @@ import { MYTH_5_IDENTITY_PROMPT } from './myths/myth-5-identity'
 
 export type { UserContext }
 
+// Extended options for buildSystemPrompt
+export interface BuildSystemPromptOptions {
+  mythNumber: number
+  userContext?: UserContext
+  isNewConversation?: boolean
+  // Phase 4C additions
+  personalizationContext?: string  // From context-builder.ts
+  bridgeContext?: string           // From bridge.ts
+  abandonedSessionContext?: string // For abandoned session moments
+}
+
 export const MYTH_NAMES: Record<number, string> = {
   1: 'The Stress Myth',
   2: 'The Pleasure Myth',
@@ -25,21 +36,63 @@ const MYTH_PROMPTS: Record<number, string> = {
   5: MYTH_5_IDENTITY_PROMPT,
 }
 
-export function buildSystemPrompt(mythNumber: number, userContext?: UserContext, isNewConversation = false): string {
-  let prompt = BASE_SYSTEM_PROMPT
+/**
+ * Build system prompt with full personalization support
+ * Supports both legacy signature and new options-based signature
+ */
+export function buildSystemPrompt(
+  mythNumberOrOptions: number | BuildSystemPromptOptions,
+  userContext?: UserContext,
+  isNewConversation = false
+): string {
+  // Handle both old and new signatures
+  let options: BuildSystemPromptOptions
 
-  if (userContext) {
-    prompt += buildPersonalization(userContext)
+  if (typeof mythNumberOrOptions === 'number') {
+    // Legacy signature: buildSystemPrompt(mythNumber, userContext, isNewConversation)
+    options = {
+      mythNumber: mythNumberOrOptions,
+      userContext,
+      isNewConversation,
+    }
+  } else {
+    // New options-based signature
+    options = mythNumberOrOptions
   }
 
-  const mythPrompt = MYTH_PROMPTS[mythNumber]
+  let prompt = BASE_SYSTEM_PROMPT
+
+  // Add basic user context (from intake)
+  if (options.userContext) {
+    prompt += buildPersonalization(options.userContext)
+  }
+
+  // Add rich personalization context (Phase 4C - from context-builder)
+  if (options.personalizationContext) {
+    prompt += options.personalizationContext
+  }
+
+  // Add myth-specific prompt
+  const mythPrompt = MYTH_PROMPTS[options.mythNumber]
   if (mythPrompt) {
     prompt += '\n\n' + mythPrompt
   }
 
+  // Add bridge context for returning users (Phase 4C)
+  if (options.bridgeContext) {
+    prompt += '\n\n## Continuing From Previous Session\n'
+    prompt += options.bridgeContext
+  }
+
+  // Add abandoned session context (Phase 4C)
+  if (options.abandonedSessionContext) {
+    prompt += '\n\n## Prior Session Context\n'
+    prompt += options.abandonedSessionContext
+  }
+
   // Add opening instruction for new conversations
-  if (isNewConversation) {
-    const openingMessage = MYTH_OPENING_MESSAGES[mythNumber]
+  if (options.isNewConversation && !options.bridgeContext && !options.abandonedSessionContext) {
+    const openingMessage = MYTH_OPENING_MESSAGES[options.mythNumber]
     if (openingMessage) {
       prompt += '\n\n## Starting This Session\n\n'
       prompt += 'This is the beginning of this myth session. Start the conversation with this opening:\n\n'

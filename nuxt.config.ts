@@ -67,6 +67,9 @@ export default defineNuxtConfig({
     llmTaskCeremonySelectModel: process.env.LLM_TASK_CEREMONY_SELECT_MODEL,
     llmTaskKeyInsightSelectModel: process.env.LLM_TASK_KEY_INSIGHT_SELECT_MODEL,
 
+    // Email Configuration (Phase 4B)
+    resendApiKey: process.env.RESEND_API_KEY,
+
     // Client-side (public)
     public: {
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000'

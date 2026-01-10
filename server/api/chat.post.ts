@@ -8,7 +8,11 @@ import {
   getSessionDetectionTracker,
   TRANSCRIPT_CAPTURE_THRESHOLD,
 } from '../utils/llm/tasks/moment-detection'
-import { mythNumberToKey, type SessionType, type MythLayer } from '../utils/llm/task-types'
+import { mythNumberToKey, type SessionType, type MythLayer, type MythKey } from '../utils/llm/task-types'
+import { handleSessionComplete } from '../utils/session/session-complete'
+import { buildSessionContext, formatContextForPrompt } from '../utils/personalization/context-builder'
+import { buildCrossLayerContext, formatCrossLayerContext } from '../utils/personalization/cross-layer-context'
+import { buildBridgeContext } from '../utils/session/bridge'
 
 export default defineEventHandler(async (event) => {
   // Verify authentication
@@ -27,6 +31,7 @@ export default defineEventHandler(async (event) => {
     inputModality = 'text',
     sessionType = 'core',
     mythLayer = 'intellectual',
+    priorMoments = [],
   } = body as {
     messages: Message[]
     conversationId?: string
@@ -36,6 +41,7 @@ export default defineEventHandler(async (event) => {
     inputModality?: 'text' | 'voice'
     sessionType?: SessionType
     mythLayer?: MythLayer
+    priorMoments?: Array<{ transcript: string; moment_type: string }>
   }
 
   if (!messages || !Array.isArray(messages)) {
@@ -53,6 +59,9 @@ export default defineEventHandler(async (event) => {
   const isNewConversation = messages.length === 0
 
   if (mythNumber) {
+    const mythKey = mythNumberToKey(mythNumber)
+
+    // Fetch basic intake data
     const { data: intake } = await supabase
       .from('user_intake')
       .select('product_types, usage_frequency, years_using, previous_attempts, triggers')
@@ -67,7 +76,55 @@ export default defineEventHandler(async (event) => {
       triggers: intake.triggers
     } : undefined
 
-    const systemPrompt = buildSystemPrompt(mythNumber, userContext, isNewConversation)
+    // Build rich personalization context (Phase 4C)
+    let personalizationContext = ''
+    let bridgeContext = ''
+    let abandonedSessionContext = ''
+
+    // Format prior moments from abandoned session
+    if (priorMoments && priorMoments.length > 0) {
+      abandonedSessionContext = 'The user started this session earlier but didn\'t complete it. Here are insights they shared before:\n\n'
+      abandonedSessionContext += priorMoments
+        .map(m => `- [${m.moment_type}]: "${m.transcript}"`)
+        .join('\n')
+      abandonedSessionContext += '\n\nAcknowledge you remember where you left off and continue naturally from their previous insights.'
+    }
+
+    if (mythKey) {
+      // Build session context with captured moments
+      const sessionContext = await buildSessionContext(
+        supabase,
+        user.sub,
+        mythKey,
+        sessionType
+      )
+      personalizationContext = formatContextForPrompt(sessionContext)
+
+      // For returning users (Layer 2+), build cross-layer context and bridge message
+      if (mythLayer !== 'intellectual') {
+        const crossLayerCtx = await buildCrossLayerContext(
+          supabase,
+          user.sub,
+          mythKey,
+          mythLayer
+        )
+        personalizationContext += formatCrossLayerContext(crossLayerCtx)
+
+        // Only add bridge context for new conversations (AI's first message)
+        if (isNewConversation) {
+          bridgeContext = buildBridgeContext(crossLayerCtx)
+        }
+      }
+    }
+
+    const systemPrompt = buildSystemPrompt({
+      mythNumber,
+      userContext,
+      isNewConversation,
+      personalizationContext,
+      bridgeContext,
+      abandonedSessionContext,
+    })
 
     // Prepend system message
     processedMessages = [
@@ -78,7 +135,7 @@ export default defineEventHandler(async (event) => {
 
   // Get or create conversation
   let convId = conversationId
-  const mythKey = mythNumber ? mythNumberToKey(mythNumber) : null
+  const conversationMythKey = mythNumber ? mythNumberToKey(mythNumber) : null
 
   if (!convId) {
     // Create new conversation with enhanced tracking
@@ -91,7 +148,7 @@ export default defineEventHandler(async (event) => {
         myth_number: mythNumber || null,
         // New Phase 4A fields
         session_type: sessionType,
-        myth_key: mythKey,
+        myth_key: conversationMythKey,
         myth_layer: mythLayer,
       })
       .select('id')
@@ -136,7 +193,7 @@ export default defineEventHandler(async (event) => {
       // Start moment detection in parallel (if eligible)
       // Only detect on user messages with 20+ words, and within rate limit
       if (
-        mythKey &&
+        conversationMythKey &&
         shouldAttemptDetection(lastUserMessage.content) &&
         detectionTracker.canDetect(convId)
       ) {
@@ -148,7 +205,7 @@ export default defineEventHandler(async (event) => {
             const result = await detectMoment({
               userMessage: lastUserMessage.content,
               recentHistory: messages.slice(-6),
-              currentMythKey: mythKey,
+              currentMythKey: conversationMythKey,
               sessionType,
             })
 
@@ -160,7 +217,7 @@ export default defineEventHandler(async (event) => {
                 message_id: savedMessageId,
                 moment_type: result.momentType,
                 transcript: result.keyPhrase || lastUserMessage.content, // Use key phrase if available
-                myth_key: mythKey,
+                myth_key: conversationMythKey,
                 session_type: sessionType,
                 myth_layer: mythLayer,
                 confidence_score: result.confidence,
@@ -212,7 +269,7 @@ export default defineEventHandler(async (event) => {
                 time_since_last_message: null
               })
 
-              // If session complete, lock the conversation
+              // If session complete, lock the conversation and run post-session tasks
               if (sessionComplete) {
                 await supabase
                   .from('conversations')
@@ -221,6 +278,28 @@ export default defineEventHandler(async (event) => {
 
                 // Reset detection tracker for this conversation
                 detectionTracker.resetCount(convId)
+
+                // Run conviction assessment and post-session tasks (only for core sessions with myth)
+                if (sessionType === 'core' && conversationMythKey) {
+                  // Wait for moment detection to complete first
+                  if (momentDetectionPromise) {
+                    await momentDetectionPromise
+                    momentDetectionPromise = null
+                  }
+
+                  // Run session complete handler (conviction assessment, user story update, key insight selection)
+                  // This runs in the background - don't block the response
+                  handleSessionComplete({
+                    userId: user.sub,
+                    conversationId: convId,
+                    mythKey: conversationMythKey as MythKey,
+                    mythLayer,
+                    messages: processedMessages,
+                    supabase,
+                  }).catch(err => {
+                    console.error('[chat] Session complete handler failed:', err)
+                  })
+                }
               }
 
               // Wait for moment detection to complete before closing
@@ -272,7 +351,7 @@ export default defineEventHandler(async (event) => {
         time_since_last_message: null
       })
 
-      // If session complete, lock the conversation
+      // If session complete, lock the conversation and run post-session tasks
       if (sessionComplete) {
         await supabase
           .from('conversations')
@@ -281,6 +360,28 @@ export default defineEventHandler(async (event) => {
 
         // Reset detection tracker for this conversation
         detectionTracker.resetCount(convId)
+
+        // Run conviction assessment and post-session tasks (only for core sessions with myth)
+        if (sessionType === 'core' && conversationMythKey) {
+          // Wait for moment detection to complete first
+          if (momentDetectionPromise) {
+            await momentDetectionPromise
+            momentDetectionPromise = null
+          }
+
+          // Run session complete handler (conviction assessment, user story update, key insight selection)
+          // This runs in the background - don't block the response
+          handleSessionComplete({
+            userId: user.sub,
+            conversationId: convId,
+            mythKey: conversationMythKey as MythKey,
+            mythLayer,
+            messages: processedMessages,
+            supabase,
+          }).catch(err => {
+            console.error('[chat] Session complete handler failed:', err)
+          })
+        }
       }
 
       // Wait for moment detection to complete
