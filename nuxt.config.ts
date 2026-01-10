@@ -37,8 +37,15 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     // Server-side only (not exposed to client)
+    // Groq Configuration (Primary LLM Provider)
+    groqApiKey: process.env.GROQ_API_KEY,
+    groqModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+
+    // Gemini Configuration (Fallback/Testing)
     geminiApiKey: process.env.GEMINI_API_KEY,
     geminiModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
+
+    // Future Providers
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
 
