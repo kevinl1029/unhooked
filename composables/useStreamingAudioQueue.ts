@@ -37,6 +37,8 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
 
   // Track if we received a completion marker while audio is still playing
   let pendingCompletion = false
+  // Track how many chunks have finished playing
+  let chunksFinishedPlaying = 0
 
   /**
    * Decode base64 WAV to AudioBuffer
@@ -80,13 +82,17 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     try {
       // Handle empty "final marker" chunk - just signals completion without audio
       if (chunk.isLast && !chunk.audioBase64) {
-        // If we're currently playing, we need to wait for current audio to finish
-        // then trigger completion. If not playing, trigger immediately.
-        if (!isPlaying.value) {
+        // Check if all queued audio has already finished playing
+        const allAudioFinished = queuedChunks.length > 0 &&
+          chunksFinishedPlaying >= queuedChunks.length
+
+        if (allAudioFinished || queuedChunks.length === 0) {
+          // All audio done or no audio was ever queued - trigger completion immediately
+          isPlaying.value = false
+          stopWordTracking()
           options.onComplete?.()
         } else {
-          // Mark that we should call onComplete when current audio finishes
-          // We do this by setting a flag that the last real chunk's onended will check
+          // Audio still playing - mark for completion when it finishes
           pendingCompletion = true
         }
         return
@@ -128,6 +134,9 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
 
       // Track when this chunk ends
       source.onended = () => {
+        // Increment finished count
+        chunksFinishedPlaying++
+
         // Update current chunk index
         const chunkIdx = queuedChunks.findIndex(qc => qc.scheduledTime === scheduledTime)
         if (chunkIdx >= 0) {
@@ -135,8 +144,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
         }
 
         // Check if this is the last queued chunk
-        const isLastQueuedChunk = queuedChunks.length > 0 &&
-          queuedChunks[queuedChunks.length - 1].scheduledTime === scheduledTime
+        const isLastQueuedChunk = chunksFinishedPlaying >= queuedChunks.length
 
         // Check if this was marked as last, OR if we have a pending completion and this is the last queued chunk
         if (chunk.isLast || (pendingCompletion && isLastQueuedChunk)) {
@@ -227,6 +235,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     allWordTimings.value = []
     error.value = null
     pendingCompletion = false
+    chunksFinishedPlaying = 0
   }
 
   /**
