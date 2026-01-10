@@ -13,7 +13,11 @@ interface QueuedChunk {
   scheduledTime: number
 }
 
-export const useStreamingAudioQueue = () => {
+interface StreamingAudioQueueOptions {
+  onComplete?: () => void
+}
+
+export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {}) => {
   // State
   const isPlaying = ref(false)
   const isWaitingForChunks = ref(false)
@@ -117,6 +121,8 @@ export const useStreamingAudioQueue = () => {
         if (chunk.isLast) {
           isPlaying.value = false
           stopWordTracking()
+          // Notify that audio playback is complete
+          options.onComplete?.()
         }
       }
 

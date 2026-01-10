@@ -45,6 +45,11 @@ export const useVoiceSession = () => {
     },
     onError: (err) => {
       error.value = err
+    },
+    onAudioComplete: () => {
+      // Audio playback finished - update state
+      isAISpeaking.value = false
+      isStreamingMode.value = false
     }
   })
   const isStreamingMode = ref(false)
@@ -167,16 +172,15 @@ export const useVoiceSession = () => {
     } catch (e: any) {
       console.error('[useVoiceSession] Streaming TTS error:', e)
       error.value = e.message || 'Streaming playback failed'
+      isStreamingMode.value = false
       return {
         success: false,
         sessionComplete: false,
         conversationId: null
       }
-    } finally {
-      isStreamingMode.value = false
-      // Wait for audio to finish playing
-      // The isAISpeaking will be updated by the audio queue
     }
+    // Note: isStreamingMode stays true until onAudioComplete callback is called
+    // The callback will set isAISpeaking = false, and we watch that to reset isStreamingMode
   }
 
   // Start word tracking during playback

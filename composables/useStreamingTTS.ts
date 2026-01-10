@@ -11,6 +11,7 @@ interface StreamingTTSOptions {
   onTextUpdate?: (text: string) => void
   onComplete?: (fullText: string, sessionComplete: boolean) => void
   onError?: (error: string) => void
+  onAudioComplete?: () => void
 }
 
 interface SSEEvent {
@@ -25,7 +26,11 @@ interface SSEEvent {
 }
 
 export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
-  const audioQueue = useStreamingAudioQueue()
+  const audioQueue = useStreamingAudioQueue({
+    onComplete: () => {
+      options.onAudioComplete?.()
+    }
+  })
 
   // State
   const isStreaming = ref(false)
