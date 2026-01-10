@@ -31,6 +31,6 @@ export interface LLMProvider {
   chatStream(request: ChatRequest, callbacks: StreamCallbacks): Promise<void>
 }
 
-export type ModelType = 'gemini' | 'claude' | 'openai'
+export type ModelType = 'groq' | 'gemini' | 'claude' | 'openai'
 
-export const DEFAULT_MODEL: ModelType = 'gemini'
+export const DEFAULT_MODEL: ModelType = 'groq'

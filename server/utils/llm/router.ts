@@ -1,16 +1,24 @@
 import type { LLMProvider, ModelType, ChatRequest, ChatResponse, StreamCallbacks } from './types'
 import { GeminiProvider } from './providers/gemini'
+import { GroqProvider } from './providers/groq'
 
 export class ModelRouter {
   private providers: Map<ModelType, LLMProvider> = new Map()
 
   constructor(config: {
+    groqApiKey?: string
+    groqModel?: string
     geminiApiKey?: string
     geminiModel?: string
     anthropicApiKey?: string
     openaiApiKey?: string
   }) {
-    // Initialize available providers
+    // Initialize Groq provider (primary)
+    if (config.groqApiKey) {
+      this.providers.set('groq', new GroqProvider(config.groqApiKey, config.groqModel))
+    }
+
+    // Initialize Gemini provider (fallback/testing)
     if (config.geminiApiKey) {
       this.providers.set('gemini', new GeminiProvider(config.geminiApiKey, config.geminiModel))
     }

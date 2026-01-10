@@ -6,6 +6,8 @@ export function getModelRouter(): ModelRouter {
   if (!router) {
     const config = useRuntimeConfig()
     router = new ModelRouter({
+      groqApiKey: config.groqApiKey,
+      groqModel: config.groqModel,
       geminiApiKey: config.geminiApiKey,
       geminiModel: config.geminiModel,
       anthropicApiKey: config.anthropicApiKey,
