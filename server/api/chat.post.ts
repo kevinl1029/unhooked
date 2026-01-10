@@ -13,6 +13,9 @@ import { handleSessionComplete } from '../utils/session/session-complete'
 import { buildSessionContext, formatContextForPrompt } from '../utils/personalization/context-builder'
 import { buildCrossLayerContext, formatCrossLayerContext } from '../utils/personalization/cross-layer-context'
 import { buildBridgeContext } from '../utils/session/bridge'
+import { createSentenceDetector } from '../utils/tts/sentence-detector'
+import { createStreamingSynthesizer } from '../utils/tts/streaming-synthesizer'
+import { getTTSProviderFromConfig, type TTSProviderType, type AudioChunk } from '../utils/tts'
 
 export default defineEventHandler(async (event) => {
   // Verify authentication
@@ -29,6 +32,7 @@ export default defineEventHandler(async (event) => {
     mythNumber,
     model = defaultModel,
     stream = false,
+    streamTTS = false,
     inputModality = 'text',
     sessionType = 'core',
     mythLayer = 'intellectual',
@@ -39,6 +43,7 @@ export default defineEventHandler(async (event) => {
     mythNumber?: number
     model?: ModelType
     stream?: boolean
+    streamTTS?: boolean
     inputModality?: 'text' | 'voice'
     sessionType?: SessionType
     mythLayer?: MythLayer
@@ -244,20 +249,75 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'no-cache')
     setResponseHeader(event, 'Connection', 'keep-alive')
 
+    // Check if streaming TTS is enabled and supported (Groq only)
+    const config = useRuntimeConfig()
+    const ttsProvider = config.ttsProvider as TTSProviderType
+    const supportsStreamingTTS = ttsProvider === 'groq' && !!config.groqApiKey
+    const useStreamingTTS = streamTTS && supportsStreamingTTS
+
     const encoder = new TextEncoder()
     const streamResponse = new ReadableStream({
       async start(controller) {
         let fullResponse = ''
+
+        // Initialize streaming TTS components if enabled
+        const sentenceDetector = useStreamingTTS ? createSentenceDetector() : null
+        const ttsSynthesizer = useStreamingTTS ? createStreamingSynthesizer(getTTSProviderFromConfig()) : null
+        const pendingTTSPromises: Promise<void>[] = []
+
+        // Helper to send audio chunk via SSE
+        const sendAudioChunk = (chunk: AudioChunk) => {
+          const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId })
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+        }
+
+        // Helper to process sentences for TTS
+        const processSentencesForTTS = (sentences: string[], isLast: boolean = false) => {
+          if (!ttsSynthesizer || sentences.length === 0) return
+
+          sentences.forEach((sentence, index) => {
+            const isLastSentence = isLast && index === sentences.length - 1
+            const promise = ttsSynthesizer.synthesizeChunk(sentence, isLastSentence)
+              .then(sendAudioChunk)
+              .catch(err => {
+                console.error('[streaming-tts] TTS synthesis failed for sentence:', err)
+                // Don't fail the stream, just skip this audio chunk
+              })
+            pendingTTSPromises.push(promise)
+          })
+        }
 
         await router.chatStream(
           { messages: processedMessages, model },
           {
             onToken: (token) => {
               fullResponse += token
-              const data = JSON.stringify({ token, conversationId: convId })
+
+              // Always send the token for text display
+              const data = JSON.stringify({ type: 'token', token, conversationId: convId })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+
+              // If streaming TTS enabled, detect sentences and queue TTS
+              if (sentenceDetector) {
+                const sentences = sentenceDetector.addToken(token)
+                processSentencesForTTS(sentences)
+              }
             },
             onComplete: async (response) => {
+              // Flush any remaining text for TTS
+              if (sentenceDetector && ttsSynthesizer) {
+                const remaining = sentenceDetector.flush()
+                if (remaining) {
+                  processSentencesForTTS([remaining], true)
+                } else if (pendingTTSPromises.length > 0) {
+                  // Mark the last queued chunk as final
+                  // Note: This is handled by isLast flag in processSentencesForTTS
+                }
+
+                // Wait for all TTS synthesis to complete
+                await Promise.all(pendingTTSPromises)
+              }
+
               // Check for session complete token
               const sessionComplete = response.includes('[SESSION_COMPLETE]')
 
@@ -309,9 +369,11 @@ export default defineEventHandler(async (event) => {
               }
 
               const data = JSON.stringify({
+                type: 'done',
                 done: true,
                 conversationId: convId,
-                sessionComplete
+                sessionComplete,
+                streamingTTS: useStreamingTTS
               })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               controller.close()
@@ -321,6 +383,7 @@ export default defineEventHandler(async (event) => {
               const status = (error as any)?.status
               const statusText = (error as any)?.statusText
               const data = JSON.stringify({
+                type: 'error',
                 error: error.message,
                 status,
                 statusText,

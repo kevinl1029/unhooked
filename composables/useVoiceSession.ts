@@ -1,8 +1,4 @@
-interface WordTiming {
-  word: string
-  startMs: number
-  endMs: number
-}
+import type { WordTiming } from '~/server/utils/tts/types'
 
 interface TTSResponse {
   audio: string // base64
@@ -10,7 +6,7 @@ interface TTSResponse {
   wordTimings: WordTiming[]
   estimatedDurationMs: number
   voice: string
-  provider: 'openai' | 'elevenlabs'
+  provider: 'openai' | 'elevenlabs' | 'groq'
   timingSource: 'actual' | 'estimated'
 }
 
@@ -38,6 +34,20 @@ export const useVoiceSession = () => {
 
   // Audio recorder
   const recorder = useAudioRecorder()
+
+  // Streaming TTS support
+  const streamingTTS = useStreamingTTS({
+    onTextUpdate: (text) => {
+      currentTranscript.value = text
+    },
+    onComplete: (_fullText, _sessionComplete) => {
+      // Handled by the calling code
+    },
+    onError: (err) => {
+      error.value = err
+    }
+  })
+  const isStreamingMode = ref(false)
 
   // Synthesize text to speech and play it
   const playAIResponse = async (text: string): Promise<boolean> => {
@@ -129,6 +139,43 @@ export const useVoiceSession = () => {
       error.value = e.data?.message || e.message || 'Failed to synthesize speech'
       isProcessing.value = false
       return false
+    }
+  }
+
+  /**
+   * Play streaming TTS response from SSE stream
+   * This is used when streamTTS=true and provider supports it (Groq)
+   */
+  const playStreamingResponse = async (
+    reader: ReadableStreamDefaultReader<Uint8Array>
+  ): Promise<{ success: boolean; sessionComplete: boolean; conversationId: string | null }> => {
+    error.value = null
+    isStreamingMode.value = true
+    isAISpeaking.value = true
+    currentTranscript.value = ''
+    currentWordIndex.value = -1
+
+    try {
+      await streamingTTS.processStream(reader)
+
+      // Return result
+      return {
+        success: true,
+        sessionComplete: false, // Will be updated by done event
+        conversationId: streamingTTS.conversationId.value
+      }
+    } catch (e: any) {
+      console.error('[useVoiceSession] Streaming TTS error:', e)
+      error.value = e.message || 'Streaming playback failed'
+      return {
+        success: false,
+        sessionComplete: false,
+        conversationId: null
+      }
+    } finally {
+      isStreamingMode.value = false
+      // Wait for audio to finish playing
+      // The isAISpeaking will be updated by the audio queue
     }
   }
 
@@ -254,15 +301,40 @@ export const useVoiceSession = () => {
 
   // Get current word for highlighting
   const getCurrentWord = computed(() => {
+    // In streaming mode, use streaming TTS word index
+    if (isStreamingMode.value) {
+      const idx = streamingTTS.currentWordIndex.value
+      const timings = streamingTTS.allWordTimings.value
+      if (idx < 0 || idx >= timings.length) return null
+      return timings[idx]?.word || null
+    }
+
+    // Batch mode
     if (currentWordIndex.value < 0 || currentWordIndex.value >= wordTimings.length) {
       return null
     }
     return wordTimings[currentWordIndex.value]?.word || null
   })
 
+  // Get current word index (unified for both modes)
+  const effectiveWordIndex = computed(() => {
+    if (isStreamingMode.value) {
+      return streamingTTS.currentWordIndex.value
+    }
+    return currentWordIndex.value
+  })
+
   // Get words array for display
   const getWords = computed(() => {
     return currentTranscript.value.split(/\s+/).filter(w => w.length > 0)
+  })
+
+  // Get word timings (unified for both modes)
+  const effectiveWordTimings = computed(() => {
+    if (isStreamingMode.value) {
+      return streamingTTS.allWordTimings.value
+    }
+    return wordTimings
   })
 
   // Get audio level from recorder (for visualizations)
@@ -274,6 +346,7 @@ export const useVoiceSession = () => {
   const cleanup = () => {
     stopAudio()
     recorder.cleanup()
+    streamingTTS.reset()
     if (audioElement) {
       URL.revokeObjectURL(audioElement.src)
       audioElement = null
@@ -281,6 +354,7 @@ export const useVoiceSession = () => {
     wordTimings = []
     currentWordIndex.value = -1
     currentTranscript.value = ''
+    isStreamingMode.value = false
   }
 
   onUnmounted(() => {
@@ -293,11 +367,17 @@ export const useVoiceSession = () => {
     isRecording: readonly(isRecording),
     isProcessing: readonly(isProcessing),
     isAudioReady: readonly(isAudioReady),
-    currentWordIndex: readonly(currentWordIndex),
+    currentWordIndex: effectiveWordIndex,
     currentTranscript: readonly(currentTranscript),
     error: readonly(error),
     getCurrentWord,
     getWords,
+    effectiveWordTimings,
+    isStreamingMode: readonly(isStreamingMode),
+
+    // Streaming TTS state passthrough
+    isStreamingPlaying: streamingTTS.isPlaying,
+    isWaitingForChunks: streamingTTS.isWaitingForChunks,
 
     // Recorder state passthrough
     permissionState: recorder.permissionState,
@@ -305,6 +385,7 @@ export const useVoiceSession = () => {
 
     // Methods
     playAIResponse,
+    playStreamingResponse,
     pauseAudio,
     resumeAudio,
     stopAudio,

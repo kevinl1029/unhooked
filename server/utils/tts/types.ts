@@ -30,3 +30,18 @@ export interface TTSProvider {
 }
 
 export type TTSProviderType = 'openai' | 'elevenlabs' | 'groq'
+
+/**
+ * Audio chunk for streaming TTS
+ * Sent via SSE during streaming responses
+ */
+export interface AudioChunk {
+  chunkIndex: number
+  audioBase64: string
+  contentType: string
+  wordTimings: WordTiming[]
+  cumulativeOffsetMs: number // Time offset from start of conversation
+  durationMs: number
+  isLast: boolean
+  text: string // The sentence text for this chunk
+}

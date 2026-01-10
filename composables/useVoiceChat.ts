@@ -3,10 +3,11 @@ import type { Message } from '~/server/utils/llm/types'
 interface VoiceChatOptions {
   mythNumber?: number
   onSessionComplete?: () => void
+  enableStreamingTTS?: boolean // Enable streaming TTS when supported
 }
 
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
-  const { mythNumber, onSessionComplete } = options
+  const { mythNumber, onSessionComplete, enableStreamingTTS = true } = options
 
   // State
   const messages = ref<Message[]>([])
@@ -14,6 +15,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
   const isLoading = ref(false)
   const sessionComplete = ref(false)
   const error = ref<string | null>(null)
+  const useStreamingTTS = ref(false) // Will be set based on server response
 
   // Voice session
   const voiceSession = useVoiceSession()
@@ -39,44 +41,89 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
 
     isLoading.value = true
 
+    // Use streaming TTS if enabled and speaking
+    const shouldStreamTTS = enableStreamingTTS && speakResponse
+
     try {
-      // Send to chat API
-      const response = await $fetch('/api/chat', {
-        method: 'POST',
-        body: {
-          messages: messages.value,
-          conversationId: conversationId.value,
-          mythNumber,
-          stream: false,
-          inputModality
+      if (shouldStreamTTS) {
+        // Use streaming mode for TTS
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: messages.value,
+            conversationId: conversationId.value,
+            mythNumber,
+            stream: true,
+            streamTTS: true,
+            inputModality
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
-      })
 
-      // Update conversation ID
-      if (response.conversationId) {
-        conversationId.value = response.conversationId
+        const reader = response.body?.getReader()
+        if (!reader) {
+          throw new Error('No response body reader')
+        }
+
+        // Process the streaming response
+        const result = await voiceSession.playStreamingResponse(reader)
+
+        // Update state based on streaming result
+        if (result.conversationId) {
+          conversationId.value = result.conversationId
+        }
+
+        // Add assistant message from the streamed content
+        const assistantContent = voiceSession.currentTranscript.value
+        messages.value.push({ role: 'assistant', content: assistantContent })
+
+        isLoading.value = false
+        useStreamingTTS.value = true
+
+        return result.success
+      } else {
+        // Use non-streaming mode (batch TTS)
+        const response = await $fetch('/api/chat', {
+          method: 'POST',
+          body: {
+            messages: messages.value,
+            conversationId: conversationId.value,
+            mythNumber,
+            stream: false,
+            inputModality
+          }
+        })
+
+        // Update conversation ID
+        if (response.conversationId) {
+          conversationId.value = response.conversationId
+        }
+
+        // Add assistant message
+        const assistantContent = response.content
+        messages.value.push({ role: 'assistant', content: assistantContent })
+
+        isLoading.value = false
+
+        // Check for session complete
+        if (response.sessionComplete) {
+          sessionComplete.value = true
+          onSessionComplete?.()
+        }
+
+        // Play the response with TTS if requested
+        if (speakResponse) {
+          // Strip the [SESSION_COMPLETE] token before speaking
+          const textToSpeak = assistantContent.replace('[SESSION_COMPLETE]', '').trim()
+          await voiceSession.playAIResponse(textToSpeak)
+        }
+
+        return true
       }
-
-      // Add assistant message
-      const assistantContent = response.content
-      messages.value.push({ role: 'assistant', content: assistantContent })
-
-      isLoading.value = false
-
-      // Check for session complete
-      if (response.sessionComplete) {
-        sessionComplete.value = true
-        onSessionComplete?.()
-      }
-
-      // Play the response with TTS if requested
-      if (speakResponse) {
-        // Strip the [SESSION_COMPLETE] token before speaking
-        const textToSpeak = assistantContent.replace('[SESSION_COMPLETE]', '').trim()
-        await voiceSession.playAIResponse(textToSpeak)
-      }
-
-      return true
     } catch (e: any) {
       console.error('[useVoiceChat] Error sending message:', e)
       error.value = e.data?.message || e.message || 'Failed to send message'
@@ -93,29 +140,70 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     isLoading.value = true
 
     try {
-      // Send empty messages to trigger AI's opening message
-      const response = await $fetch('/api/chat', {
-        method: 'POST',
-        body: {
-          messages: [],
-          conversationId: null,
-          mythNumber,
-          stream: false
+      if (enableStreamingTTS) {
+        // Use streaming mode for TTS
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [],
+            conversationId: null,
+            mythNumber,
+            stream: true,
+            streamTTS: true
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
-      })
 
-      conversationId.value = response.conversationId
+        const reader = response.body?.getReader()
+        if (!reader) {
+          throw new Error('No response body reader')
+        }
 
-      // Add AI's opening message
-      const assistantContent = response.content
-      messages.value.push({ role: 'assistant', content: assistantContent })
+        // Process the streaming response
+        const result = await voiceSession.playStreamingResponse(reader)
 
-      isLoading.value = false
+        // Update state
+        if (result.conversationId) {
+          conversationId.value = result.conversationId
+        }
 
-      // Speak the opening message
-      await voiceSession.playAIResponse(assistantContent)
+        // Add AI's opening message
+        const assistantContent = voiceSession.currentTranscript.value
+        messages.value.push({ role: 'assistant', content: assistantContent })
 
-      return true
+        isLoading.value = false
+        useStreamingTTS.value = true
+
+        return result.success
+      } else {
+        // Non-streaming mode
+        const response = await $fetch('/api/chat', {
+          method: 'POST',
+          body: {
+            messages: [],
+            conversationId: null,
+            mythNumber,
+            stream: false
+          }
+        })
+
+        conversationId.value = response.conversationId
+
+        // Add AI's opening message
+        const assistantContent = response.content
+        messages.value.push({ role: 'assistant', content: assistantContent })
+
+        isLoading.value = false
+
+        // Speak the opening message
+        await voiceSession.playAIResponse(assistantContent)
+
+        return true
+      }
     } catch (e: any) {
       console.error('[useVoiceChat] Error starting conversation:', e)
       error.value = e.data?.message || e.message || 'Failed to start conversation'
@@ -190,6 +278,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     isProcessing,
     sessionComplete: readonly(sessionComplete),
     error: readonly(error),
+    useStreamingTTS: readonly(useStreamingTTS),
 
     // Voice session state passthrough
     isAISpeaking: voiceSession.isAISpeaking,
@@ -201,6 +290,8 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     getWords: voiceSession.getWords,
     permissionState: voiceSession.permissionState,
     isSupported: voiceSession.isSupported,
+    isStreamingMode: voiceSession.isStreamingMode,
+    isWaitingForChunks: voiceSession.isWaitingForChunks,
 
     // Methods
     sendMessage,
