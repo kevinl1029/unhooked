@@ -56,6 +56,17 @@ export default defineNuxtConfig({
     e2eTestEmail: process.env.E2E_TEST_EMAIL,
     e2eTestPassword: process.env.E2E_TEST_PASSWORD,
 
+    // LLM Task Model Configuration (Phase 4A)
+    // These can be overridden via environment variables
+    llmTaskConversationModel: process.env.LLM_TASK_CONVERSATION_MODEL,
+    llmTaskMomentDetectModel: process.env.LLM_TASK_MOMENT_DETECT_MODEL,
+    llmTaskConvictionAssessModel: process.env.LLM_TASK_CONVICTION_ASSESS_MODEL,
+    llmTaskCheckinPersonalizeModel: process.env.LLM_TASK_CHECKIN_PERSONALIZE_MODEL,
+    llmTaskStorySummarizeModel: process.env.LLM_TASK_STORY_SUMMARIZE_MODEL,
+    llmTaskCeremonyNarrativeModel: process.env.LLM_TASK_CEREMONY_NARRATIVE_MODEL,
+    llmTaskCeremonySelectModel: process.env.LLM_TASK_CEREMONY_SELECT_MODEL,
+    llmTaskKeyInsightSelectModel: process.env.LLM_TASK_KEY_INSIGHT_SELECT_MODEL,
+
     // Client-side (public)
     public: {
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000'

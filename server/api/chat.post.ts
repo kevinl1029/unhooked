@@ -2,6 +2,13 @@ import { getModelRouter, DEFAULT_MODEL } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { buildSystemPrompt, MYTH_NAMES } from '../utils/prompts'
+import {
+  detectMoment,
+  shouldAttemptDetection,
+  getSessionDetectionTracker,
+  TRANSCRIPT_CAPTURE_THRESHOLD,
+} from '../utils/llm/tasks/moment-detection'
+import { mythNumberToKey, type SessionType, type MythLayer } from '../utils/llm/task-types'
 
 export default defineEventHandler(async (event) => {
   // Verify authentication
@@ -17,7 +24,9 @@ export default defineEventHandler(async (event) => {
     mythNumber,
     model = DEFAULT_MODEL,
     stream = false,
-    inputModality = 'text'
+    inputModality = 'text',
+    sessionType = 'core',
+    mythLayer = 'intellectual',
   } = body as {
     messages: Message[]
     conversationId?: string
@@ -25,6 +34,8 @@ export default defineEventHandler(async (event) => {
     model?: ModelType
     stream?: boolean
     inputModality?: 'text' | 'voice'
+    sessionType?: SessionType
+    mythLayer?: MythLayer
   }
 
   if (!messages || !Array.isArray(messages)) {
@@ -67,15 +78,21 @@ export default defineEventHandler(async (event) => {
 
   // Get or create conversation
   let convId = conversationId
+  const mythKey = mythNumber ? mythNumberToKey(mythNumber) : null
+
   if (!convId) {
-    // Create new conversation
+    // Create new conversation with enhanced tracking
     const { data: newConv, error: convError } = await supabase
       .from('conversations')
       .insert({
         user_id: user.sub,
         model,
         title: mythNumber ? MYTH_NAMES[mythNumber] : (messages.length > 0 ? messages[0]?.content.slice(0, 50) : 'New conversation'),
-        myth_number: mythNumber || null
+        myth_number: mythNumber || null,
+        // New Phase 4A fields
+        session_type: sessionType,
+        myth_key: mythKey,
+        myth_layer: mythLayer,
       })
       .select('id')
       .single()
@@ -85,6 +102,10 @@ export default defineEventHandler(async (event) => {
   }
 
   // Save user message with metadata (only if there are messages)
+  let savedMessageId: string | null = null
+  let momentDetectionPromise: Promise<void> | null = null
+  const detectionTracker = getSessionDetectionTracker()
+
   if (messages.length > 0) {
     const lastUserMessage = messages[messages.length - 1]
     if (lastUserMessage.role === 'user') {
@@ -101,14 +122,61 @@ export default defineEventHandler(async (event) => {
         ? Math.floor((Date.now() - new Date(lastMessage.created_at).getTime()) / 1000)
         : null
 
-      await supabase.from('messages').insert({
+      const { data: insertedMessage } = await supabase.from('messages').insert({
         conversation_id: convId,
         role: 'user',
         content: lastUserMessage.content,
         message_length: lastUserMessage.content.length,
         time_since_last_message: timeSinceLast,
         input_modality: inputModality
-      })
+      }).select('id').single()
+
+      savedMessageId = insertedMessage?.id || null
+
+      // Start moment detection in parallel (if eligible)
+      // Only detect on user messages with 20+ words, and within rate limit
+      if (
+        mythKey &&
+        shouldAttemptDetection(lastUserMessage.content) &&
+        detectionTracker.canDetect(convId)
+      ) {
+        detectionTracker.incrementCount(convId)
+
+        // Run detection in parallel - don't await here
+        momentDetectionPromise = (async () => {
+          try {
+            const result = await detectMoment({
+              userMessage: lastUserMessage.content,
+              recentHistory: messages.slice(-6),
+              currentMythKey: mythKey,
+              sessionType,
+            })
+
+            // If we should capture, save the moment
+            if (result.shouldCapture && result.confidence >= TRANSCRIPT_CAPTURE_THRESHOLD) {
+              await supabase.from('captured_moments').insert({
+                user_id: user.sub,
+                conversation_id: convId,
+                message_id: savedMessageId,
+                moment_type: result.momentType,
+                transcript: result.keyPhrase || lastUserMessage.content, // Use key phrase if available
+                myth_key: mythKey,
+                session_type: sessionType,
+                myth_layer: mythLayer,
+                confidence_score: result.confidence,
+                emotional_valence: result.emotionalValence,
+                // Audio capture deferred for MVP
+                audio_clip_path: null,
+                audio_duration_ms: null,
+              })
+              console.log(`[moment-detection] Captured ${result.momentType} moment with confidence ${result.confidence}`)
+            }
+          } catch (err) {
+            // Silent fail - don't disrupt the conversation
+            console.error('[moment-detection] Failed silently:', err)
+          }
+        })()
+      }
     }
   }
 
@@ -143,6 +211,22 @@ export default defineEventHandler(async (event) => {
                 message_length: response.length,
                 time_since_last_message: null
               })
+
+              // If session complete, lock the conversation
+              if (sessionComplete) {
+                await supabase
+                  .from('conversations')
+                  .update({ completed_at: new Date().toISOString() })
+                  .eq('id', convId)
+
+                // Reset detection tracker for this conversation
+                detectionTracker.resetCount(convId)
+              }
+
+              // Wait for moment detection to complete before closing
+              if (momentDetectionPromise) {
+                await momentDetectionPromise
+              }
 
               const data = JSON.stringify({
                 done: true,
@@ -187,6 +271,22 @@ export default defineEventHandler(async (event) => {
         message_length: response.content.length,
         time_since_last_message: null
       })
+
+      // If session complete, lock the conversation
+      if (sessionComplete) {
+        await supabase
+          .from('conversations')
+          .update({ completed_at: new Date().toISOString() })
+          .eq('id', convId)
+
+        // Reset detection tracker for this conversation
+        detectionTracker.resetCount(convId)
+      }
+
+      // Wait for moment detection to complete
+      if (momentDetectionPromise) {
+        await momentDetectionPromise
+      }
 
       return {
         ...response,
