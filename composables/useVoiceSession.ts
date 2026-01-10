@@ -38,6 +38,9 @@ export const useVoiceSession = () => {
   // Streaming TTS support
   const streamingTTSResult = ref<{ sessionComplete: boolean; usedStreamingTTS: boolean } | null>(null)
 
+  // Track whether we're currently receiving streamed text (regardless of TTS mode)
+  const isTextStreaming = ref(false)
+
   const streamingTTS = useStreamingTTS({
     onTextUpdate: (text) => {
       currentTranscript.value = text
@@ -45,9 +48,12 @@ export const useVoiceSession = () => {
     onComplete: (_fullText, sessionComplete, usedStreamingTTS) => {
       // Store the result for playStreamingResponse to use
       streamingTTSResult.value = { sessionComplete, usedStreamingTTS }
+      // Text streaming is done
+      isTextStreaming.value = false
     },
     onError: (err) => {
       error.value = err
+      isTextStreaming.value = false
     },
     onAudioComplete: () => {
       // Audio playback finished - update state
@@ -162,6 +168,7 @@ export const useVoiceSession = () => {
     streamingTTSResult.value = null
     currentTranscript.value = ''
     currentWordIndex.value = -1
+    isTextStreaming.value = true
 
     try {
       // Process the stream (text tokens + optional audio chunks)
@@ -205,6 +212,7 @@ export const useVoiceSession = () => {
       console.error('[useVoiceSession] Streaming TTS error:', e)
       error.value = e.message || 'Streaming playback failed'
       isStreamingMode.value = false
+      isTextStreaming.value = false
       return {
         success: false,
         sessionComplete: false,
@@ -408,6 +416,7 @@ export const useVoiceSession = () => {
     getWords,
     effectiveWordTimings,
     isStreamingMode: readonly(isStreamingMode),
+    isTextStreaming: readonly(isTextStreaming),
 
     // Streaming TTS state passthrough
     isStreamingPlaying: streamingTTS.isPlaying,

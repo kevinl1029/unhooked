@@ -221,6 +221,7 @@ const {
   currentWordIndex,
   currentTranscript,
   isStreamingMode,
+  isTextStreaming,
   error,
   permissionState,
   isSupported,
@@ -263,15 +264,19 @@ onMounted(() => {
 })
 
 // Display messages with [SESSION_COMPLETE] stripped
-// In streaming mode, show the live transcript as it arrives
+// Show the live transcript while text is streaming OR while streaming TTS audio is playing
 const displayMessages = computed(() => {
   const allMessages = messages.value.map(msg => ({
     ...msg,
     content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
   }))
 
-  // In streaming mode, add/update the current streaming message
-  if (isStreamingMode.value && currentTranscript.value) {
+  // Show streaming transcript while text is being streamed OR while streaming TTS audio plays
+  // isTextStreaming: text tokens arriving from LLM
+  // isStreamingMode: streaming TTS audio is playing
+  const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value) && currentTranscript.value
+
+  if (showStreamingTranscript) {
     // Check if last message is already the streaming assistant message
     const lastMsg = allMessages[allMessages.length - 1]
     if (lastMsg?.role !== 'assistant' || !isAISpeaking.value) {
