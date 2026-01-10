@@ -193,8 +193,13 @@ export const useVoiceSession = () => {
         // The text is already in currentTranscript from onTextUpdate
         const textToSpeak = currentTranscript.value
         if (textToSpeak.trim()) {
+          // Keep isTextStreaming true during batch TTS so the message stays visible
+          // (playAIResponse sets isAudioReady=false which would hide it otherwise)
+          isTextStreaming.value = true
           // Use batch TTS to synthesize and play the complete response
           const success = await playAIResponse(textToSpeak)
+          // Now we can turn off text streaming - audio is ready/playing
+          isTextStreaming.value = false
           return {
             success,
             sessionComplete: result?.sessionComplete || false,
