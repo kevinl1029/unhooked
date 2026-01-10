@@ -93,7 +93,8 @@ export default defineEventHandler(async (event) => {
     progress: progress ? {
       program_status: progress.program_status,
       current_myth: progress.current_myth,
-      myths_completed: progress.myths_completed,
+      myths_completed: progress.myths_completed || [],
+      myth_order: progress.myth_order || [1, 2, 3, 4, 5],
       total_sessions: progress.total_sessions,
       started_at: progress.started_at,
     } : null,

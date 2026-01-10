@@ -9,6 +9,7 @@ export interface UserStatus {
     program_status: string
     current_myth: number
     myths_completed: number[]
+    myth_order: number[]
     total_sessions: number
     started_at: string | null
   } | null
