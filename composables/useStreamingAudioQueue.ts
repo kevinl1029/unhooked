@@ -35,6 +35,9 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   const currentWordIndex = ref(-1)
   let wordTrackingInterval: ReturnType<typeof setInterval> | null = null
 
+  // Track if we received a completion marker while audio is still playing
+  let pendingCompletion = false
+
   /**
    * Decode base64 WAV to AudioBuffer
    */
@@ -75,6 +78,20 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
    */
   const enqueueChunk = async (chunk: AudioChunk) => {
     try {
+      // Handle empty "final marker" chunk - just signals completion without audio
+      if (chunk.isLast && !chunk.audioBase64) {
+        // If we're currently playing, we need to wait for current audio to finish
+        // then trigger completion. If not playing, trigger immediately.
+        if (!isPlaying.value) {
+          options.onComplete?.()
+        } else {
+          // Mark that we should call onComplete when current audio finishes
+          // We do this by setting a flag that the last real chunk's onended will check
+          pendingCompletion = true
+        }
+        return
+      }
+
       // Initialize on first chunk
       if (!audioContext) {
         await initialize()
@@ -117,10 +134,15 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
           currentChunkIndex.value = queuedChunks[chunkIdx].chunk.chunkIndex
         }
 
-        // Check if this was the last chunk
-        if (chunk.isLast) {
+        // Check if this is the last queued chunk
+        const isLastQueuedChunk = queuedChunks.length > 0 &&
+          queuedChunks[queuedChunks.length - 1].scheduledTime === scheduledTime
+
+        // Check if this was marked as last, OR if we have a pending completion and this is the last queued chunk
+        if (chunk.isLast || (pendingCompletion && isLastQueuedChunk)) {
           isPlaying.value = false
           stopWordTracking()
+          pendingCompletion = false
           // Notify that audio playback is complete
           options.onComplete?.()
         }
@@ -204,6 +226,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     queuedChunks = []
     allWordTimings.value = []
     error.value = null
+    pendingCompletion = false
   }
 
   /**
