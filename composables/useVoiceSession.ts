@@ -36,12 +36,15 @@ export const useVoiceSession = () => {
   const recorder = useAudioRecorder()
 
   // Streaming TTS support
+  const streamingTTSResult = ref<{ sessionComplete: boolean; usedStreamingTTS: boolean } | null>(null)
+
   const streamingTTS = useStreamingTTS({
     onTextUpdate: (text) => {
       currentTranscript.value = text
     },
-    onComplete: (_fullText, _sessionComplete) => {
-      // Handled by the calling code
+    onComplete: (_fullText, sessionComplete, usedStreamingTTS) => {
+      // Store the result for playStreamingResponse to use
+      streamingTTSResult.value = { sessionComplete, usedStreamingTTS }
     },
     onError: (err) => {
       error.value = err
@@ -150,24 +153,53 @@ export const useVoiceSession = () => {
   /**
    * Play streaming TTS response from SSE stream
    * This is used when streamTTS=true and provider supports it (Groq)
+   * Falls back to batch TTS if server doesn't support streaming TTS
    */
   const playStreamingResponse = async (
     reader: ReadableStreamDefaultReader<Uint8Array>
   ): Promise<{ success: boolean; sessionComplete: boolean; conversationId: string | null }> => {
     error.value = null
-    isStreamingMode.value = true
-    isAISpeaking.value = true
+    streamingTTSResult.value = null
     currentTranscript.value = ''
     currentWordIndex.value = -1
 
     try {
+      // Process the stream (text tokens + optional audio chunks)
       await streamingTTS.processStream(reader)
 
-      // Return result
-      return {
-        success: true,
-        sessionComplete: false, // Will be updated by done event
-        conversationId: streamingTTS.conversationId.value
+      const convId = streamingTTS.conversationId.value
+      const result = streamingTTSResult.value
+
+      // Check if streaming TTS was actually used
+      if (result?.usedStreamingTTS) {
+        // Streaming TTS was used - audio is playing/will play
+        isStreamingMode.value = true
+        isAISpeaking.value = true
+        // Note: isStreamingMode stays true until onAudioComplete callback is called
+        return {
+          success: true,
+          sessionComplete: result.sessionComplete,
+          conversationId: convId
+        }
+      } else {
+        // Streaming TTS was NOT used by server - fall back to batch TTS
+        // The text is already in currentTranscript from onTextUpdate
+        const textToSpeak = currentTranscript.value
+        if (textToSpeak.trim()) {
+          // Use batch TTS to synthesize and play the complete response
+          const success = await playAIResponse(textToSpeak)
+          return {
+            success,
+            sessionComplete: result?.sessionComplete || false,
+            conversationId: convId
+          }
+        } else {
+          return {
+            success: true,
+            sessionComplete: result?.sessionComplete || false,
+            conversationId: convId
+          }
+        }
       }
     } catch (e: any) {
       console.error('[useVoiceSession] Streaming TTS error:', e)
@@ -179,8 +211,6 @@ export const useVoiceSession = () => {
         conversationId: null
       }
     }
-    // Note: isStreamingMode stays true until onAudioComplete callback is called
-    // The callback will set isAISpeaking = false, and we watch that to reset isStreamingMode
   }
 
   // Start word tracking during playback

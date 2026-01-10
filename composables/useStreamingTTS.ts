@@ -9,7 +9,7 @@ import type { AudioChunk } from '~/server/utils/tts/types'
 
 interface StreamingTTSOptions {
   onTextUpdate?: (text: string) => void
-  onComplete?: (fullText: string, sessionComplete: boolean) => void
+  onComplete?: (fullText: string, sessionComplete: boolean, usedStreamingTTS: boolean) => void
   onError?: (error: string) => void
   onAudioComplete?: () => void
 }
@@ -110,7 +110,8 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
               if (event.conversationId) {
                 conversationId.value = event.conversationId
               }
-              options.onComplete?.(fullText.value, event.sessionComplete || false)
+              // Pass whether streaming TTS was actually used by the server
+              options.onComplete?.(fullText.value, event.sessionComplete || false, event.streamingTTS || false)
               break
 
             case 'error':
@@ -125,7 +126,7 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
                 options.onTextUpdate?.(fullText.value)
               }
               if ('done' in event && event.done) {
-                options.onComplete?.(fullText.value, event.sessionComplete || false)
+                options.onComplete?.(fullText.value, event.sessionComplete || false, event.streamingTTS || false)
               }
               if ('error' in event && event.error) {
                 error.value = event.error
