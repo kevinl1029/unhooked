@@ -372,7 +372,11 @@ export const useVoiceSession = () => {
   })
 
   // Get words array for display
+  // In streaming mode, use TTS-derived words for perfect sync with audio highlighting
   const getWords = computed(() => {
+    if (isStreamingMode.value && streamingTTS.ttsWords.value.length > 0) {
+      return streamingTTS.ttsWords.value
+    }
     return currentTranscript.value.split(/\s+/).filter(w => w.length > 0)
   })
 
@@ -382,6 +386,16 @@ export const useVoiceSession = () => {
       return streamingTTS.allWordTimings.value
     }
     return wordTimings
+  })
+
+  // Get transcript text for final message content
+  // In streaming TTS mode, use TTS-derived text to match what was displayed/spoken
+  const getTranscriptText = computed(() => {
+    // If we have TTS text and used streaming mode, prefer that for consistency
+    if (streamingTTS.ttsText.value && streamingTTS.ttsText.value.length > 0) {
+      return streamingTTS.ttsText.value
+    }
+    return currentTranscript.value
   })
 
   // Get audio level from recorder (for visualizations)
@@ -419,6 +433,7 @@ export const useVoiceSession = () => {
     error: readonly(error),
     getCurrentWord,
     getWords,
+    getTranscriptText,
     effectiveWordTimings,
     isStreamingMode: readonly(isStreamingMode),
     isTextStreaming: readonly(isTextStreaming),

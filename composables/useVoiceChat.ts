@@ -78,7 +78,8 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
         }
 
         // Add assistant message from the streamed content
-        const assistantContent = voiceSession.currentTranscript.value
+        // Use getTranscriptText which prefers TTS-derived text for consistency with what was displayed
+        const assistantContent = voiceSession.getTranscriptText.value
         messages.value.push({ role: 'assistant', content: assistantContent })
 
         isLoading.value = false
@@ -172,7 +173,8 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
         }
 
         // Add AI's opening message
-        const assistantContent = voiceSession.currentTranscript.value
+        // Use getTranscriptText which prefers TTS-derived text for consistency with what was displayed
+        const assistantContent = voiceSession.getTranscriptText.value
         messages.value.push({ role: 'assistant', content: assistantContent })
 
         isLoading.value = false
@@ -288,6 +290,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     currentTranscript: voiceSession.currentTranscript,
     getCurrentWord: voiceSession.getCurrentWord,
     getWords: voiceSession.getWords,
+    getTranscriptText: voiceSession.getTranscriptText,
     permissionState: voiceSession.permissionState,
     isSupported: voiceSession.isSupported,
     isStreamingMode: voiceSession.isStreamingMode,
