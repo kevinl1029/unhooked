@@ -53,7 +53,8 @@ export default defineNuxtConfig({
     openaiApiKey: process.env.OPENAI_API_KEY,
 
     // TTS Provider Configuration
-    ttsProvider: process.env.TTS_PROVIDER || 'openai', // 'openai' | 'elevenlabs'
+    ttsProvider: process.env.TTS_PROVIDER || 'groq', // 'groq' | 'openai' | 'elevenlabs'
+    groqTtsVoice: process.env.GROQ_TTS_VOICE || 'troy', // 'troy' | 'hannah' | 'austin'
     elevenlabsApiKey: process.env.ELEVENLABS_API_KEY,
     elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL', // Bella
     elevenlabsModel: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',

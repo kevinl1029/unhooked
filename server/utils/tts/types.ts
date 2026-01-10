@@ -15,7 +15,7 @@ export interface TTSResult {
   contentType: string
   wordTimings: WordTiming[]
   estimatedDurationMs: number
-  provider: 'openai' | 'elevenlabs'
+  provider: 'openai' | 'elevenlabs' | 'groq'
   timingSource: 'actual' | 'estimated' // So UI knows confidence level
   voice: string
 }
@@ -29,4 +29,4 @@ export interface TTSProvider {
   synthesize(options: TTSOptions): Promise<TTSResult>
 }
 
-export type TTSProviderType = 'openai' | 'elevenlabs'
+export type TTSProviderType = 'openai' | 'elevenlabs' | 'groq'
