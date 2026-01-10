@@ -23,7 +23,7 @@ interface CheckInToSend {
 
 /**
  * Process scheduled check-ins that are due
- * Called by Vercel Cron every 5 minutes
+ * Called by Vercel Cron daily
  */
 export async function processScheduledCheckIns(supabase: SupabaseClient): Promise<{
   processed: number
@@ -31,7 +31,7 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
   errors: string[]
 }> {
   const now = new Date()
-  const windowEnd = new Date(now.getTime() + 5 * 60 * 1000) // 5 minutes from now
+  const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours from now
 
   // Find check-ins due to be sent
   const { data: checkIns, error } = await supabase
