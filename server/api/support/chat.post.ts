@@ -4,7 +4,7 @@
  * Provides full user context to the AI
  */
 
-import { getModelRouter, DEFAULT_MODEL } from '../../utils/llm'
+import { getModelRouter, getDefaultModel } from '../../utils/llm'
 import type { Message, ModelType } from '../../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { buildSupportPrompt, type SupportMode } from '../../utils/prompts/support-prompt'
@@ -16,11 +16,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
+  const defaultModel = getDefaultModel()
   const {
     messages,
     conversationId,
     mode = 'boost',
-    model = DEFAULT_MODEL,
+    model = defaultModel,
     stream = false,
   } = body as {
     messages: Message[]

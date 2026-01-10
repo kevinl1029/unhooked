@@ -33,4 +33,5 @@ export interface LLMProvider {
 
 export type ModelType = 'groq' | 'gemini' | 'claude' | 'openai'
 
-export const DEFAULT_MODEL: ModelType = 'groq'
+// Hardcoded fallback - actual default comes from DEFAULT_LLM_PROVIDER env var
+export const FALLBACK_MODEL: ModelType = 'gemini'

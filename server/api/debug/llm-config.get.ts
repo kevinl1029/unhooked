@@ -3,8 +3,7 @@
  * Shows which providers are available and what the defaults are
  */
 
-import { getModelRouter } from '~/server/utils/llm'
-import { DEFAULT_MODEL } from '~/server/utils/llm/types'
+import { getModelRouter, getDefaultModel } from '~/server/utils/llm'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -13,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const availableProviders = router.listAvailableModels()
 
   return {
-    defaultModel: DEFAULT_MODEL,
+    defaultModel: getDefaultModel(),
     availableProviders,
     configuration: {
       groq: {

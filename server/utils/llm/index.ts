@@ -1,4 +1,6 @@
 import { ModelRouter } from './router'
+import type { ModelType } from './types'
+import { FALLBACK_MODEL } from './types'
 
 let router: ModelRouter | null = null
 
@@ -15,6 +17,11 @@ export function getModelRouter(): ModelRouter {
     })
   }
   return router
+}
+
+export function getDefaultModel(): ModelType {
+  const config = useRuntimeConfig()
+  return (config.defaultLlmProvider as ModelType) || FALLBACK_MODEL
 }
 
 export * from './types'

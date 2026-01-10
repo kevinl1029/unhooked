@@ -1,4 +1,4 @@
-import { getModelRouter, DEFAULT_MODEL } from '../utils/llm'
+import { getModelRouter, getDefaultModel } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { buildSystemPrompt, MYTH_NAMES } from '../utils/prompts'
@@ -22,11 +22,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
+  const defaultModel = getDefaultModel()
   const {
     messages,
     conversationId,
     mythNumber,
-    model = DEFAULT_MODEL,
+    model = defaultModel,
     stream = false,
     inputModality = 'text',
     sessionType = 'core',

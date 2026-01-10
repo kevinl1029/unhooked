@@ -1,5 +1,5 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { DEFAULT_MODEL } from '../../utils/llm'
+import { getDefaultModel } from '../../utils/llm'
 import { MYTH_NAMES } from '../../utils/prompts'
 import type { Message } from '../../utils/llm/types'
 
@@ -10,7 +10,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { title, model = DEFAULT_MODEL, mythNumber, initialMessages } = body as {
+  const defaultModel = getDefaultModel()
+  const { title, model = defaultModel, mythNumber, initialMessages } = body as {
     title?: string
     model?: string
     mythNumber?: number
