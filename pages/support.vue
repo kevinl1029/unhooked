@@ -33,6 +33,7 @@ const messages = ref<Array<{ role: 'user' | 'assistant'; content: string }>>([])
 const isLoading = ref(false)
 const inputText = ref('')
 const chatContainerRef = ref<HTMLElement | null>(null)
+const conversationId = ref<string | null>(null)
 
 // Start conversation on mount
 onMounted(async () => {
@@ -44,17 +45,19 @@ async function startConversation() {
 
   try {
     // Get initial greeting from support chat endpoint
-    const response = await $fetch<{ message: string; conversation_id: string }>('/api/support/chat', {
+    // Send empty messages array to get initial greeting
+    const response = await $fetch<{ content: string; conversationId: string }>('/api/support/chat', {
       method: 'POST',
       body: {
         mode: mode.value,
-        message: null, // Initial message triggers greeting
+        messages: [], // Empty array triggers initial greeting
       },
     })
 
+    conversationId.value = response.conversationId
     messages.value.push({
       role: 'assistant',
-      content: response.message,
+      content: response.content,
     })
   } catch (err) {
     console.error('Failed to start conversation:', err)
@@ -84,17 +87,20 @@ async function sendMessage() {
   isLoading.value = true
 
   try {
-    const response = await $fetch<{ message: string }>('/api/support/chat', {
+    // Send full message history to maintain context
+    const response = await $fetch<{ content: string; conversationId: string }>('/api/support/chat', {
       method: 'POST',
       body: {
         mode: mode.value,
-        message: userMessage,
+        messages: messages.value.map(m => ({ role: m.role, content: m.content })),
+        conversationId: conversationId.value,
       },
     })
 
+    conversationId.value = response.conversationId
     messages.value.push({
       role: 'assistant',
-      content: response.message,
+      content: response.content,
     })
   } catch (err) {
     console.error('Failed to send message:', err)

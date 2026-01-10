@@ -35,7 +35,7 @@ export interface UserStatus {
 
 export const useUserStatus = () => {
   const status = ref<UserStatus | null>(null)
-  const isLoading = ref(false)
+  const isLoading = ref(true) // Start true so loading shows until fetch completes
   const error = ref<string | null>(null)
 
   const fetchStatus = async () => {
