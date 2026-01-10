@@ -219,6 +219,8 @@ const {
   isRecording,
   isAudioReady,
   currentWordIndex,
+  currentTranscript,
+  isStreamingMode,
   error,
   permissionState,
   isSupported,
@@ -261,15 +263,31 @@ onMounted(() => {
 })
 
 // Display messages with [SESSION_COMPLETE] stripped
-// Also hide the latest assistant message while audio is loading
+// In streaming mode, show the live transcript as it arrives
 const displayMessages = computed(() => {
   const allMessages = messages.value.map(msg => ({
     ...msg,
     content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
   }))
 
-  // If the latest message is from assistant and audio isn't ready yet, don't show it
-  // (the loading indicator will show instead)
+  // In streaming mode, add/update the current streaming message
+  if (isStreamingMode.value && currentTranscript.value) {
+    // Check if last message is already the streaming assistant message
+    const lastMsg = allMessages[allMessages.length - 1]
+    if (lastMsg?.role !== 'assistant' || !isAISpeaking.value) {
+      // Add streaming message
+      allMessages.push({
+        role: 'assistant',
+        content: currentTranscript.value.replace('[SESSION_COMPLETE]', '').trim()
+      })
+    } else {
+      // Update the last assistant message with current streaming content
+      lastMsg.content = currentTranscript.value.replace('[SESSION_COMPLETE]', '').trim()
+    }
+    return allMessages
+  }
+
+  // Non-streaming mode: hide the latest assistant message while audio is loading
   const lastMsg = allMessages[allMessages.length - 1]
   if (lastMsg?.role === 'assistant' && isProcessing.value && !isAudioReady.value) {
     return allMessages.slice(0, -1)
