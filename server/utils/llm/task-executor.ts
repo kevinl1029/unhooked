@@ -13,14 +13,7 @@ import type {
 } from './task-types'
 
 // Map task model types to base provider models
-function getProviderModel(taskModel: TaskModelType): { provider: 'groq' | 'gemini' | 'claude' | 'openai'; model: string } {
-  // Support "provider:model" format (e.g., "groq:llama-3.1-8b-instant")
-  if (typeof taskModel === 'string' && taskModel.includes(':')) {
-    const [provider, model] = taskModel.split(':')
-    return { provider: provider as 'groq' | 'gemini' | 'claude' | 'openai', model }
-  }
-
-  // Legacy enum support
+function getProviderModel(taskModel: TaskModelType): { provider: 'gemini' | 'claude' | 'openai'; model: string } {
   switch (taskModel) {
     case 'gemini-pro':
       return { provider: 'gemini', model: 'gemini-2.0-flash' }
@@ -35,8 +28,7 @@ function getProviderModel(taskModel: TaskModelType): { provider: 'groq' | 'gemin
     case 'gpt-4-turbo':
       return { provider: 'openai', model: 'gpt-4-turbo' }
     default:
-      // Default to Groq fast model
-      return { provider: 'groq', model: 'llama-3.1-8b-instant' }
+      return { provider: 'gemini', model: 'gemini-2.0-flash' }
   }
 }
 
@@ -48,16 +40,16 @@ function toPascalCase(str: string): string {
     .join('')
 }
 
-// Default task configurations (using Groq as primary provider)
+// Default task configurations
 const defaultConfigs: TaskModelConfig[] = [
-  { task: 'conversation', model: 'groq:llama-3.1-8b-instant', temperature: 0.7 },
-  { task: 'moment.detect', model: 'groq:llama-3.1-8b-instant', temperature: 0.3, maxTokens: 500 },
-  { task: 'conviction.assess', model: 'groq:llama-3.3-70b-versatile', temperature: 0.3, maxTokens: 1000 },
-  { task: 'checkin.personalize', model: 'groq:llama-3.1-8b-instant', temperature: 0.7, maxTokens: 300 },
-  { task: 'story.summarize', model: 'groq:llama-3.3-70b-versatile', temperature: 0.5, maxTokens: 500 },
-  { task: 'ceremony.narrative', model: 'groq:llama-3.3-70b-versatile', temperature: 0.8, maxTokens: 2000 },
-  { task: 'ceremony.select', model: 'groq:llama-3.1-8b-instant', temperature: 0.3, maxTokens: 1000 },
-  { task: 'key_insight.select', model: 'groq:llama-3.1-8b-instant', temperature: 0.3, maxTokens: 500 },
+  { task: 'conversation', model: 'gemini-pro', temperature: 0.7 },
+  { task: 'moment.detect', model: 'gemini-flash', temperature: 0.3, maxTokens: 500 },
+  { task: 'conviction.assess', model: 'gemini-pro', temperature: 0.3, maxTokens: 1000 },
+  { task: 'checkin.personalize', model: 'gemini-flash', temperature: 0.7, maxTokens: 300 },
+  { task: 'story.summarize', model: 'gemini-pro', temperature: 0.5, maxTokens: 500 },
+  { task: 'ceremony.narrative', model: 'gemini-pro', temperature: 0.8, maxTokens: 2000 },
+  { task: 'ceremony.select', model: 'gemini-pro', temperature: 0.3, maxTokens: 1000 },
+  { task: 'key_insight.select', model: 'gemini-pro', temperature: 0.3, maxTokens: 500 },
 ]
 
 export class TaskExecutor {
@@ -115,7 +107,7 @@ export class TaskExecutor {
       { role: 'user', content: prompt }
     ]
 
-    const request: ChatRequest & { model: 'groq' | 'gemini' | 'claude' | 'openai' } = {
+    const request: ChatRequest & { model: 'gemini' | 'claude' | 'openai' } = {
       messages,
       model: provider,
     }
@@ -144,7 +136,7 @@ export class TaskExecutor {
       { role: 'user', content: userMessage }
     ]
 
-    const request: ChatRequest & { model: 'groq' | 'gemini' | 'claude' | 'openai' } = {
+    const request: ChatRequest & { model: 'gemini' | 'claude' | 'openai' } = {
       messages,
       model: provider,
     }
