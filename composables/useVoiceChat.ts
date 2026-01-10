@@ -291,6 +291,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     permissionState: voiceSession.permissionState,
     isSupported: voiceSession.isSupported,
     isStreamingMode: voiceSession.isStreamingMode,
+    isTextStreaming: voiceSession.isTextStreaming,
     isWaitingForChunks: voiceSession.isWaitingForChunks,
 
     // Methods
