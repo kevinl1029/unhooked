@@ -2,12 +2,22 @@ import type { Message } from '~/server/utils/llm/types'
 
 interface VoiceChatOptions {
   mythNumber?: number
+  sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement'
+  checkInId?: string
+  checkInPrompt?: string
   onSessionComplete?: () => void
   enableStreamingTTS?: boolean // Enable streaming TTS when supported
 }
 
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
-  const { mythNumber, onSessionComplete, enableStreamingTTS = true } = options
+  const {
+    mythNumber,
+    sessionType = 'core',
+    checkInId,
+    checkInPrompt,
+    onSessionComplete,
+    enableStreamingTTS = true
+  } = options
 
   // State
   const messages = ref<Message[]>([])
@@ -55,6 +65,9 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: messages.value,
             conversationId: conversationId.value,
             mythNumber,
+            sessionType,
+            checkInId,
+            checkInPrompt,
             stream: true,
             streamTTS: true,
             inputModality
@@ -96,6 +109,9 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: messages.value,
             conversationId: conversationId.value,
             mythNumber,
+            sessionType,
+            checkInId,
+            checkInPrompt,
             stream: false,
             inputModality
           }
@@ -152,6 +168,9 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: [],
             conversationId: null,
             mythNumber,
+            sessionType,
+            checkInId,
+            checkInPrompt,
             stream: true,
             streamTTS: true
           })
@@ -192,6 +211,9 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: [],
             conversationId: null,
             mythNumber,
+            sessionType,
+            checkInId,
+            checkInPrompt,
             stream: false
           }
         })

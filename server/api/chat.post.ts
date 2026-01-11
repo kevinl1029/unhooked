@@ -1,7 +1,7 @@
 import { getModelRouter, getDefaultModel } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { buildSystemPrompt, MYTH_NAMES } from '../utils/prompts'
+import { buildSystemPrompt, buildCheckInSystemPrompt, MYTH_NAMES } from '../utils/prompts'
 import {
   detectMoment,
   shouldAttemptDetection,
@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
     sessionType = 'core',
     mythLayer = 'intellectual',
     priorMoments = [],
+    checkInId,
+    checkInPrompt,
   } = body as {
     messages: Message[]
     conversationId?: string
@@ -48,6 +50,8 @@ export default defineEventHandler(async (event) => {
     sessionType?: SessionType
     mythLayer?: MythLayer
     priorMoments?: Array<{ transcript: string; moment_type: string }>
+    checkInId?: string
+    checkInPrompt?: string
   }
 
   if (!messages || !Array.isArray(messages)) {
@@ -135,6 +139,15 @@ export default defineEventHandler(async (event) => {
     // Prepend system message
     processedMessages = [
       { role: 'system', content: systemPrompt },
+      ...messages
+    ]
+  } else if (sessionType === 'check_in' && checkInPrompt) {
+    // Build check-in specific system prompt
+    const checkInSystemPrompt = buildCheckInSystemPrompt(checkInPrompt)
+
+    // Prepend system message
+    processedMessages = [
+      { role: 'system', content: checkInSystemPrompt },
       ...messages
     ]
   }

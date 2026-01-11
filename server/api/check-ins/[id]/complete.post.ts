@@ -6,7 +6,7 @@ import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { completeCheckIn } from '~/server/utils/scheduling/check-in-scheduler'
 
 interface CompleteCheckInBody {
-  response_conversation_id: string
+  response_conversation_id?: string  // Optional as safety net, but should normally be provided
 }
 
 export default defineEventHandler(async (event) => {
@@ -21,9 +21,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<CompleteCheckInBody>(event)
-  if (!body.response_conversation_id) {
-    throw createError({ statusCode: 400, message: 'response_conversation_id is required' })
-  }
 
   const supabase = serverSupabaseServiceRole(event)
 
@@ -31,7 +28,7 @@ export default defineEventHandler(async (event) => {
     supabase,
     checkInId,
     user.sub,
-    body.response_conversation_id
+    body.response_conversation_id || null
   )
 
   if (!success) {

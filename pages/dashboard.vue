@@ -314,6 +314,15 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- Check-in Interstitial Modal -->
+    <CheckInInterstitial
+      v-if="showInterstitial && pendingCheckIn"
+      :check-in="pendingCheckIn"
+      @dismiss="dismissInterstitial"
+      @skip="skipCheckIn"
+      @respond="respondToCheckIn"
+    />
   </div>
 </template>
 
@@ -343,6 +352,19 @@ const {
   ceremonyDate,
 } = useUserStatus()
 
+// Check-in interstitial
+const {
+  showInterstitial,
+  pendingCheckIn,
+  checkForInterstitial,
+  dismissInterstitial,
+  skipCheckIn,
+  respondToCheckIn,
+} = useCheckIns()
+
+// Timezone detection
+const { detectAndStoreTimezone } = useTimezoneDetection()
+
 // Audio player state
 const showAudioPlayer = ref(false)
 const audioPlayerTitle = ref('')
@@ -360,6 +382,14 @@ onMounted(async () => {
   if (!intake.value) {
     router.push('/onboarding')
     return
+  }
+
+  // Detect and store timezone (for check-in scheduling)
+  detectAndStoreTimezone()
+
+  // Check for pending check-in interstitial (only if not post-ceremony)
+  if (!isPostCeremony.value) {
+    await checkForInterstitial()
   }
 })
 

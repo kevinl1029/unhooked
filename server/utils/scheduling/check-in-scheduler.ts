@@ -362,15 +362,20 @@ export async function completeCheckIn(
   supabase: SupabaseClient,
   checkInId: string,
   userId: string,
-  responseConversationId: string
+  responseConversationId: string | null
 ): Promise<boolean> {
+  const updateData: Record<string, any> = {
+    status: 'completed',
+    completed_at: new Date().toISOString(),
+  }
+
+  if (responseConversationId) {
+    updateData.response_conversation_id = responseConversationId
+  }
+
   const { error } = await supabase
     .from('check_in_schedule')
-    .update({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-      response_conversation_id: responseConversationId,
-    })
+    .update(updateData)
     .eq('id', checkInId)
     .eq('user_id', userId)
 

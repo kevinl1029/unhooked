@@ -64,10 +64,16 @@ export function useCheckIns() {
 
   /**
    * Navigate to respond to check-in
+   * Passes prompt via query param to avoid redundant API fetch
    */
   function respondToCheckIn(id: string) {
     showInterstitial.value = false
-    navigateTo(`/check-in/${id}`)
+    const prompt = pendingCheckIn.value?.prompt
+    if (prompt) {
+      navigateTo(`/check-in/${id}?prompt=${encodeURIComponent(prompt)}`)
+    } else {
+      navigateTo(`/check-in/${id}`)
+    }
   }
 
   return {
