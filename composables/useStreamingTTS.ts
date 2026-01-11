@@ -12,6 +12,7 @@ interface StreamingTTSOptions {
   onComplete?: (fullText: string, sessionComplete: boolean, usedStreamingTTS: boolean) => void
   onError?: (error: string) => void
   onAudioComplete?: () => void
+  onAudioStart?: () => void // Called when first audio chunk starts playing
 }
 
 interface SSEEvent {
@@ -29,6 +30,9 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
   const audioQueue = useStreamingAudioQueue({
     onComplete: () => {
       options.onAudioComplete?.()
+    },
+    onPlaybackStart: () => {
+      options.onAudioStart?.()
     }
   })
 
@@ -150,10 +154,11 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
 
   /**
    * Stop streaming and playback
+   * @param triggerComplete - Whether to trigger onAudioComplete callback
    */
-  const stop = () => {
+  const stop = (triggerComplete = false) => {
     isStreaming.value = false
-    audioQueue.stop()
+    audioQueue.stop(triggerComplete)
     fullText.value = ''
     conversationId.value = null
     error.value = null

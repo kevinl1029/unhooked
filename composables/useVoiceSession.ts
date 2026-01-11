@@ -57,11 +57,22 @@ export const useVoiceSession = () => {
     },
     onAudioComplete: () => {
       // Audio playback finished - update state
+      console.log('[onAudioComplete] Audio finished - setting isAISpeaking=false, streamingModeFlag=false')
       isAISpeaking.value = false
-      isStreamingMode.value = false
+      streamingModeFlag.value = false
+    },
+    onAudioStart: () => {
+      // First audio chunk started playing - update state immediately
+      console.log('[onAudioStart] Audio started - setting isAISpeaking=true, streamingModeFlag=true')
+      isAISpeaking.value = true
+      streamingModeFlag.value = true
     }
   })
-  const isStreamingMode = ref(false)
+  // Flag to track if we're in streaming TTS mode (set when result confirms streaming was used)
+  const streamingModeFlag = ref(false)
+  // isStreamingMode is true when audio is playing OR the flag is set
+  // This ensures word highlighting starts immediately when audio starts, not after stream completes
+  const isStreamingMode = computed(() => streamingModeFlag.value || streamingTTS.isPlaying.value)
 
   // Synthesize text to speech and play it
   const playAIResponse = async (text: string): Promise<boolean> => {
@@ -164,6 +175,7 @@ export const useVoiceSession = () => {
   const playStreamingResponse = async (
     reader: ReadableStreamDefaultReader<Uint8Array>
   ): Promise<{ success: boolean; sessionComplete: boolean; conversationId: string | null }> => {
+    console.log('[playStreamingResponse] START - setting isTextStreaming=true, clearing currentTranscript')
     error.value = null
     streamingTTSResult.value = null
     currentTranscript.value = ''
@@ -180,9 +192,9 @@ export const useVoiceSession = () => {
       // Check if streaming TTS was actually used
       if (result?.usedStreamingTTS) {
         // Streaming TTS was used - audio is playing/will play
-        isStreamingMode.value = true
+        streamingModeFlag.value = true
         isAISpeaking.value = true
-        // Note: isStreamingMode stays true until onAudioComplete callback is called
+        // Note: streamingModeFlag stays true until onAudioComplete callback is called
         return {
           success: true,
           sessionComplete: result.sessionComplete,
@@ -216,7 +228,7 @@ export const useVoiceSession = () => {
     } catch (e: any) {
       console.error('[useVoiceSession] Streaming TTS error:', e)
       error.value = e.message || 'Streaming playback failed'
-      isStreamingMode.value = false
+      streamingModeFlag.value = false
       isTextStreaming.value = false
       return {
         success: false,
@@ -281,11 +293,20 @@ export const useVoiceSession = () => {
 
   // Stop audio completely
   const stopAudio = () => {
+    // Stop batch mode audio
     if (audioElement) {
       audioElement.pause()
       audioElement.currentTime = 0
-      isAISpeaking.value = false
       stopWordTracking()
+    }
+
+    // Stop streaming TTS audio (this triggers onAudioComplete via the callback)
+    if (streamingTTS.isPlaying.value) {
+      streamingTTS.stop(true) // Pass true to trigger onAudioComplete
+    } else {
+      // If not playing, just reset state
+      isAISpeaking.value = false
+      streamingModeFlag.value = false
     }
   }
 
@@ -389,12 +410,10 @@ export const useVoiceSession = () => {
   })
 
   // Get transcript text for final message content
-  // In streaming TTS mode, use TTS-derived text to match what was displayed/spoken
+  // Always use the original LLM transcript for message content because:
+  // 1. It's in the correct sentence order (TTS chunks can arrive out of order)
+  // 2. It includes all text (TTS might have minor variations)
   const getTranscriptText = computed(() => {
-    // If we have TTS text and used streaming mode, prefer that for consistency
-    if (streamingTTS.ttsText.value && streamingTTS.ttsText.value.length > 0) {
-      return streamingTTS.ttsText.value
-    }
     return currentTranscript.value
   })
 
@@ -415,7 +434,7 @@ export const useVoiceSession = () => {
     wordTimings = []
     currentWordIndex.value = -1
     currentTranscript.value = ''
-    isStreamingMode.value = false
+    streamingModeFlag.value = false
   }
 
   onUnmounted(() => {
@@ -435,7 +454,7 @@ export const useVoiceSession = () => {
     getWords,
     getTranscriptText,
     effectiveWordTimings,
-    isStreamingMode: readonly(isStreamingMode),
+    isStreamingMode,
     isTextStreaming: readonly(isTextStreaming),
 
     // Streaming TTS state passthrough
