@@ -207,6 +207,9 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
+// Progress tracking
+const { completeSession } = useProgress()
+
 // Voice chat composable
 const {
   messages,
@@ -243,6 +246,7 @@ const textMode = ref(false)
 const textInput = ref('')
 const audioLevel = ref(0)
 const showPermissionOverlay = ref(false)
+const sessionCompleteDetected = ref(false)
 let audioLevelFrame: number | null = null
 
 // Responsive check
@@ -327,16 +331,31 @@ watch(
   }
 )
 
-// Watch for session complete
+// Watch for session complete token in messages
 watch(
   () => messages.value,
   (msgs) => {
     const lastMsg = msgs[msgs.length - 1]
     if (lastMsg?.role === 'assistant' && lastMsg.content.includes('[SESSION_COMPLETE]')) {
-      handleSessionComplete()
+      sessionCompleteDetected.value = true
+      // Only trigger immediately if audio is completely done (not speaking AND not processing)
+      if (!isAISpeaking.value && !isProcessing.value) {
+        handleSessionComplete()
+      }
     }
   },
   { deep: true }
+)
+
+// Wait for audio to finish before triggering session complete
+// Watch both isAISpeaking and isProcessing to catch when TTS completes
+watch(
+  [() => isAISpeaking.value, () => isProcessing.value],
+  ([speaking, processing]) => {
+    if (!speaking && !processing && sessionCompleteDetected.value) {
+      handleSessionComplete()
+    }
+  }
 )
 
 onUnmounted(() => {
@@ -397,8 +416,19 @@ const handleSendText = async () => {
   await sendMessage(text, 'text', true)
 }
 
-const handleSessionComplete = () => {
-  // Emit to parent for navigation/completion handling
-  emit('sessionComplete', null)
+const handleSessionComplete = async () => {
+  if (!conversationId.value) {
+    console.error('No conversationId available for session completion')
+    emit('sessionComplete', null)
+    return
+  }
+
+  try {
+    const result = await completeSession(conversationId.value, props.mythNumber)
+    emit('sessionComplete', result.nextMyth)
+  } catch (err) {
+    console.error('Error completing session:', err)
+    emit('sessionComplete', null)
+  }
 }
 </script>
