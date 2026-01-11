@@ -221,6 +221,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       const elapsedSec = audioContext.currentTime - playbackStartTime
       const currentTimeMs = elapsedSec * 1000
 
+      // Find the current word based on elapsed time
       for (let i = allWordTimings.value.length - 1; i >= 0; i--) {
         if (currentTimeMs >= allWordTimings.value[i].startMs) {
           currentWordIndex.value = i

@@ -9,6 +9,7 @@
  */
 
 import type { TTSProvider, AudioChunk } from './types'
+import { getWavDurationMs, scaleWordTimings } from './wav-utils'
 
 export type ChunkCallback = (chunk: AudioChunk) => void
 
@@ -51,22 +52,37 @@ export class SequentialTTSProcessor {
 
         const result = await this.provider.synthesize({ text })
 
+        // For estimated timings (Groq, OpenAI), scale to actual audio duration
+        let wordTimings = result.wordTimings
+        let durationMs = result.estimatedDurationMs
+
+        if (result.timingSource === 'estimated' && result.contentType === 'audio/wav') {
+          // Get actual duration from WAV header
+          const actualDurationMs = getWavDurationMs(result.audioBuffer)
+
+          if (actualDurationMs !== null && actualDurationMs > 0) {
+            // Scale word timings to match actual audio duration
+            wordTimings = scaleWordTimings(result.wordTimings, actualDurationMs)
+            durationMs = actualDurationMs
+          }
+        }
+
         const chunk: AudioChunk = {
           chunkIndex: myChunkIndex,
           audioBase64: Buffer.from(result.audioBuffer).toString('base64'),
           contentType: result.contentType,
-          wordTimings: result.wordTimings,
+          wordTimings,
           cumulativeOffsetMs: this.cumulativeOffsetMs,
-          durationMs: result.estimatedDurationMs,
+          durationMs,
           isLast,
           text
         }
 
         // Update cumulative offset for next chunk
-        this.cumulativeOffsetMs += result.estimatedDurationMs
+        this.cumulativeOffsetMs += durationMs
 
         console.log('[sequential-tts] Emitting chunk %d (duration: %dms, cumulative: %dms)',
-          myChunkIndex, result.estimatedDurationMs, this.cumulativeOffsetMs)
+          myChunkIndex, durationMs, this.cumulativeOffsetMs)
 
         // Emit the chunk - this happens in strict order because we're in a chain
         this.onChunk(chunk)

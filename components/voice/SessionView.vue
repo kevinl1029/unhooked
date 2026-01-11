@@ -215,7 +215,6 @@ const {
   isProcessing,
   isAISpeaking,
   isRecording,
-  isAudioReady,
   currentWordIndex,
   currentTranscript,
   isStreamingMode,
@@ -271,11 +270,6 @@ const displayMessages = computed(() => {
     content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
   }))
 
-  // Debug: log state on each compute
-  if (messages.value.length > 0 || isTextStreaming.value || isStreamingMode.value) {
-    console.log('[displayMessages] msgs:', messages.value.length, 'isTextStreaming:', isTextStreaming.value, 'isStreamingMode:', isStreamingMode.value, 'hasTranscript:', !!currentTranscript.value)
-  }
-
   // Show streaming transcript while text is being streamed OR while streaming TTS audio plays
   // isTextStreaming: text tokens arriving from LLM
   // isStreamingMode: streaming TTS audio is playing
@@ -294,24 +288,12 @@ const displayMessages = computed(() => {
         role: 'assistant',
         content: displayContent
       })
-      console.log('[displayMessages] showStreamingTranscript=true, PUSHED streaming msg, total:', allMessages.length, 'roles:', allMessages.map(m => m.role))
     } else {
       // Update the last assistant message with current streaming content
       lastMsg.content = displayContent
-      console.log('[displayMessages] showStreamingTranscript=true, UPDATED last assistant msg, total:', allMessages.length)
     }
-    return allMessages
   }
 
-  // Non-streaming mode: hide the latest assistant message while audio is loading
-  // Only apply this logic when we're actively loading audio for THIS message (not when user is sending a new message)
-  const lastMsg = allMessages[allMessages.length - 1]
-  if (lastMsg?.role === 'assistant' && isProcessing.value && !isAudioReady.value && !isTextStreaming.value && !isStreamingMode.value) {
-    console.log('[displayMessages] HIDING last assistant message, returning', allMessages.length - 1, 'messages')
-    return allMessages.slice(0, -1)
-  }
-
-  console.log('[displayMessages] Returning', allMessages.length, 'messages:', allMessages.map(m => m.role))
   return allMessages
 })
 
