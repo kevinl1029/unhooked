@@ -10,6 +10,7 @@
 
 import type { TTSProvider, AudioChunk } from './types'
 import { getWavDurationMs, scaleWordTimings } from './wav-utils'
+import { sanitizeForTTS } from './sanitize'
 
 export type ChunkCallback = (chunk: AudioChunk) => void
 
@@ -38,6 +39,14 @@ export class SequentialTTSProcessor {
       return
     }
 
+    // Sanitize text before processing - removes system tokens, markdown, etc.
+    const sanitizedText = sanitizeForTTS(text)
+
+    // Skip empty sentences (e.g., "[SESSION_COMPLETE]" becomes empty after sanitization)
+    if (!sanitizedText) {
+      return
+    }
+
     // Capture the chunk index NOW, before any async operations
     // This ensures indices are assigned in enqueue order, not completion order
     const myChunkIndex = this.chunkIndex++
@@ -47,10 +56,7 @@ export class SequentialTTSProcessor {
       if (this.hasError) return
 
       try {
-        console.log('[sequential-tts] Synthesizing chunk %d: "%s"',
-          myChunkIndex, text.slice(0, 40) + (text.length > 40 ? '...' : ''))
-
-        const result = await this.provider.synthesize({ text })
+        const result = await this.provider.synthesize({ text: sanitizedText })
 
         // For estimated timings (Groq, OpenAI), scale to actual audio duration
         let wordTimings = result.wordTimings
@@ -75,14 +81,11 @@ export class SequentialTTSProcessor {
           cumulativeOffsetMs: this.cumulativeOffsetMs,
           durationMs,
           isLast,
-          text
+          text: sanitizedText
         }
 
         // Update cumulative offset for next chunk
         this.cumulativeOffsetMs += durationMs
-
-        console.log('[sequential-tts] Emitting chunk %d (duration: %dms, cumulative: %dms)',
-          myChunkIndex, durationMs, this.cumulativeOffsetMs)
 
         // Emit the chunk - this happens in strict order because we're in a chain
         this.onChunk(chunk)

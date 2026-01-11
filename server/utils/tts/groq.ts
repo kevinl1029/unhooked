@@ -7,6 +7,7 @@
  */
 
 import type { TTSProvider, TTSResult, TTSOptions, WordTiming } from './types'
+import { sanitizeForTTS } from './sanitize'
 
 // Groq Orpheus voices
 type GroqVoice = 'troy' | 'hannah' | 'austin'
@@ -28,6 +29,22 @@ export function createGroqProvider(apiKey: string, defaultVoice: string = 'troy'
       // Validate voice
       const voiceToUse = VALID_VOICES.includes(voice as GroqVoice) ? voice : defaultVoice
 
+      // Sanitize text to remove system tokens and markdown before TTS
+      const sanitizedText = sanitizeForTTS(text)
+
+      // If sanitization removed all content, return empty audio
+      if (!sanitizedText) {
+        return {
+          audioBuffer: new ArrayBuffer(0),
+          contentType: 'audio/wav',
+          wordTimings: [],
+          estimatedDurationMs: 0,
+          provider: 'groq',
+          timingSource: 'estimated',
+          voice: voiceToUse
+        }
+      }
+
       // Call Groq TTS API (OpenAI-compatible endpoint)
       const response = await fetch('https://api.groq.com/openai/v1/audio/speech', {
         method: 'POST',
@@ -37,7 +54,7 @@ export function createGroqProvider(apiKey: string, defaultVoice: string = 'troy'
         },
         body: JSON.stringify({
           model: 'canopylabs/orpheus-v1-english',
-          input: text,
+          input: sanitizedText,
           voice: voiceToUse,
           response_format: 'wav'
         })
@@ -52,11 +69,11 @@ export function createGroqProvider(apiKey: string, defaultVoice: string = 'troy'
       // Get audio as buffer
       const audioBuffer = await response.arrayBuffer()
 
-      // Calculate estimated word timings (excluding vocal direction markers)
-      const wordTimings = calculateWordTimings(text)
+      // Calculate estimated word timings using sanitized text
+      const wordTimings = calculateWordTimings(sanitizedText)
 
       // Estimate total duration based on word count
-      const words = getSpokenWords(text)
+      const words = getSpokenWords(sanitizedText)
       const estimatedDurationMs = Math.round((words.length / WORDS_PER_MINUTE) * 60 * 1000)
 
       return {
