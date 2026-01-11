@@ -21,6 +21,7 @@ export const useVoiceSession = () => {
   const isAISpeaking = ref(false)
   const isRecording = ref(false)
   const isProcessing = ref(false)
+  const isTranscribing = ref(false) // True specifically during speech-to-text transcription
   const isAudioReady = ref(false)
   const currentWordIndex = ref(-1)
   const currentTranscript = ref('')
@@ -332,6 +333,7 @@ export const useVoiceSession = () => {
 
     isRecording.value = false
     isProcessing.value = true
+    isTranscribing.value = true // User's speech is being transcribed
     error.value = null
 
     try {
@@ -339,6 +341,7 @@ export const useVoiceSession = () => {
       if (!blob) {
         error.value = 'No audio recorded'
         isProcessing.value = false
+        isTranscribing.value = false
         return null
       }
 
@@ -352,6 +355,7 @@ export const useVoiceSession = () => {
       })
 
       isProcessing.value = false
+      isTranscribing.value = false
 
       if (!response.text || response.text.trim() === '') {
         error.value = 'Could not understand audio. Please try again.'
@@ -363,6 +367,7 @@ export const useVoiceSession = () => {
       console.error('[useVoiceSession] Transcription error:', e)
       error.value = e.data?.message || e.message || 'Failed to transcribe audio'
       isProcessing.value = false
+      isTranscribing.value = false
       return null
     }
   }
@@ -446,6 +451,7 @@ export const useVoiceSession = () => {
     isAISpeaking: readonly(isAISpeaking),
     isRecording: readonly(isRecording),
     isProcessing: readonly(isProcessing),
+    isTranscribing: readonly(isTranscribing),
     isAudioReady: readonly(isAudioReady),
     currentWordIndex: effectiveWordIndex,
     currentTranscript: readonly(currentTranscript),

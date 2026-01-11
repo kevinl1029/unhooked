@@ -75,8 +75,19 @@
             </div>
           </div>
 
-          <!-- Processing indicator -->
-          <div v-if="isProcessing && !isAISpeaking" class="flex justify-start mb-4">
+          <!-- Transcribing indicator (user side - right aligned) -->
+          <div v-if="isTranscribing" class="flex justify-end mb-4">
+            <div class="glass-input rounded-2xl rounded-br-sm px-4 py-3">
+              <div class="flex gap-1">
+                <span class="w-2 h-2 bg-white-65 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                <span class="w-2 h-2 bg-white-65 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                <span class="w-2 h-2 bg-white-65 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assistant processing indicator (left aligned) -->
+          <div v-else-if="isProcessing && !isAISpeaking" class="flex justify-start mb-4">
             <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3">
               <div class="flex gap-1">
                 <span class="w-2 h-2 bg-white-65 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
@@ -213,6 +224,7 @@ const {
   messages,
   conversationId,
   isProcessing,
+  isTranscribing,
   isAISpeaking,
   isRecording,
   currentWordIndex,
