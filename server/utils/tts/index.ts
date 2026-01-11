@@ -2,13 +2,15 @@
  * TTS Provider Factory
  *
  * Creates the appropriate TTS provider based on configuration.
- * Supports Groq (default), OpenAI (estimated timings), and ElevenLabs (actual timings).
+ * Supports Groq (default), OpenAI (estimated timings), ElevenLabs (actual timings),
+ * and InWorld (actual word-level timestamps).
  */
 
 import type { TTSProvider, TTSProviderType } from './types'
 import { createOpenAIProvider } from './openai'
 import { createElevenLabsProvider } from './elevenlabs'
 import { createGroqProvider } from './groq'
+import { createInworldProvider } from './inworld'
 
 export * from './types'
 
@@ -21,6 +23,9 @@ interface TTSConfig {
   elevenlabsApiKey?: string
   elevenlabsVoiceId?: string
   elevenlabsModel?: string
+  inworldApiKey?: string
+  inworldVoiceId?: string
+  inworldModel?: string
 }
 
 /**
@@ -30,7 +35,7 @@ interface TTSConfig {
  * Falls back through the chain if requested provider is not configured.
  */
 export function createTTSProvider(config: TTSConfig): TTSProvider {
-  const { provider, groqApiKey, groqVoice, openaiApiKey, openaiVoice, elevenlabsApiKey, elevenlabsVoiceId, elevenlabsModel } = config
+  const { provider, groqApiKey, groqVoice, openaiApiKey, openaiVoice, elevenlabsApiKey, elevenlabsVoiceId, elevenlabsModel, inworldApiKey, inworldVoiceId, inworldModel } = config
 
   // Groq provider (default)
   if (provider === 'groq') {
@@ -42,6 +47,18 @@ export function createTTSProvider(config: TTSConfig): TTSProvider {
       return createOpenAIProvider(openaiApiKey, openaiVoice)
     }
     return createGroqProvider(groqApiKey, groqVoice)
+  }
+
+  // InWorld provider (actual word-level timestamps)
+  if (provider === 'inworld') {
+    if (!inworldApiKey) {
+      console.warn('[TTS] InWorld requested but no API key configured, falling back to OpenAI')
+      if (!openaiApiKey) {
+        throw new Error('No TTS provider API key configured')
+      }
+      return createOpenAIProvider(openaiApiKey, openaiVoice)
+    }
+    return createInworldProvider(inworldApiKey, inworldVoiceId, inworldModel)
   }
 
   // ElevenLabs provider
@@ -79,6 +96,9 @@ export function getTTSProviderFromConfig(): TTSProvider {
     openaiVoice: config.openaiTtsVoice,
     elevenlabsApiKey: config.elevenlabsApiKey,
     elevenlabsVoiceId: config.elevenlabsVoiceId,
-    elevenlabsModel: config.elevenlabsModel
+    elevenlabsModel: config.elevenlabsModel,
+    inworldApiKey: config.inworldApiKey,
+    inworldVoiceId: config.inworldVoiceId,
+    inworldModel: config.inworldModel
   })
 }
