@@ -207,6 +207,9 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
+// Progress tracking
+const { completeSession } = useProgress()
+
 // Voice chat composable
 const {
   messages,
@@ -243,6 +246,8 @@ const textMode = ref(false)
 const textInput = ref('')
 const audioLevel = ref(0)
 const showPermissionOverlay = ref(false)
+const sessionCompleteDetected = ref(false)
+const audioHasStartedForCompletion = ref(false)
 let audioLevelFrame: number | null = null
 
 // Responsive check
@@ -327,16 +332,42 @@ watch(
   }
 )
 
-// Watch for session complete
+// Watch for session complete token in messages
 watch(
   () => messages.value,
   (msgs) => {
     const lastMsg = msgs[msgs.length - 1]
     if (lastMsg?.role === 'assistant' && lastMsg.content.includes('[SESSION_COMPLETE]')) {
-      handleSessionComplete()
+      sessionCompleteDetected.value = true
+      // Don't trigger immediately - wait for audio to start and finish
+      // The isAISpeaking watch will handle completion
     }
   },
   { deep: true }
+)
+
+// Track when audio starts playing for the completion message
+watch(
+  () => isAISpeaking.value,
+  (speaking) => {
+    if (speaking && sessionCompleteDetected.value) {
+      audioHasStartedForCompletion.value = true
+    }
+  }
+)
+
+// Wait for audio to finish before triggering session complete
+watch(
+  () => isAISpeaking.value,
+  (speaking) => {
+    // Only trigger when:
+    // 1. Session complete was detected
+    // 2. Audio has started playing (so we know TTS was initiated)
+    // 3. Audio is now finished (speaking = false)
+    if (!speaking && sessionCompleteDetected.value && audioHasStartedForCompletion.value) {
+      handleSessionComplete()
+    }
+  }
 )
 
 onUnmounted(() => {
@@ -397,8 +428,19 @@ const handleSendText = async () => {
   await sendMessage(text, 'text', true)
 }
 
-const handleSessionComplete = () => {
-  // Emit to parent for navigation/completion handling
-  emit('sessionComplete', null)
+const handleSessionComplete = async () => {
+  if (!conversationId.value) {
+    console.error('No conversationId available for session completion')
+    emit('sessionComplete', null)
+    return
+  }
+
+  try {
+    const result = await completeSession(conversationId.value, props.mythNumber)
+    emit('sessionComplete', result.nextMyth)
+  } catch (err) {
+    console.error('Error completing session:', err)
+    emit('sessionComplete', null)
+  }
 }
 </script>
