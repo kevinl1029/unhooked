@@ -1,4 +1,14 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
+import { scheduleCheckIns } from '~/server/utils/scheduling/check-in-scheduler'
+
+// Map myth numbers to myth keys
+const MYTH_KEYS: Record<number, string> = {
+  1: 'stress_relief',
+  2: 'pleasure',
+  3: 'willpower',
+  4: 'focus',
+  5: 'identity',
+}
 
 interface CompleteSessionBody {
   conversationId: string
@@ -77,6 +87,30 @@ export default defineEventHandler(async (event) => {
 
   if (updateError) {
     throw createError({ statusCode: 500, message: updateError.message })
+  }
+
+  // Schedule post-session check-in (non-blocking)
+  // Only schedule if program is not complete (user still has sessions to do)
+  if (!isComplete) {
+    const timezone = currentProgress.timezone || 'America/New_York'
+    const mythKey = MYTH_KEYS[body.mythNumber]
+
+    scheduleCheckIns({
+      userId: user.sub,
+      timezone,
+      trigger: 'session_complete',
+      sessionId: body.conversationId,
+      mythKey,
+      sessionEndTime: new Date(),
+      supabase,
+    }).then((scheduled) => {
+      if (scheduled.length > 0) {
+        console.log(`[complete-session] Scheduled ${scheduled.length} check-in(s) for user ${user.sub}`)
+      }
+    }).catch((err) => {
+      // Log but don't fail the request - check-in scheduling is not critical
+      console.error('[complete-session] Failed to schedule check-ins:', err)
+    })
   }
 
   return {
