@@ -62,17 +62,14 @@
             <div v-else class="flex justify-start">
               <div class="max-w-[85%] md:max-w-[70%] overflow-hidden">
                 <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3 overflow-hidden">
-                  <!-- Show word-by-word if this is the current speaking message -->
+                  <!-- Always use word-by-word display for consistent rendering -->
+                  <!-- Always pass transcript for full text display; use currentWordIndex for highlighting -->
                   <VoiceWordByWordTranscript
-                    v-if="isAISpeaking && idx === displayMessages.length - 1"
-                    :words="isStreamingMode ? getWords : undefined"
-                    :transcript="!isStreamingMode ? msg.content : undefined"
-                    :current-word-index="currentWordIndex"
-                    :auto-scroll="true"
+                    :transcript="msg.content"
+                    :current-word-index="isAISpeaking && idx === displayMessages.length - 1 ? currentWordIndex : Infinity"
+                    :auto-scroll="isAISpeaking && idx === displayMessages.length - 1"
                     container-class="text-base leading-relaxed break-words"
                   />
-                  <!-- Show plain text for past messages or after speaking is done -->
-                  <p v-else class="text-white whitespace-pre-wrap break-words">{{ msg.content }}</p>
                 </div>
               </div>
             </div>
@@ -274,18 +271,20 @@ const displayMessages = computed(() => {
     content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
   }))
 
+  // Debug: log state on each compute
+  if (messages.value.length > 0 || isTextStreaming.value || isStreamingMode.value) {
+    console.log('[displayMessages] msgs:', messages.value.length, 'isTextStreaming:', isTextStreaming.value, 'isStreamingMode:', isStreamingMode.value, 'hasTranscript:', !!currentTranscript.value)
+  }
+
   // Show streaming transcript while text is being streamed OR while streaming TTS audio plays
   // isTextStreaming: text tokens arriving from LLM
   // isStreamingMode: streaming TTS audio is playing
   const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value) && currentTranscript.value
 
   if (showStreamingTranscript) {
-    // Use getTranscriptText in streaming mode for consistency with TTS-derived words
-    // This ensures the plain text fallback matches what's shown in word-by-word highlighting
-    const transcriptContent = isStreamingMode.value && getTranscriptText.value
-      ? getTranscriptText.value
-      : currentTranscript.value
-    const displayContent = transcriptContent.replace('[SESSION_COMPLETE]', '').trim()
+    // Always use currentTranscript for the message content (full text from LLM)
+    // The word-by-word component handles TTS word alignment separately via getWords
+    const displayContent = currentTranscript.value.replace('[SESSION_COMPLETE]', '').trim()
 
     // Check if last message is already the streaming assistant message
     const lastMsg = allMessages[allMessages.length - 1]
@@ -295,19 +294,24 @@ const displayMessages = computed(() => {
         role: 'assistant',
         content: displayContent
       })
+      console.log('[displayMessages] showStreamingTranscript=true, PUSHED streaming msg, total:', allMessages.length, 'roles:', allMessages.map(m => m.role))
     } else {
       // Update the last assistant message with current streaming content
       lastMsg.content = displayContent
+      console.log('[displayMessages] showStreamingTranscript=true, UPDATED last assistant msg, total:', allMessages.length)
     }
     return allMessages
   }
 
   // Non-streaming mode: hide the latest assistant message while audio is loading
+  // Only apply this logic when we're actively loading audio for THIS message (not when user is sending a new message)
   const lastMsg = allMessages[allMessages.length - 1]
-  if (lastMsg?.role === 'assistant' && isProcessing.value && !isAudioReady.value) {
+  if (lastMsg?.role === 'assistant' && isProcessing.value && !isAudioReady.value && !isTextStreaming.value && !isStreamingMode.value) {
+    console.log('[displayMessages] HIDING last assistant message, returning', allMessages.length - 1, 'messages')
     return allMessages.slice(0, -1)
   }
 
+  console.log('[displayMessages] Returning', allMessages.length, 'messages:', allMessages.map(m => m.role))
   return allMessages
 })
 
