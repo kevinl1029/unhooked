@@ -3,6 +3,9 @@
  *
  * Manages Web Audio API for gapless playback of streaming audio chunks.
  * Queues AudioBufferSourceNodes and schedules them for continuous playback.
+ *
+ * SIMPLIFIED: Chunks are now guaranteed to arrive in order from the server
+ * thanks to the SequentialTTSProcessor. No client-side reordering needed.
  */
 
 import type { AudioChunk, WordTiming } from '~/server/utils/tts/types'
@@ -15,7 +18,7 @@ interface QueuedChunk {
 
 interface StreamingAudioQueueOptions {
   onComplete?: () => void
-  onPlaybackStart?: () => void // Called when first audio chunk starts playing
+  onPlaybackStart?: () => void
 }
 
 export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {}) => {
@@ -28,15 +31,10 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   // Internal state
   let audioContext: AudioContext | null = null
   let queuedChunks: QueuedChunk[] = []
-  let playbackStartTime = 0 // When first chunk started (audioContext.currentTime)
-  let activeSourceNodes: AudioBufferSourceNode[] = [] // Track active source nodes for cleanup
-  let playbackStarted = false // Track if we've started playback
-
-  // Buffer for out-of-order chunk handling
-  // We wait for chunks to arrive in order before scheduling them
-  let nextExpectedChunkIndex = 0
-  let pendingChunks: Map<number, { chunk: AudioChunk; audioBuffer: AudioBuffer }> = new Map()
-  let nextScheduleTime = 0 // Track when next chunk should be scheduled
+  let playbackStartTime = 0
+  let activeSourceNodes: AudioBufferSourceNode[] = []
+  let playbackStarted = false
+  let nextScheduleTime = 0
 
   // Word timing tracking
   const allWordTimings = ref<WordTiming[]>([])
@@ -46,30 +44,30 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   // Words derived from TTS timings (for display sync)
   const ttsWords = computed(() => allWordTimings.value.map(t => t.word))
 
-  // Full text derived from TTS words (for final message content after streaming)
+  // Full text derived from TTS words
   const ttsText = computed(() => ttsWords.value.join(' '))
 
-  // Track if we received a completion marker while audio is still playing
+  // Track completion state
   let pendingCompletion = false
-  // Track how many chunks have finished playing
   let chunksFinishedPlaying = 0
+
+  // Serialize chunk processing to maintain order during async decode
+  let processingQueue: Promise<void> = Promise.resolve()
 
   /**
    * Decode base64 WAV to AudioBuffer
    */
-  const decodeWavToAudioBuffer = async (base64: string, contentType: string): Promise<AudioBuffer> => {
+  const decodeWavToAudioBuffer = async (base64: string): Promise<AudioBuffer> => {
     if (!audioContext) {
       throw new Error('AudioContext not initialized')
     }
 
-    // Decode base64 to ArrayBuffer
     const binaryString = atob(base64)
     const bytes = new Uint8Array(binaryString.length)
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i)
     }
 
-    // Decode audio data
     return audioContext.decodeAudioData(bytes.buffer)
   }
 
@@ -81,11 +79,8 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       audioContext = new AudioContext()
     }
 
-    // Resume if suspended (happens after page load without user gesture)
     if (audioContext.state === 'suspended') {
       try {
-        // Add a timeout to prevent infinite waiting if resume doesn't complete
-        // (can happen in automated tests or if user gesture context is lost)
         const resumePromise = audioContext.resume()
         const timeoutPromise = new Promise<void>((_, reject) => {
           setTimeout(() => reject(new Error('AudioContext resume timed out')), 5000)
@@ -93,7 +88,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
         await Promise.race([resumePromise, timeoutPromise])
       } catch (e) {
         console.warn('[streaming-audio] Failed to resume AudioContext:', e)
-        // Continue anyway - the context may resume when audio is scheduled
       }
     }
 
@@ -101,8 +95,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   }
 
   /**
-   * Schedule a chunk for playback (internal helper)
-   * Only called when we have the next expected chunk ready
+   * Schedule a chunk for playback
    */
   const scheduleChunk = (chunk: AudioChunk, audioBuffer: AudioBuffer) => {
     const currentTime = audioContext!.currentTime
@@ -119,7 +112,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       options.onPlaybackStart?.()
     }
 
-    // Schedule this chunk at the next available time
     const scheduledTime = nextScheduleTime
 
     console.log('[streaming-audio] Scheduling chunk %d at %.3fs (duration: %dms)',
@@ -131,29 +123,20 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     source.connect(audioContext!.destination)
     source.start(scheduledTime)
 
-    // Track this source node for cleanup
     activeSourceNodes.push(source)
-
-    // Update next schedule time for gapless playback
     nextScheduleTime = scheduledTime + audioBuffer.duration
 
-    // Track when this chunk ends
+    // Handle chunk completion
     source.onended = () => {
-      // Remove from active list
       const idx = activeSourceNodes.indexOf(source)
       if (idx >= 0) {
         activeSourceNodes.splice(idx, 1)
       }
-      // Increment finished count
       chunksFinishedPlaying++
-
-      // Update current chunk index
       currentChunkIndex.value = chunk.chunkIndex
 
-      // Check if this is the last queued chunk
       const isLastQueuedChunk = chunksFinishedPlaying >= queuedChunks.length
 
-      // Check if this was marked as last, OR if we have a pending completion and this is the last queued chunk
       if (chunk.isLast || (pendingCompletion && isLastQueuedChunk)) {
         isPlaying.value = false
         stopWordTracking()
@@ -162,7 +145,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       }
     }
 
-    // Add word timings (already in correct order since we schedule in order)
+    // Add word timings with cumulative offset
     const adjustedTimings = chunk.wordTimings.map(t => ({
       word: t.word,
       startMs: t.startMs + chunk.cumulativeOffsetMs,
@@ -170,7 +153,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     }))
     allWordTimings.value.push(...adjustedTimings)
 
-    // Track this chunk
     queuedChunks.push({
       chunk,
       audioBuffer,
@@ -179,91 +161,43 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   }
 
   /**
-   * Process any pending chunks that are now ready to be scheduled
-   */
-  const processPendingChunks = () => {
-    // Schedule chunks in order as they become available
-    while (pendingChunks.has(nextExpectedChunkIndex)) {
-      const pending = pendingChunks.get(nextExpectedChunkIndex)!
-      pendingChunks.delete(nextExpectedChunkIndex)
-      console.log('[streaming-audio] Processing buffered chunk %d', pending.chunk.chunkIndex)
-      scheduleChunk(pending.chunk, pending.audioBuffer)
-      nextExpectedChunkIndex++
-    }
-
-    // Update waiting state
-    if (pendingChunks.size === 0) {
-      isWaitingForChunks.value = false
-    }
-  }
-
-  // Queue for serializing chunk processing to avoid race conditions
-  let processingQueue: Promise<void> = Promise.resolve()
-
-  /**
-   * Enqueue an audio chunk for playback
-   * Chunks may arrive out of order; we buffer and schedule them in correct order
+   * Enqueue an audio chunk for playback.
+   * Chunks are processed in the order they arrive (guaranteed by server).
    */
   const enqueueChunk = async (chunk: AudioChunk) => {
-    // Handle empty "final marker" chunk - just signals completion without audio
+    // Handle empty "final marker" chunk
     if (chunk.isLast && !chunk.audioBase64) {
-      // Check if all queued audio has already finished playing
       const allAudioFinished = queuedChunks.length > 0 &&
         chunksFinishedPlaying >= queuedChunks.length
 
       if (allAudioFinished || queuedChunks.length === 0) {
-        // All audio done or no audio was ever queued - trigger completion immediately
         isPlaying.value = false
         stopWordTracking()
         options.onComplete?.()
       } else {
-        // Audio still playing - mark for completion when it finishes
         pendingCompletion = true
       }
       return
     }
 
-    // Serialize chunk processing to avoid race conditions from async decode
-    // Without this, chunk 6 could finish decoding before chunk 5 and get scheduled out of order
+    // Serialize chunk processing to maintain decode order
     processingQueue = processingQueue.then(async () => {
       try {
-        // Initialize on first chunk
         if (!audioContext) {
           await initialize()
         }
 
-        // Resume if suspended
         if (audioContext!.state === 'suspended') {
           await audioContext!.resume()
         }
 
-        // Decode the audio
-        const audioBuffer = await decodeWavToAudioBuffer(chunk.audioBase64, chunk.contentType)
+        const audioBuffer = await decodeWavToAudioBuffer(chunk.audioBase64)
 
-        console.log('[streaming-audio] Received chunk %d (expected: %d, offset: %dms, pending: [%s])',
-          chunk.chunkIndex, nextExpectedChunkIndex, chunk.cumulativeOffsetMs,
-          Array.from(pendingChunks.keys()).join(','))
+        console.log('[streaming-audio] Processing chunk %d (offset: %dms)',
+          chunk.chunkIndex, chunk.cumulativeOffsetMs)
 
-        // Check if this is the chunk we're waiting for
-        if (chunk.chunkIndex === nextExpectedChunkIndex) {
-          // Schedule this chunk immediately
-          scheduleChunk(chunk, audioBuffer)
-          nextExpectedChunkIndex++
-
-          // Check if any pending chunks can now be scheduled
-          processPendingChunks()
-        } else if (chunk.chunkIndex > nextExpectedChunkIndex) {
-          // This chunk arrived early - buffer it
-          console.log('[streaming-audio] Buffering chunk %d (waiting for chunk %d, buffer size: %d)',
-            chunk.chunkIndex, nextExpectedChunkIndex, pendingChunks.size + 1)
-          pendingChunks.set(chunk.chunkIndex, { chunk, audioBuffer })
-          isWaitingForChunks.value = true
-        } else {
-          // This chunk is older than expected (shouldn't happen normally)
-          console.warn('[streaming-audio] Received old chunk %d (expected: %d), scheduling anyway',
-            chunk.chunkIndex, nextExpectedChunkIndex)
-          scheduleChunk(chunk, audioBuffer)
-        }
+        // Schedule immediately - chunks arrive in order from server
+        scheduleChunk(chunk, audioBuffer)
 
         error.value = null
       } catch (err) {
@@ -272,7 +206,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       }
     })
 
-    // Wait for this chunk to be processed before returning
     await processingQueue
   }
 
@@ -285,18 +218,16 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     wordTrackingInterval = setInterval(() => {
       if (!audioContext || !isPlaying.value) return
 
-      // Calculate current playback time in ms
       const elapsedSec = audioContext.currentTime - playbackStartTime
       const currentTimeMs = elapsedSec * 1000
 
-      // Find current word based on timing
       for (let i = allWordTimings.value.length - 1; i >= 0; i--) {
         if (currentTimeMs >= allWordTimings.value[i].startMs) {
           currentWordIndex.value = i
           break
         }
       }
-    }, 50) // Update every 50ms
+    }, 50)
   }
 
   /**
@@ -311,12 +242,10 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
 
   /**
    * Stop playback and clear queue
-   * @param triggerComplete - Whether to trigger onComplete callback (default: false for reset, true for user-initiated stop)
    */
   const stop = (triggerComplete = false) => {
     const wasPlaying = isPlaying.value
 
-    // Stop all active source nodes first
     for (const source of activeSourceNodes) {
       try {
         source.stop()
@@ -340,8 +269,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     currentWordIndex.value = -1
     playbackStartTime = 0
     playbackStarted = false
-    nextExpectedChunkIndex = 0
-    pendingChunks = new Map()
     nextScheduleTime = 0
     processingQueue = Promise.resolve()
     queuedChunks = []
@@ -350,14 +277,13 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     pendingCompletion = false
     chunksFinishedPlaying = 0
 
-    // Trigger complete callback if requested and we were playing
     if (triggerComplete && wasPlaying) {
       options.onComplete?.()
     }
   }
 
   /**
-   * Pause playback (suspend audio context)
+   * Pause playback
    */
   const pause = async () => {
     if (audioContext && audioContext.state === 'running') {
@@ -366,7 +292,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   }
 
   /**
-   * Resume playback (resume audio context)
+   * Resume playback
    */
   const resume = async () => {
     if (audioContext && audioContext.state === 'suspended') {
@@ -381,7 +307,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     stop()
   }
 
-  // Cleanup on unmount
   onUnmounted(() => {
     stop()
   })
