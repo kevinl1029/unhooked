@@ -14,8 +14,8 @@ import { buildSessionContext, formatContextForPrompt } from '../utils/personaliz
 import { buildCrossLayerContext, formatCrossLayerContext } from '../utils/personalization/cross-layer-context'
 import { buildBridgeContext } from '../utils/session/bridge'
 import { createSentenceDetector } from '../utils/tts/sentence-detector'
-import { createStreamingSynthesizer } from '../utils/tts/streaming-synthesizer'
-import { getTTSProviderFromConfig, type TTSProviderType, type AudioChunk } from '../utils/tts'
+import { createSequentialTTSProcessor } from '../utils/tts/sequential-processor'
+import { getTTSProviderFromConfig, type TTSProviderType } from '../utils/tts'
 
 export default defineEventHandler(async (event) => {
   // Verify authentication
@@ -262,30 +262,19 @@ export default defineEventHandler(async (event) => {
 
         // Initialize streaming TTS components if enabled
         const sentenceDetector = useStreamingTTS ? createSentenceDetector() : null
-        const ttsSynthesizer = useStreamingTTS ? createStreamingSynthesizer(getTTSProviderFromConfig()) : null
-        const pendingTTSPromises: Promise<void>[] = []
 
-        // Helper to send audio chunk via SSE
-        const sendAudioChunk = (chunk: AudioChunk) => {
-          const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId })
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-        }
-
-        // Helper to process sentences for TTS
-        const processSentencesForTTS = (sentences: string[], isLast: boolean = false) => {
-          if (!ttsSynthesizer || sentences.length === 0) return
-
-          sentences.forEach((sentence, index) => {
-            const isLastSentence = isLast && index === sentences.length - 1
-            const promise = ttsSynthesizer.synthesizeChunk(sentence, isLastSentence)
-              .then(sendAudioChunk)
-              .catch(err => {
-                console.error('[streaming-tts] TTS synthesis failed for sentence:', err)
-                // Don't fail the stream, just skip this audio chunk
-              })
-            pendingTTSPromises.push(promise)
-          })
-        }
+        // Create sequential TTS processor - guarantees chunks are sent in order
+        // by processing one sentence at a time (no parallel synthesis)
+        const ttsProcessor = useStreamingTTS
+          ? createSequentialTTSProcessor(
+              getTTSProviderFromConfig(),
+              (chunk) => {
+                // This callback is invoked in strict order for each synthesized chunk
+                const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId })
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+              }
+            )
+          : null
 
         await router.chatStream(
           { messages: processedMessages, model },
@@ -297,39 +286,31 @@ export default defineEventHandler(async (event) => {
               const data = JSON.stringify({ type: 'token', token, conversationId: convId })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
 
-              // If streaming TTS enabled, detect sentences and queue TTS
-              if (sentenceDetector) {
+              // If streaming TTS enabled, detect sentences and enqueue for sequential synthesis
+              if (sentenceDetector && ttsProcessor) {
                 const sentences = sentenceDetector.addToken(token)
-                processSentencesForTTS(sentences)
+                for (const sentence of sentences) {
+                  // Each sentence is enqueued and will be processed in strict order
+                  ttsProcessor.enqueueSentence(sentence, false)
+                }
               }
             },
             onComplete: async (response) => {
               // Flush any remaining text for TTS
-              if (sentenceDetector && ttsSynthesizer) {
+              if (sentenceDetector && ttsProcessor) {
                 const remaining = sentenceDetector.flush()
                 if (remaining) {
-                  // There's remaining text - synthesize it as the final chunk
-                  processSentencesForTTS([remaining], true)
+                  // Synthesize remaining text as the final chunk
+                  ttsProcessor.enqueueSentence(remaining, true)
                 }
 
-                // Wait for all TTS synthesis to complete
-                await Promise.all(pendingTTSPromises)
+                // Wait for all sequential synthesis to complete
+                // This ensures all audio chunks are sent before closing the stream
+                await ttsProcessor.flush()
 
-                // If no remaining text but we had chunks, we need to send a final marker
-                // because the last sentence was already sent without isLast=true
-                if (!remaining && pendingTTSPromises.length > 0) {
-                  // Send a final empty audio chunk to signal completion
-                  const finalChunk: AudioChunk = {
-                    chunkIndex: ttsSynthesizer.getChunkCount(),
-                    audioBase64: '',
-                    contentType: 'audio/wav',
-                    wordTimings: [],
-                    cumulativeOffsetMs: ttsSynthesizer.getCumulativeOffset(),
-                    durationMs: 0,
-                    isLast: true,
-                    text: ''
-                  }
-                  sendAudioChunk(finalChunk)
+                // If no remaining text but we had chunks, send a completion marker
+                if (!remaining && ttsProcessor.getEnqueuedCount() > 0) {
+                  await ttsProcessor.sendCompletionMarker()
                 }
               }
 
