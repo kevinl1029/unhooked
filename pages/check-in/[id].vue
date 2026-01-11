@@ -107,7 +107,6 @@ async function handleComplete() {
 
   // Mark check-in as complete - always call API, include conversationId if available
   const responseConversationId = voiceChat?.conversationId.value
-  console.log('[check-in] handleComplete - conversationId:', responseConversationId)
 
   try {
     await $fetch(`/api/check-ins/${checkInId}/complete`, {
@@ -116,7 +115,6 @@ async function handleComplete() {
         response_conversation_id: responseConversationId || undefined,
       },
     })
-    console.log('[check-in] Successfully marked complete')
   } catch (err) {
     console.error('[check-in] Failed to mark complete:', err)
     // Still show toast and navigate even if API fails
@@ -135,9 +133,6 @@ async function handleMicTap() {
   if (voiceChat.isRecording.value) {
     // Stop recording and send - wait for full completion including AI response
     const success = await voiceChat.stopRecordingAndSend()
-    console.log('[check-in] stopRecordingAndSend completed, success:', success, 'conversationId:', voiceChat.conversationId.value)
-
-    // Now conversationId should be set - mark complete
     if (success) {
       await handleComplete()
     }

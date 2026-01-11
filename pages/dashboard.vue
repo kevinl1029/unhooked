@@ -322,6 +322,7 @@
       @dismiss="dismissInterstitial"
       @skip="skipCheckIn"
       @respond="respondToCheckIn"
+      @complete="completeCheckInInline"
     />
   </div>
 </template>
@@ -360,6 +361,7 @@ const {
   dismissInterstitial,
   skipCheckIn,
   respondToCheckIn,
+  completeCheckInInline,
 } = useCheckIns()
 
 // Timezone detection

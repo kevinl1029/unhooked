@@ -76,6 +76,15 @@ export function useCheckIns() {
     }
   }
 
+  /**
+   * Complete check-in inline (from interstitial modal)
+   * Called after voice recording is complete
+   */
+  function completeCheckInInline(_id: string, _conversationId: string | null) {
+    showInterstitial.value = false
+    pendingCheckIn.value = null
+  }
+
   return {
     showInterstitial: readonly(showInterstitial),
     pendingCheckIn: readonly(pendingCheckIn),
@@ -84,6 +93,7 @@ export function useCheckIns() {
     dismissInterstitial,
     skipCheckIn,
     respondToCheckIn,
+    completeCheckInInline,
   }
 }
 
