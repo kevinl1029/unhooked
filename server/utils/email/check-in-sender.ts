@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getResendClient, getEmailSubject } from './resend-client'
 
 // From email address
-const FROM_EMAIL = 'coach@unhooked.app'
+const FROM_EMAIL = 'coach@getunhooked.app'
 const FROM_NAME = 'Unhooked Coach'
 
 interface CheckInToSend {
@@ -120,7 +120,7 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
 async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
   const resend = getResendClient()
   const config = useRuntimeConfig()
-  const appUrl = config.public.appUrl || 'https://unhooked.app'
+  const appUrl = config.public.appUrl || 'https://getunhooked.app'
 
   const magicLink = `${appUrl}/check-in/open/${checkIn.magic_link_token}`
   const subject = getEmailSubject(checkIn.check_in_type)
