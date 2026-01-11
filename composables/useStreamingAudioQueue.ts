@@ -51,6 +51,18 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   let pendingCompletion = false
   let chunksFinishedPlaying = 0
 
+  // Track actual cumulative audio duration (from decoded buffers, not server estimates)
+  // This ensures word timings align with actual audio playback
+  let actualCumulativeMs = 0
+
+  // InWorld sentence tracking:
+  // InWorld returns ABSOLUTE timings from 0 for each SENTENCE (not conversation).
+  // Each sentence is a separate API call. When a new sentence starts (chunk.text
+  // is non-empty), we capture the current actualCumulativeMs as the sentence base.
+  // InWorld's word timings are accurate relative to the audio, so we just add
+  // the sentence base offset without any scaling.
+  let inworldSentenceBaseMs = 0
+
   // Serialize chunk processing to maintain order during async decode
   let processingQueue: Promise<void> = Promise.resolve()
 
@@ -102,7 +114,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
 
     // First chunk starts playback
     if (!playbackStarted) {
-      console.log('[streaming-audio] Starting playback with chunk %d', chunk.chunkIndex)
       playbackStarted = true
       playbackStartTime = currentTime
       nextScheduleTime = currentTime
@@ -113,9 +124,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     }
 
     const scheduledTime = nextScheduleTime
-
-    console.log('[streaming-audio] Scheduling chunk %d at %.3fs (duration: %dms)',
-      chunk.chunkIndex, scheduledTime, chunk.durationMs)
 
     // Create and schedule the source node
     const source = audioContext!.createBufferSource()
@@ -145,13 +153,74 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       }
     }
 
-    // Add word timings with cumulative offset
-    const adjustedTimings = chunk.wordTimings.map(t => ({
-      word: t.word,
-      startMs: t.startMs + chunk.cumulativeOffsetMs,
-      endMs: t.endMs + chunk.cumulativeOffsetMs
-    }))
+    // Get actual audio duration from decoded buffer (in ms)
+    const actualDurationMs = audioBuffer.duration * 1000
+
+    // Determine if word timings are absolute (from sentence start) or relative (from chunk start)
+    // - InWorld (audio/mpeg): ABSOLUTE timings within each sentence - word timings span the sentence from 0
+    // - Groq/others (audio/wav): RELATIVE timings - each chunk's timings start at 0
+    //
+    // IMPORTANT: Each SENTENCE is a separate InWorld synthesis call. So timings reset to 0
+    // for each new sentence. We use the server's cumulativeOffsetMs to know where this
+    // sentence starts in the overall playback timeline.
+    const isInWorldProvider = chunk.contentType === 'audio/mpeg'
+
+    const firstWordStartMs = chunk.wordTimings.length > 0 ? chunk.wordTimings[0].startMs : 0
+    const lastWordEndMs = chunk.wordTimings.length > 0
+      ? chunk.wordTimings[chunk.wordTimings.length - 1].endMs
+      : 0
+
+    let adjustedTimings: Array<{ word: string; startMs: number; endMs: number }> = []
+
+    if (isInWorldProvider && chunk.wordTimings.length > 0) {
+      // InWorld ABSOLUTE timings (within each sentence):
+      // - Each SENTENCE is a separate InWorld API call
+      // - Word timings within a sentence are ABSOLUTE from sentence start (0)
+      // - Multiple chunks per sentence, each with absolute timings from 0
+      // - When a new sentence starts (chunk.text non-empty), timings reset to 0
+      //
+      // Strategy:
+      // 1. Detect new sentence (chunk.text is non-empty = first chunk of sentence)
+      // 2. On new sentence: capture current actualCumulativeMs as sentence base
+      // 3. DON'T scale - InWorld's actual word timings are accurate relative to audio
+      // 4. Just add sentence base offset to position timings in playback timeline
+      //
+      // Key insight: InWorld's word timings are already accurate relative to the audio.
+      // The server's durationMs (chunk duration) may differ slightly, but word timings
+      // within that audio are correct. We just need to offset them by sentence start.
+
+      // Detect new sentence - first chunk of each sentence has non-empty text
+      const isNewSentence = chunk.text && chunk.text.length > 0
+
+      if (isNewSentence) {
+        // New sentence starts - capture base offset
+        inworldSentenceBaseMs = actualCumulativeMs
+      }
+
+      // Simply add sentence base offset - InWorld timings are already accurate
+      adjustedTimings = chunk.wordTimings.map(t => ({
+        word: t.word,
+        startMs: t.startMs + inworldSentenceBaseMs,
+        endMs: t.endMs + inworldSentenceBaseMs
+      }))
+    } else if (chunk.wordTimings.length > 0) {
+      // RELATIVE TIMINGS (Groq, etc): Word timings start at 0 for each chunk
+      // Scale to match actual audio duration and add cumulative offset
+      const chunkWordDurationMs = lastWordEndMs
+      const scaleFactor = chunkWordDurationMs > 0 ? actualDurationMs / chunkWordDurationMs : 1
+
+      adjustedTimings = chunk.wordTimings.map(t => ({
+        word: t.word,
+        startMs: Math.round(t.startMs * scaleFactor) + actualCumulativeMs,
+        endMs: Math.round(t.endMs * scaleFactor) + actualCumulativeMs
+      }))
+
+    }
+
     allWordTimings.value.push(...adjustedTimings)
+
+    // Update actual cumulative time based on decoded audio duration
+    actualCumulativeMs += actualDurationMs
 
     queuedChunks.push({
       chunk,
@@ -192,11 +261,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
         }
 
         const audioBuffer = await decodeWavToAudioBuffer(chunk.audioBase64)
-
-        console.log('[streaming-audio] Processing chunk %d (offset: %dms)',
-          chunk.chunkIndex, chunk.cumulativeOffsetMs)
-
-        // Schedule immediately - chunks arrive in order from server
         scheduleChunk(chunk, audioBuffer)
 
         error.value = null
@@ -222,11 +286,19 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       const currentTimeMs = elapsedSec * 1000
 
       // Find the current word based on elapsed time
-      for (let i = allWordTimings.value.length - 1; i >= 0; i--) {
-        if (currentTimeMs >= allWordTimings.value[i].startMs) {
-          currentWordIndex.value = i
+      // Use forward search to find word where we're past its start time
+      let foundIndex = -1
+      for (let i = 0; i < allWordTimings.value.length; i++) {
+        const timing = allWordTimings.value[i]
+        if (currentTimeMs >= timing.startMs) {
+          foundIndex = i
+        } else {
           break
         }
+      }
+
+      if (foundIndex >= 0 && foundIndex !== currentWordIndex.value) {
+        currentWordIndex.value = foundIndex
       }
     }, 50)
   }
@@ -271,6 +343,8 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     playbackStartTime = 0
     playbackStarted = false
     nextScheduleTime = 0
+    actualCumulativeMs = 0
+    inworldSentenceBaseMs = 0
     processingQueue = Promise.resolve()
     queuedChunks = []
     allWordTimings.value = []

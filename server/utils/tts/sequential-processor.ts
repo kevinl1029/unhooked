@@ -30,6 +30,9 @@ export class SequentialTTSProcessor {
    * Sentences are processed strictly in the order they are enqueued.
    * Each synthesis waits for the previous one to complete before starting.
    *
+   * For streaming providers (e.g., InWorld), multiple sub-sentence chunks
+   * are emitted progressively as they arrive from the provider.
+   *
    * @param text - The sentence text to synthesize
    * @param isLast - Whether this is the last sentence in the stream
    */
@@ -47,50 +50,92 @@ export class SequentialTTSProcessor {
       return
     }
 
-    // Capture the chunk index NOW, before any async operations
-    // This ensures indices are assigned in enqueue order, not completion order
-    const myChunkIndex = this.chunkIndex++
-
     // Chain this synthesis operation after all previous ones
     this.synthesisChain = this.synthesisChain.then(async () => {
       if (this.hasError) return
 
       try {
-        const result = await this.provider.synthesize({ text: sanitizedText })
+        // Check if provider supports streaming synthesis
+        if (this.provider.supportsStreaming && this.provider.synthesizeStream) {
+          // STREAMING PATH: Emit multiple sub-sentence chunks progressively
+          // This reduces time-to-first-byte significantly
+          let subChunkCount = 0
 
-        // For estimated timings (Groq, OpenAI), scale to actual audio duration
-        let wordTimings = result.wordTimings
-        let durationMs = result.estimatedDurationMs
+          for await (const streamChunk of this.provider.synthesizeStream({ text: sanitizedText })) {
+            const chunk: AudioChunk = {
+              chunkIndex: this.chunkIndex++,
+              audioBase64: Buffer.from(streamChunk.audioBuffer).toString('base64'),
+              contentType: streamChunk.contentType,
+              wordTimings: streamChunk.wordTimings,
+              cumulativeOffsetMs: this.cumulativeOffsetMs,
+              durationMs: streamChunk.durationMs,
+              isLast: false, // Individual sub-chunks are never the last chunk
+              text: subChunkCount === 0 ? sanitizedText : '' // Only include text on first sub-chunk
+            }
 
-        if (result.timingSource === 'estimated' && result.contentType === 'audio/wav') {
-          // Get actual duration from WAV header
-          const actualDurationMs = getWavDurationMs(result.audioBuffer)
+            // Update cumulative offset for next chunk
+            this.cumulativeOffsetMs += streamChunk.durationMs
+            subChunkCount++
 
-          if (actualDurationMs !== null && actualDurationMs > 0) {
-            // Scale word timings to match actual audio duration
-            wordTimings = scaleWordTimings(result.wordTimings, actualDurationMs)
-            durationMs = actualDurationMs
+            // Emit the chunk immediately - streaming provides progressive audio
+            this.onChunk(chunk)
           }
+
+          // If this was the last sentence and we emitted chunks, send a completion marker
+          if (isLast && subChunkCount > 0) {
+            const completionChunk: AudioChunk = {
+              chunkIndex: this.chunkIndex++,
+              audioBase64: '',
+              contentType: 'audio/mpeg',
+              wordTimings: [],
+              cumulativeOffsetMs: this.cumulativeOffsetMs,
+              durationMs: 0,
+              isLast: true,
+              text: ''
+            }
+            this.onChunk(completionChunk)
+          }
+        } else {
+          // NON-STREAMING PATH: Existing behavior for Groq, OpenAI, ElevenLabs
+          // Capture chunk index for this sentence
+          const myChunkIndex = this.chunkIndex++
+
+          const result = await this.provider.synthesize({ text: sanitizedText })
+
+          // For estimated timings (Groq, OpenAI), scale to actual audio duration
+          let wordTimings = result.wordTimings
+          let durationMs = result.estimatedDurationMs
+
+          if (result.timingSource === 'estimated' && result.contentType === 'audio/wav') {
+            // Get actual duration from WAV header
+            const actualDurationMs = getWavDurationMs(result.audioBuffer)
+
+            if (actualDurationMs !== null && actualDurationMs > 0) {
+              // Scale word timings to match actual audio duration
+              wordTimings = scaleWordTimings(result.wordTimings, actualDurationMs)
+              durationMs = actualDurationMs
+            }
+          }
+
+          const chunk: AudioChunk = {
+            chunkIndex: myChunkIndex,
+            audioBase64: Buffer.from(result.audioBuffer).toString('base64'),
+            contentType: result.contentType,
+            wordTimings,
+            cumulativeOffsetMs: this.cumulativeOffsetMs,
+            durationMs,
+            isLast,
+            text: sanitizedText
+          }
+
+          // Update cumulative offset for next chunk
+          this.cumulativeOffsetMs += durationMs
+
+          // Emit the chunk - this happens in strict order because we're in a chain
+          this.onChunk(chunk)
         }
-
-        const chunk: AudioChunk = {
-          chunkIndex: myChunkIndex,
-          audioBase64: Buffer.from(result.audioBuffer).toString('base64'),
-          contentType: result.contentType,
-          wordTimings,
-          cumulativeOffsetMs: this.cumulativeOffsetMs,
-          durationMs,
-          isLast,
-          text: sanitizedText
-        }
-
-        // Update cumulative offset for next chunk
-        this.cumulativeOffsetMs += durationMs
-
-        // Emit the chunk - this happens in strict order because we're in a chain
-        this.onChunk(chunk)
       } catch (err) {
-        console.error('[sequential-tts] Failed to synthesize chunk %d:', myChunkIndex, err)
+        console.error('[sequential-tts] Failed to synthesize sentence:', sanitizedText.slice(0, 50), err)
         // Don't set hasError for individual chunk failures - let the stream continue
         // The chunk simply won't be sent, but subsequent chunks can still work
       }

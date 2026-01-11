@@ -262,10 +262,14 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'no-cache')
     setResponseHeader(event, 'Connection', 'keep-alive')
 
-    // Check if streaming TTS is enabled and supported (Groq only)
+    // Check if streaming TTS is enabled and supported
+    // Groq: Sentence-level streaming (full sentence synthesized, then sent)
+    // InWorld: True sub-sentence streaming (chunks emitted progressively)
     const config = useRuntimeConfig()
     const ttsProvider = config.ttsProvider as TTSProviderType
-    const supportsStreamingTTS = ttsProvider === 'groq' && !!config.groqApiKey
+    const supportsStreamingTTS =
+      (ttsProvider === 'groq' && !!config.groqApiKey) ||
+      (ttsProvider === 'inworld' && !!config.inworldApiKey)
     const useStreamingTTS = streamTTS && supportsStreamingTTS
 
     const encoder = new TextEncoder()
