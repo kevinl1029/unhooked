@@ -247,6 +247,7 @@ const textInput = ref('')
 const audioLevel = ref(0)
 const showPermissionOverlay = ref(false)
 const sessionCompleteDetected = ref(false)
+const audioHasStartedForCompletion = ref(false)
 let audioLevelFrame: number | null = null
 
 // Responsive check
@@ -338,21 +339,32 @@ watch(
     const lastMsg = msgs[msgs.length - 1]
     if (lastMsg?.role === 'assistant' && lastMsg.content.includes('[SESSION_COMPLETE]')) {
       sessionCompleteDetected.value = true
-      // Only trigger immediately if audio is completely done (not speaking AND not processing)
-      if (!isAISpeaking.value && !isProcessing.value) {
-        handleSessionComplete()
-      }
+      // Don't trigger immediately - wait for audio to start and finish
+      // The isAISpeaking watch will handle completion
     }
   },
   { deep: true }
 )
 
-// Wait for audio to finish before triggering session complete
-// Watch both isAISpeaking and isProcessing to catch when TTS completes
+// Track when audio starts playing for the completion message
 watch(
-  [() => isAISpeaking.value, () => isProcessing.value],
-  ([speaking, processing]) => {
-    if (!speaking && !processing && sessionCompleteDetected.value) {
+  () => isAISpeaking.value,
+  (speaking) => {
+    if (speaking && sessionCompleteDetected.value) {
+      audioHasStartedForCompletion.value = true
+    }
+  }
+)
+
+// Wait for audio to finish before triggering session complete
+watch(
+  () => isAISpeaking.value,
+  (speaking) => {
+    // Only trigger when:
+    // 1. Session complete was detected
+    // 2. Audio has started playing (so we know TTS was initiated)
+    // 3. Audio is now finished (speaking = false)
+    if (!speaking && sessionCompleteDetected.value && audioHasStartedForCompletion.value) {
       handleSessionComplete()
     }
   }
