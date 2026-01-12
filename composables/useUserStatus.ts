@@ -40,9 +40,6 @@ export interface UserStatus {
   }> | null
   next_session: {
     illusionNumber: number
-    // Backward-compatible alias (deprecated)
-    /** @deprecated Use illusionNumber instead */
-    mythNumber?: number
   } | null
 }
 

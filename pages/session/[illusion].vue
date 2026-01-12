@@ -348,7 +348,7 @@ async function handleSessionComplete() {
 
   try {
     const result = await completeSession(conversationId.value, illusionNumber.value)
-    nextIllusion.value = result.nextIllusion ?? result.nextMyth ?? null
+    nextIllusion.value = result.nextIllusion ?? null
     sessionComplete.value = true
     await fetchProgress()
   } catch (err) {

@@ -169,23 +169,3 @@ Start by speaking the check-in prompt naturally, as if you're asking them direct
 Wait for their response before saying anything else.`
 }
 
-// ============================================
-// Backward-compatible aliases (deprecated)
-// ============================================
-
-/** @deprecated Use BuildSystemPromptOptions with illusionNumber instead */
-export interface LegacyBuildSystemPromptOptions {
-  mythNumber: number
-  userContext?: UserContext
-  isNewConversation?: boolean
-  personalizationContext?: string
-  bridgeContext?: string
-  abandonedSessionContext?: string
-}
-
-/** @deprecated Use ILLUSION_NAMES instead */
-export const MYTH_NAMES = ILLUSION_NAMES
-/** @deprecated Use ILLUSION_OPENING_MESSAGES instead */
-export const MYTH_OPENING_MESSAGES = ILLUSION_OPENING_MESSAGES
-/** @deprecated Use getIllusionOpening instead */
-export const getMythOpening = getIllusionOpening

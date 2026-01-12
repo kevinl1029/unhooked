@@ -25,9 +25,6 @@ export interface CompleteSessionResponse {
   progress: Progress
   nextIllusion: number | null
   isComplete: boolean
-  // Backward-compatible alias (deprecated)
-  /** @deprecated Use nextIllusion instead */
-  nextMyth?: number | null
 }
 
 export const useProgress = () => {

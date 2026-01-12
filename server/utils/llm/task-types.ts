@@ -309,23 +309,3 @@ export function illusionKeyToNumber(illusionKey: string): number | null {
   return data ? data.number : null
 }
 
-// ============================================
-// Backward-compatible aliases (deprecated)
-// ============================================
-
-/** @deprecated Use IllusionLayer instead */
-export type MythLayer = IllusionLayer
-/** @deprecated Use IllusionKey instead */
-export type MythKey = IllusionKey
-/** @deprecated Use ILLUSION_KEYS instead */
-export const MYTH_KEYS = ILLUSION_KEYS
-/** @deprecated Use ILLUSION_DATA instead */
-export const MYTH_DATA = ILLUSION_DATA
-/** @deprecated Use illusionNumberToKey instead */
-export const mythNumberToKey = illusionNumberToKey
-/** @deprecated Use illusionKeyToNumber instead */
-export const mythKeyToNumber = illusionKeyToNumber
-/** @deprecated Use IllusionCheatSheetEntry instead */
-export type MythCheatSheetEntry = IllusionCheatSheetEntry
-/** @deprecated Use IllusionsCheatSheet instead */
-export type MythsCheatSheet = IllusionsCheatSheet

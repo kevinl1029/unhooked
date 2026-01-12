@@ -7,24 +7,17 @@ interface VoiceChatOptions {
   checkInPrompt?: string
   onSessionComplete?: () => void
   enableStreamingTTS?: boolean // Enable streaming TTS when supported
-  // Backward-compatible alias (deprecated)
-  /** @deprecated Use illusionNumber instead */
-  mythNumber?: number
 }
 
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
   const {
-    illusionNumber: illusionNumberProp,
-    mythNumber: mythNumberProp,
+    illusionNumber,
     sessionType = 'core',
     checkInId,
     checkInPrompt,
     onSessionComplete,
     enableStreamingTTS = true
   } = options
-
-  // Support both illusionNumber and deprecated mythNumber
-  const illusionNumber = illusionNumberProp ?? mythNumberProp
 
   // State
   const messages = ref<Message[]>([])

@@ -184,7 +184,7 @@ const {
   getAudioLevel,
   checkPermission,
   reset
-} = useVoiceChat({ mythNumber: 1 })
+} = useVoiceChat({ illusionNumber: 1 })
 
 // Also get playAIResponse for testing
 const voiceSession = useVoiceSession()

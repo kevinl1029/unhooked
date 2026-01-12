@@ -212,7 +212,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  sessionComplete: [nextMyth: number | null]
+  sessionComplete: [nextIllusion: number | null]
   error: [message: string]
 }>()
 

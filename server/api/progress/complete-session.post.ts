@@ -12,8 +12,7 @@ const ILLUSION_KEYS: Record<number, string> = {
 
 interface CompleteSessionBody {
   conversationId: string
-  illusionNumber?: number
-  mythNumber?: number // Backward compatibility alias
+  illusionNumber: number
 }
 
 export default defineEventHandler(async (event) => {
@@ -23,9 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<CompleteSessionBody>(event)
-
-  // Support both illusionNumber and mythNumber (backward compatibility)
-  const illusionNumber = body.illusionNumber ?? body.mythNumber
+  const { illusionNumber } = body
 
   // Validate required fields
   if (!body.conversationId) {
@@ -63,11 +60,11 @@ export default defineEventHandler(async (event) => {
   }
 
   // Add illusionNumber to illusions_completed (deduplicated)
-  const illusionsCompleted = currentProgress.myths_completed || []
+  const illusionsCompleted = currentProgress.illusions_completed || []
   const updatedIllusionsCompleted = Array.from(new Set([...illusionsCompleted, illusionNumber]))
 
   // Calculate next illusion
-  const illusionOrder = currentProgress.myth_order || [1, 2, 3, 4, 5]
+  const illusionOrder = currentProgress.illusion_order || [1, 2, 3, 4, 5]
   const nextIllusion = illusionOrder.find(m => !updatedIllusionsCompleted.includes(m)) || null
 
   // Check if program is complete
@@ -77,8 +74,8 @@ export default defineEventHandler(async (event) => {
   const { data: updatedProgress, error: updateError } = await supabase
     .from('user_progress')
     .update({
-      current_myth: nextIllusion || currentProgress.current_myth,
-      myths_completed: updatedIllusionsCompleted,
+      current_illusion: nextIllusion || currentProgress.current_illusion,
+      illusions_completed: updatedIllusionsCompleted,
       program_status: isComplete ? 'completed' : 'in_progress',
       completed_at: isComplete ? new Date().toISOString() : null,
       last_session_at: new Date().toISOString(),
@@ -104,7 +101,7 @@ export default defineEventHandler(async (event) => {
       timezone,
       trigger: 'session_complete',
       sessionId: body.conversationId,
-      mythKey: illusionKey, // Keep mythKey param name for scheduler compatibility
+      illusionKey,
       sessionEndTime: new Date(),
       supabase,
     }).then((scheduled) => {
@@ -120,7 +117,6 @@ export default defineEventHandler(async (event) => {
   return {
     progress: updatedProgress,
     nextIllusion,
-    nextMyth: nextIllusion, // Backward compatibility alias
     isComplete
   }
 })

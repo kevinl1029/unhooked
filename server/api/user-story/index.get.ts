@@ -3,9 +3,9 @@
  * Get the user's narrative and belief state
  */
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { MYTH_KEYS, type MythKey } from '~/server/utils/llm/task-types'
+import { ILLUSION_KEYS, type IllusionKey } from '~/server/utils/llm/task-types'
 
-interface MythState {
+interface IllusionState {
   conviction: number
   key_insight: {
     id: string
@@ -63,17 +63,17 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Build myth states
-  const mythStates: Record<MythKey, MythState> = {} as Record<MythKey, MythState>
+  // Build illusion states
+  const illusionStates: Record<IllusionKey, IllusionState> = {} as Record<IllusionKey, IllusionState>
 
-  for (const mythKey of MYTH_KEYS) {
-    const convictionKey = `${mythKey}_conviction` as keyof typeof story
-    const insightKey = `${mythKey}_key_insight_id` as keyof typeof story
-    const resistanceKey = `${mythKey}_resistance_notes` as keyof typeof story
+  for (const illusionKey of ILLUSION_KEYS) {
+    const convictionKey = `${illusionKey}_conviction` as keyof typeof story
+    const insightKey = `${illusionKey}_key_insight_id` as keyof typeof story
+    const resistanceKey = `${illusionKey}_resistance_notes` as keyof typeof story
 
     const insightId = story[insightKey] as string | null
 
-    mythStates[mythKey] = {
+    illusionStates[illusionKey] = {
       conviction: (story[convictionKey] as number) || 0,
       key_insight: insightId ? insightsMap[insightId] || null : null,
       resistance_notes: (story[resistanceKey] as string) || null,
@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
     origin_summary: story.origin_summary,
     primary_triggers: story.primary_triggers || [],
     personal_stakes: story.personal_stakes || [],
-    myth_states: mythStates,
+    illusion_states: illusionStates,
     overall_readiness: story.overall_readiness || 0,
   }
 })
