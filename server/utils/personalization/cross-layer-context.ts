@@ -1,13 +1,13 @@
 /**
  * Cross-Layer Context Builder
- * Builds context from previous layers when user returns for Layer 2 or 3 of a myth
+ * Builds context from previous layers when user returns for Layer 2 or 3 of an illusion
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { MythKey, MythLayer, MomentType } from '../llm/task-types'
+import type { IllusionKey, IllusionLayer, MomentType } from '../llm/task-types'
 
 export interface LayerInsight {
-  layer: MythLayer
+  layer: IllusionLayer
   quote: string
 }
 
@@ -16,31 +16,31 @@ export interface CrossLayerContext {
   breakthroughs: string[]
   resistancePoints: string[]
   convictionAtPreviousLayers: Array<{
-    layer: MythLayer
+    layer: IllusionLayer
     conviction: number
     assessed_at: string
   }>
 }
 
 /**
- * Get conviction history for a myth across layers
+ * Get conviction history for an illusion across layers
  */
 async function getConvictionHistory(
   supabase: SupabaseClient,
   userId: string,
-  mythKey: string
+  illusionKey: string
 ): Promise<CrossLayerContext['convictionAtPreviousLayers']> {
   const { data } = await supabase
     .from('conviction_assessments')
-    .select('myth_layer, conviction_score, created_at')
+    .select('illusion_layer, conviction_score, created_at')
     .eq('user_id', userId)
-    .eq('myth_key', mythKey)
+    .eq('illusion_key', illusionKey)
     .order('created_at', { ascending: true })
 
   if (!data) return []
 
   return data.map(d => ({
-    layer: d.myth_layer as MythLayer,
+    layer: d.illusion_layer as IllusionLayer,
     conviction: d.conviction_score,
     assessed_at: d.created_at,
   }))
@@ -48,24 +48,24 @@ async function getConvictionHistory(
 
 /**
  * Build cross-layer context for returning users
- * Used when user returns for Layer 2 or 3 of a myth
+ * Used when user returns for Layer 2 or 3 of an illusion
  */
 export async function buildCrossLayerContext(
   supabase: SupabaseClient,
   userId: string,
-  mythKey: string,
-  currentLayer: MythLayer
+  illusionKey: string,
+  currentLayer: IllusionLayer
 ): Promise<CrossLayerContext> {
-  // Fetch all moments from this myth
+  // Fetch all moments from this illusion
   const { data: previousMoments } = await supabase
     .from('captured_moments')
-    .select('id, moment_type, transcript, myth_layer, confidence_score, created_at')
+    .select('id, moment_type, transcript, illusion_layer, confidence_score, created_at')
     .eq('user_id', userId)
-    .eq('myth_key', mythKey)
+    .eq('illusion_key', illusionKey)
     .order('created_at', { ascending: true })
 
   // Get conviction history
-  const convictionHistory = await getConvictionHistory(supabase, userId, mythKey)
+  const convictionHistory = await getConvictionHistory(supabase, userId, illusionKey)
 
   // Filter to get 1 per type max
   const getOnePerType = (moments: typeof previousMoments, type: MomentType): string[] => {
@@ -76,10 +76,10 @@ export async function buildCrossLayerContext(
 
   // Get insights with their layer info
   const insightsWithLayer: LayerInsight[] = (previousMoments || [])
-    .filter(m => m.moment_type === 'insight' && m.myth_layer)
+    .filter(m => m.moment_type === 'insight' && m.illusion_layer)
     .slice(0, 2) // Max 2 insights from previous layers
     .map(m => ({
-      layer: m.myth_layer as MythLayer,
+      layer: m.illusion_layer as IllusionLayer,
       quote: m.transcript,
     }))
 

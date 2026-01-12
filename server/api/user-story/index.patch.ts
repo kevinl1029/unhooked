@@ -3,10 +3,10 @@
  * Update belief state after session
  */
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { MYTH_KEYS, type MythKey } from '~/server/utils/llm/task-types'
+import { ILLUSION_KEYS, type IllusionKey } from '~/server/utils/llm/task-types'
 
 interface UpdateUserStoryBody {
-  myth_key: MythKey
+  illusion_key: IllusionKey
   conviction?: number
   key_insight_id?: string
   resistance_notes?: string
@@ -23,12 +23,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<UpdateUserStoryBody>(event)
 
   // Validate required fields
-  if (!body.myth_key) {
-    throw createError({ statusCode: 400, message: 'myth_key is required' })
+  if (!body.illusion_key) {
+    throw createError({ statusCode: 400, message: 'illusion_key is required' })
   }
 
-  if (!MYTH_KEYS.includes(body.myth_key)) {
-    throw createError({ statusCode: 400, message: `Invalid myth_key: ${body.myth_key}` })
+  if (!ILLUSION_KEYS.includes(body.illusion_key)) {
+    throw createError({ statusCode: 400, message: `Invalid illusion_key: ${body.illusion_key}` })
   }
 
   const supabase = serverSupabaseServiceRole(event)
@@ -49,21 +49,21 @@ export default defineEventHandler(async (event) => {
     updated_at: new Date().toISOString(),
   }
 
-  // Update conviction for the specific myth
+  // Update conviction for the specific illusion
   if (body.conviction !== undefined) {
     // Coerce to valid range
     const conviction = Math.max(0, Math.min(10, Math.round(body.conviction)))
-    updateData[`${body.myth_key}_conviction`] = conviction
+    updateData[`${body.illusion_key}_conviction`] = conviction
   }
 
-  // Update key insight for the specific myth
+  // Update key insight for the specific illusion
   if (body.key_insight_id !== undefined) {
-    updateData[`${body.myth_key}_key_insight_id`] = body.key_insight_id
+    updateData[`${body.illusion_key}_key_insight_id`] = body.key_insight_id
   }
 
-  // Update resistance notes for the specific myth
+  // Update resistance notes for the specific illusion
   if (body.resistance_notes !== undefined) {
-    updateData[`${body.myth_key}_resistance_notes`] = body.resistance_notes
+    updateData[`${body.illusion_key}_resistance_notes`] = body.resistance_notes
   }
 
   // Merge new triggers with existing (deduplicate)

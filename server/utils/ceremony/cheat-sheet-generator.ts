@@ -1,61 +1,62 @@
 /**
- * Myths Cheat Sheet Generator
- * Creates a structured artifact with myth summaries and user's key insights
+ * Illusions Cheat Sheet Generator
+ * Creates a structured artifact with illusion summaries and user's key insights
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-// Static myth content - the truth behind each myth
-export const MYTH_CONTENT: Record<string, { name: string; myth: string; truth: string }> = {
+// Static illusion content - the truth behind each illusion
+// Keys must match ILLUSION_KEYS: stress_relief, pleasure, willpower, focus, identity
+export const ILLUSION_CONTENT: Record<string, { name: string; illusion: string; truth: string }> = {
   stress_relief: {
     name: 'Stress Relief',
-    myth: 'Nicotine helps me manage stress',
+    illusion: 'Nicotine helps me manage stress',
     truth: 'Nicotine creates the stress it appears to relieve. The "relief" you feel is just satisfying the withdrawal it caused.',
   },
-  pleasure_illusion: {
+  pleasure: {
     name: 'Pleasure',
-    myth: 'Nicotine gives me genuine pleasure',
+    illusion: 'Nicotine gives me genuine pleasure',
     truth: 'The "pleasure" is actually relief from withdrawal disguised as enjoyment. Non-smokers don\'t need nicotine to feel good.',
   },
-  willpower_myth: {
+  willpower: {
     name: 'Willpower',
-    myth: 'Quitting requires incredible willpower',
+    illusion: 'Quitting requires incredible willpower',
     truth: 'Quitting is about changing your perception, not white-knuckling through cravings. When you see the truth, there\'s nothing to resist.',
   },
-  focus_enhancement: {
+  focus: {
     name: 'Focus',
-    myth: 'Nicotine helps me concentrate and focus',
+    illusion: 'Nicotine helps me concentrate and focus',
     truth: 'Nicotine actually disrupts your natural concentration. The "focus" you feel is just relief from withdrawal-induced distraction.',
   },
-  identity_belief: {
+  identity: {
     name: 'Identity',
-    myth: 'I have an addictive personality',
+    illusion: 'I have an addictive personality',
     truth: 'Addiction is a trap anyone can fall into and escape from. Your identity is not defined by a chemical dependency.',
   },
 }
 
-export interface MythCheatSheetEntry {
-  mythKey: string
+export interface IllusionCheatSheetEntry {
+  illusionKey: string
   name: string
-  myth: string
+  illusion: string
   truth: string
   userInsight?: string
   insightMomentId?: string
 }
 
 export interface CheatSheetData {
-  entries: MythCheatSheetEntry[]
+  entries: IllusionCheatSheetEntry[]
   generatedAt: string
 }
 
 /**
- * Generate the myths cheat sheet for a user
+ * Generate the illusions cheat sheet for a user
  */
-export async function generateCheatSheet(
+export async function generateIllusionsCheatSheet(
   supabase: SupabaseClient,
   userId: string
 ): Promise<CheatSheetData> {
-  // 1. Get user's key insights for each myth
+  // 1. Get user's key insights for each illusion
   const { data: userStory } = await supabase
     .from('user_story')
     .select(`
@@ -70,14 +71,14 @@ export async function generateCheatSheet(
 
   // 2. Collect all key insight IDs
   const insightIds: string[] = []
-  const mythKeyInsightMap: Record<string, string> = {}
+  const illusionKeyInsightMap: Record<string, string> = {}
 
   if (userStory) {
     for (const [key, value] of Object.entries(userStory)) {
       if (key.endsWith('_key_insight_id') && value) {
-        const mythKey = key.replace('_key_insight_id', '')
+        const illusionKey = key.replace('_key_insight_id', '')
         insightIds.push(value as string)
-        mythKeyInsightMap[mythKey] = value as string
+        illusionKeyInsightMap[illusionKey] = value as string
       }
     }
   }
@@ -98,14 +99,14 @@ export async function generateCheatSheet(
   }
 
   // 4. Build cheat sheet entries
-  const entries: MythCheatSheetEntry[] = []
+  const entries: IllusionCheatSheetEntry[] = []
 
-  for (const [mythKey, content] of Object.entries(MYTH_CONTENT)) {
-    const insightId = mythKeyInsightMap[mythKey]
-    const entry: MythCheatSheetEntry = {
-      mythKey,
+  for (const [illusionKey, content] of Object.entries(ILLUSION_CONTENT)) {
+    const insightId = illusionKeyInsightMap[illusionKey]
+    const entry: IllusionCheatSheetEntry = {
+      illusionKey,
       name: content.name,
-      myth: content.myth,
+      illusion: content.illusion,
       truth: content.truth,
     }
 

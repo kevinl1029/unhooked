@@ -248,7 +248,7 @@ test.describe('Streaming TTS - Voice Session Diagnostic', () => {
     })
 
     // Mock progress and intake APIs
-    await mockProgressAPI(page, { currentMyth: 1, mythsCompleted: [] })
+    await mockProgressAPI(page, { currentIllusion: 1, illusionsCompleted: [] })
     await mockIntakeAPI(page)
 
     // Mock the chat API to return streaming SSE
@@ -478,7 +478,7 @@ test.describe('Streaming TTS - Voice Session Diagnostic', () => {
     })
 
     // Mock APIs
-    await mockProgressAPI(page, { currentMyth: 1, mythsCompleted: [] })
+    await mockProgressAPI(page, { currentIllusion: 1, illusionsCompleted: [] })
     await mockIntakeAPI(page)
 
     // Use out-of-order SSE events

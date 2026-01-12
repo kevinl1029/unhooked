@@ -17,7 +17,7 @@ export function buildBridgeContext(crossLayerContext: CrossLayerContext): string
   const lastInsight = crossLayerContext.previousLayerInsights[crossLayerContext.previousLayerInsights.length - 1]
 
   let bridgeText = `
-The user is continuing from a previous session on this myth.
+The user is continuing from a previous session on this illusion.
 Last time, they expressed: "${lastInsight.quote}"
 `
 
@@ -83,21 +83,21 @@ export const TRANSITION_MESSAGES = {
     dashboardButton: 'Return to Dashboard',
   },
 
-  // After completing all 3 layers of a myth
-  mythComplete: {
-    title: 'Myth Explored',
-    getSubtitle: (mythsRemaining: number) =>
-      mythsRemaining > 0
-        ? `${mythsRemaining} more to go.`
-        : "You've explored all the myths.",
-    continueButton: 'Continue to Next Myth',
+  // After completing all 3 layers of an illusion
+  illusionComplete: {
+    title: 'Illusion Explored',
+    getSubtitle: (illusionsRemaining: number) =>
+      illusionsRemaining > 0
+        ? `${illusionsRemaining} more to go.`
+        : "You've explored all the illusions.",
+    continueButton: 'Continue to Next Illusion',
     dashboardButton: 'Return to Dashboard',
   },
 
-  // When all myths are done, ready for ceremony
+  // When all illusions are done, ready for ceremony
   ceremonyReady: {
     title: "You're Ready",
-    subtitle: 'All myths explored. Time for the final step.',
+    subtitle: 'All illusions explored. Time for the final step.',
     continueButton: 'Begin Ceremony',
     dashboardButton: 'Return to Dashboard',
   },
@@ -107,35 +107,35 @@ export const TRANSITION_MESSAGES = {
  * Get the appropriate transition message based on progress
  */
 export function getTransitionMessage(
-  currentMythIndex: number, // 0-4
+  currentIllusionIndex: number, // 0-4
   currentLayerIndex: number, // 0-2
-  totalMyths: number = 5,
+  totalIllusions: number = 5,
   totalLayers: number = 3
 ): {
   title: string
   subtitle: string
   continueButton: string
   dashboardButton: string
-  type: 'layer' | 'myth' | 'ceremony'
+  type: 'layer' | 'illusion' | 'ceremony'
 } {
   const isLastLayer = currentLayerIndex === totalLayers - 1
-  const isLastMyth = currentMythIndex === totalMyths - 1
+  const isLastIllusion = currentIllusionIndex === totalIllusions - 1
 
-  // All myths complete
-  if (isLastLayer && isLastMyth) {
+  // All illusions complete
+  if (isLastLayer && isLastIllusion) {
     return {
       ...TRANSITION_MESSAGES.ceremonyReady,
       type: 'ceremony',
     }
   }
 
-  // Myth complete (layer 3 done)
+  // Illusion complete (layer 3 done)
   if (isLastLayer) {
-    const mythsRemaining = totalMyths - currentMythIndex - 1
+    const illusionsRemaining = totalIllusions - currentIllusionIndex - 1
     return {
-      ...TRANSITION_MESSAGES.mythComplete,
-      subtitle: TRANSITION_MESSAGES.mythComplete.getSubtitle(mythsRemaining),
-      type: 'myth',
+      ...TRANSITION_MESSAGES.illusionComplete,
+      subtitle: TRANSITION_MESSAGES.illusionComplete.getSubtitle(illusionsRemaining),
+      type: 'illusion',
     }
   }
 

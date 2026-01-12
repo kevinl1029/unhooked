@@ -6,7 +6,7 @@
         You're about to start a journey that will change how you see nicotine forever.
       </p>
       <p class="text-white-65 mb-8">
-        This isn't about willpower or struggle. It's about seeing through the myths that keep you hooked.
+        This isn't about willpower or struggle. It's about seeing through the illusions that keep you hooked.
         We'll guide you through 5 focused conversations that will help you break free—not by resisting cravings,
         but by eliminating them.
       </p>

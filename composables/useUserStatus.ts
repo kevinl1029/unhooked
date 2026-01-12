@@ -7,11 +7,18 @@ export interface UserStatus {
   phase: 'not_started' | 'in_progress' | 'ceremony_ready' | 'post_ceremony'
   progress: {
     program_status: string
-    current_myth: number
-    myths_completed: number[]
-    myth_order: number[]
+    current_illusion: number
+    illusions_completed: number[]
+    illusion_order: number[]
     total_sessions: number
     started_at: string | null
+    // Backward-compatible aliases (deprecated)
+    /** @deprecated Use current_illusion instead */
+    current_myth?: number
+    /** @deprecated Use illusions_completed instead */
+    myths_completed?: number[]
+    /** @deprecated Use illusion_order instead */
+    myth_order?: number[]
   } | null
   ceremony: {
     completed_at: string | null
@@ -20,7 +27,10 @@ export interface UserStatus {
   artifacts: {
     reflective_journey: { id: string; audio_duration_ms?: number } | null
     final_recording: { id: string; audio_path?: string; audio_duration_ms?: number } | null
-    myths_cheat_sheet: { id: string } | null
+    illusions_cheat_sheet: { id: string } | null
+    // Backward-compatible alias (deprecated)
+    /** @deprecated Use illusions_cheat_sheet instead */
+    myths_cheat_sheet?: { id: string } | null
   } | null
   pending_follow_ups: Array<{
     id: string
@@ -29,7 +39,10 @@ export interface UserStatus {
     status: string
   }> | null
   next_session: {
-    mythNumber: number
+    illusionNumber: number
+    // Backward-compatible alias (deprecated)
+    /** @deprecated Use illusionNumber instead */
+    mythNumber?: number
   } | null
 }
 
@@ -61,16 +74,20 @@ export const useUserStatus = () => {
 
   const hasJourneyArtifact = computed(() => !!status.value?.artifacts?.reflective_journey)
   const hasFinalRecording = computed(() => !!status.value?.artifacts?.final_recording)
-  const hasCheatSheet = computed(() => !!status.value?.artifacts?.myths_cheat_sheet)
+  const hasCheatSheet = computed(() => !!status.value?.artifacts?.illusions_cheat_sheet || !!status.value?.artifacts?.myths_cheat_sheet)
 
   const nextFollowUp = computed(() => {
     if (!status.value?.pending_follow_ups?.length) return null
     return status.value.pending_follow_ups[0]
   })
 
-  const mythsCompletedCount = computed(() => {
-    return status.value?.progress?.myths_completed?.length || 0
+  const illusionsCompletedCount = computed(() => {
+    return status.value?.progress?.illusions_completed?.length || status.value?.progress?.myths_completed?.length || 0
   })
+
+  // Backward-compatible alias (deprecated)
+  /** @deprecated Use illusionsCompletedCount instead */
+  const mythsCompletedCount = illusionsCompletedCount
 
   const ceremonyDate = computed(() => {
     if (!status.value?.ceremony?.completed_at) return null
@@ -91,7 +108,9 @@ export const useUserStatus = () => {
     hasFinalRecording,
     hasCheatSheet,
     nextFollowUp,
-    mythsCompletedCount,
+    illusionsCompletedCount,
     ceremonyDate,
+    // Backward-compatible alias (deprecated)
+    mythsCompletedCount,
   }
 }

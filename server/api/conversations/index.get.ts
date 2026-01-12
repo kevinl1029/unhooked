@@ -7,18 +7,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const mythNumber = query.mythNumber ? parseInt(query.mythNumber as string) : undefined
+  const illusionNumber = query.illusionNumber ? parseInt(query.illusionNumber as string) : undefined
 
   const supabase = serverSupabaseServiceRole(event)
 
   let queryBuilder = supabase
     .from('conversations')
-    .select('id, title, model, myth_number, session_completed, created_at, updated_at')
+    .select('id, title, model, illusion_number, session_completed, created_at, updated_at')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
 
-  if (mythNumber) {
-    queryBuilder = queryBuilder.eq('myth_number', mythNumber)
+  if (illusionNumber) {
+    queryBuilder = queryBuilder.eq('illusion_number', illusionNumber)
   }
 
   const { data, error } = await queryBuilder

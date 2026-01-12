@@ -1,23 +1,30 @@
 import type { Message } from '~/server/utils/llm/types'
 
 interface VoiceChatOptions {
-  mythNumber?: number
+  illusionNumber?: number
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement'
   checkInId?: string
   checkInPrompt?: string
   onSessionComplete?: () => void
   enableStreamingTTS?: boolean // Enable streaming TTS when supported
+  // Backward-compatible alias (deprecated)
+  /** @deprecated Use illusionNumber instead */
+  mythNumber?: number
 }
 
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
   const {
-    mythNumber,
+    illusionNumber: illusionNumberProp,
+    mythNumber: mythNumberProp,
     sessionType = 'core',
     checkInId,
     checkInPrompt,
     onSessionComplete,
     enableStreamingTTS = true
   } = options
+
+  // Support both illusionNumber and deprecated mythNumber
+  const illusionNumber = illusionNumberProp ?? mythNumberProp
 
   // State
   const messages = ref<Message[]>([])
@@ -64,7 +71,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: JSON.stringify({
             messages: messages.value,
             conversationId: conversationId.value,
-            mythNumber,
+            illusionNumber,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -108,7 +115,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: {
             messages: messages.value,
             conversationId: conversationId.value,
-            mythNumber,
+            illusionNumber,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -167,7 +174,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: JSON.stringify({
             messages: [],
             conversationId: null,
-            mythNumber,
+            illusionNumber,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -210,7 +217,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: {
             messages: [],
             conversationId: null,
-            mythNumber,
+            illusionNumber,
             sessionType,
             checkInId,
             checkInPrompt,

@@ -29,28 +29,28 @@ export default defineEventHandler(async (event) => {
     .eq('user_id', user.sub)
     .single()
 
-  // 3. Fetch key insights (one per myth)
+  // 3. Fetch key insights (one per illusion)
   const keyInsightIds: string[] = []
   if (userStory) {
-    const mythKeys = ['stress_relief', 'pleasure_illusion', 'willpower_myth', 'focus_enhancement', 'identity_belief']
-    for (const mythKey of mythKeys) {
-      const insightId = userStory[`${mythKey}_key_insight_id`]
+    const illusionKeys = ['stress_relief', 'pleasure_illusion', 'willpower_myth', 'focus_enhancement', 'identity_belief']
+    for (const illusionKey of illusionKeys) {
+      const insightId = userStory[`${illusionKey}_key_insight_id`]
       if (insightId) {
         keyInsightIds.push(insightId)
       }
     }
   }
 
-  let keyInsights: Array<{ mythKey: string; transcript: string }> = []
+  let keyInsights: Array<{ illusionKey: string; transcript: string }> = []
   if (keyInsightIds.length > 0) {
     const { data: insights } = await supabase
       .from('captured_moments')
-      .select('id, myth_key, transcript')
+      .select('id, illusion_key, transcript')
       .in('id', keyInsightIds)
 
     if (insights) {
       keyInsights = insights.map(i => ({
-        mythKey: i.myth_key,
+        illusionKey: i.illusion_key,
         transcript: i.transcript,
       }))
     }
@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
   // 4. Fetch recent moments (last 10, for variety)
   const { data: recentMoments } = await supabase
     .from('captured_moments')
-    .select('moment_type, transcript, myth_key, created_at')
+    .select('moment_type, transcript, illusion_key, created_at')
     .eq('user_id', user.sub)
     .order('created_at', { ascending: false })
     .limit(10)
@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
       identity_belief: userStory.identity_belief_conviction,
     } : null,
 
-    // Key insights from each myth
+    // Key insights from each illusion
     keyInsights,
 
     // Recent moments for context

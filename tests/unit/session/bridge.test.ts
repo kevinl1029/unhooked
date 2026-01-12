@@ -2,7 +2,7 @@
  * Unit tests for session bridge messages
  */
 import { describe, it, expect } from 'vitest'
-import type { MythLayer } from '~/server/utils/llm/task-types'
+import type { IllusionLayer } from '~/server/utils/llm/task-types'
 
 // Static transition messages (copied from implementation for testing)
 const TRANSITION_MESSAGES = {
@@ -10,15 +10,15 @@ const TRANSITION_MESSAGES = {
     intellectualToEmotional: 'You\'ve started to understand this logically. Now let\'s explore how it feels.',
     emotionalToVisceral: 'You\'re making real progress. Let\'s go deeper into your body\'s experience.',
   },
-  mythComplete: 'You\'ve explored this myth fully. You\'re ready to move on.',
-  ceremonyReady: 'You\'ve explored all five myths. You\'re ready for your final step.',
+  illusionComplete: 'You\'ve explored this illusion fully. You\'re ready to move on.',
+  ceremonyReady: 'You\'ve explored all five illusions. You\'re ready for your final step.',
 }
 
 describe('Session Bridge', () => {
   describe('Transition message selection', () => {
     it('should select correct message for intellectual to emotional transition', () => {
-      const previousLayer: MythLayer = 'intellectual'
-      const currentLayer: MythLayer = 'emotional'
+      const previousLayer: IllusionLayer = 'intellectual'
+      const currentLayer: IllusionLayer = 'emotional'
 
       const message = previousLayer === 'intellectual' && currentLayer === 'emotional'
         ? TRANSITION_MESSAGES.layerComplete.intellectualToEmotional
@@ -28,8 +28,8 @@ describe('Session Bridge', () => {
     })
 
     it('should select correct message for emotional to visceral transition', () => {
-      const previousLayer: MythLayer = 'emotional'
-      const currentLayer: MythLayer = 'visceral'
+      const previousLayer: IllusionLayer = 'emotional'
+      const currentLayer: IllusionLayer = 'visceral'
 
       const message = previousLayer === 'emotional' && currentLayer === 'visceral'
         ? TRANSITION_MESSAGES.layerComplete.emotionalToVisceral
@@ -38,27 +38,27 @@ describe('Session Bridge', () => {
       expect(message).toBe('You\'re making real progress. Let\'s go deeper into your body\'s experience.')
     })
 
-    it('should return myth complete message when all layers done', () => {
+    it('should return illusion complete message when all layers done', () => {
       const allLayersComplete = true
 
-      const message = allLayersComplete ? TRANSITION_MESSAGES.mythComplete : null
+      const message = allLayersComplete ? TRANSITION_MESSAGES.illusionComplete : null
 
-      expect(message).toBe('You\'ve explored this myth fully. You\'re ready to move on.')
+      expect(message).toBe('You\'ve explored this illusion fully. You\'re ready to move on.')
     })
 
-    it('should return ceremony ready message when all myths done', () => {
-      const allMythsComplete = true
+    it('should return ceremony ready message when all illusions done', () => {
+      const allIllusionsComplete = true
 
-      const message = allMythsComplete ? TRANSITION_MESSAGES.ceremonyReady : null
+      const message = allIllusionsComplete ? TRANSITION_MESSAGES.ceremonyReady : null
 
-      expect(message).toBe('You\'ve explored all five myths. You\'re ready for your final step.')
+      expect(message).toBe('You\'ve explored all five illusions. You\'re ready for your final step.')
     })
   })
 
   describe('Bridge context building', () => {
     it('should include key insight in bridge context', () => {
       const keyInsight = 'The anxiety IS the withdrawal'
-      const previousLayer: MythLayer = 'intellectual'
+      const previousLayer: IllusionLayer = 'intellectual'
 
       const bridge = `Last time, you shared: "${keyInsight}"\nLet\'s build on that.`
 
@@ -110,7 +110,7 @@ describe('Session Bridge', () => {
 
   describe('Layer-specific bridge content', () => {
     it('should not include bridge for first layer (intellectual)', () => {
-      const currentLayer: MythLayer = 'intellectual'
+      const currentLayer: IllusionLayer = 'intellectual'
 
       const shouldIncludeBridge = currentLayer !== 'intellectual'
 
@@ -118,7 +118,7 @@ describe('Session Bridge', () => {
     })
 
     it('should include bridge for second layer (emotional)', () => {
-      const currentLayer: MythLayer = 'emotional'
+      const currentLayer: IllusionLayer = 'emotional'
 
       const shouldIncludeBridge = currentLayer !== 'intellectual'
 
@@ -126,7 +126,7 @@ describe('Session Bridge', () => {
     })
 
     it('should include bridge for third layer (visceral)', () => {
-      const currentLayer: MythLayer = 'visceral'
+      const currentLayer: IllusionLayer = 'visceral'
 
       const shouldIncludeBridge = currentLayer !== 'intellectual'
 

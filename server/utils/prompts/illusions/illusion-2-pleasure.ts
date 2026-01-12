@@ -1,7 +1,7 @@
-// Myth 2: "I Enjoy It / It's Pleasurable"
+// Illusion 2: "I Enjoy It / It's Pleasurable"
 
-export const MYTH_2_PLEASURE_PROMPT = `
-## This Session's Focus: The Pleasure Myth
+export const ILLUSION_2_PLEASURE_PROMPT = `
+## This Session's Focus: The Pleasure Illusion
 
 **The Belief They Hold:**
 "I genuinely enjoy using nicotine. It's pleasurable. It's not just about addiction—I actually like it."

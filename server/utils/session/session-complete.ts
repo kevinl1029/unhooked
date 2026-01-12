@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Message } from '../llm/types'
-import type { MythKey, MythLayer, CapturedMoment, UserIntakeData } from '../llm/task-types'
+import type { IllusionKey, IllusionLayer, CapturedMoment, UserIntakeData } from '../llm/task-types'
 import { assessConviction } from '../llm/tasks/conviction-assessment'
 import { selectKeyInsight } from '../llm/tasks/key-insight-selection'
 import { summarizeOriginStory, shouldGenerateSummary } from '../llm/tasks/story-summarization'
@@ -13,8 +13,8 @@ import { summarizeOriginStory, shouldGenerateSummary } from '../llm/tasks/story-
 interface SessionCompleteInput {
   userId: string
   conversationId: string
-  mythKey: MythKey
-  mythLayer: MythLayer
+  illusionKey: IllusionKey
+  illusionLayer: IllusionLayer
   messages: Message[]
   supabase: SupabaseClient
 }
@@ -42,7 +42,7 @@ interface SessionCompleteResult {
  * 6. Update key insight in user_story
  */
 export async function handleSessionComplete(input: SessionCompleteInput): Promise<SessionCompleteResult> {
-  const { userId, conversationId, mythKey, mythLayer, messages, supabase } = input
+  const { userId, conversationId, illusionKey, illusionLayer, messages, supabase } = input
 
   try {
     // 1. Fetch user story for context
@@ -52,19 +52,19 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
       .eq('user_id', userId)
       .single()
 
-    // Get previous conviction for this myth
-    const previousConviction = userStory?.[`${mythKey}_conviction`] ?? 0
+    // Get previous conviction for this illusion
+    const previousConviction = userStory?.[`${illusionKey}_conviction`] ?? 0
 
     // Get existing triggers and stakes
     const existingTriggers = userStory?.primary_triggers || []
     const existingStakes = userStory?.personal_stakes || []
 
-    // 2. Fetch previous insights for this myth
+    // 2. Fetch previous insights for this illusion
     const { data: previousInsightMoments } = await supabase
       .from('captured_moments')
       .select('transcript')
       .eq('user_id', userId)
-      .eq('myth_key', mythKey)
+      .eq('illusion_key', illusionKey)
       .eq('moment_type', 'insight')
       .order('created_at', { ascending: false })
       .limit(5)
@@ -72,10 +72,10 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
     const previousInsights = previousInsightMoments?.map(m => m.transcript) || []
 
     // 3. Run conviction assessment
-    console.log(`[session-complete] Running conviction assessment for ${mythKey}`)
+    console.log(`[session-complete] Running conviction assessment for ${illusionKey}`)
     const assessment = await assessConviction({
       conversationTranscript: messages,
-      mythKey,
+      illusionKey,
       previousConviction,
       previousInsights,
       existingTriggers,
@@ -88,8 +88,8 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
       .insert({
         user_id: userId,
         conversation_id: conversationId,
-        myth_key: mythKey,
-        myth_layer: mythLayer,
+        illusion_key: illusionKey,
+        illusion_layer: illusionLayer,
         conviction_score: assessment.newConviction,
         delta: assessment.delta,
         recommended_next_step: assessment.recommendedNextStep,
@@ -104,13 +104,13 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
 
     // 5. Update user_story with new conviction and merge triggers/stakes
     const storyUpdateData: Record<string, unknown> = {
-      [`${mythKey}_conviction`]: assessment.newConviction,
+      [`${illusionKey}_conviction`]: assessment.newConviction,
       updated_at: new Date().toISOString(),
     }
 
     // Store resistance notes if present
     if (assessment.remainingResistance) {
-      storyUpdateData[`${mythKey}_resistance_notes`] = assessment.remainingResistance
+      storyUpdateData[`${illusionKey}_resistance_notes`] = assessment.remainingResistance
     }
 
     // Merge new triggers (deduplicate)
@@ -130,12 +130,12 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
       .update(storyUpdateData)
       .eq('user_id', userId)
 
-    // 6. Select key insight if multiple candidates exist for this myth
+    // 6. Select key insight if multiple candidates exist for this illusion
     const { data: insightCandidates } = await supabase
       .from('captured_moments')
       .select('*')
       .eq('user_id', userId)
-      .eq('myth_key', mythKey)
+      .eq('illusion_key', illusionKey)
       .eq('moment_type', 'insight')
       .order('confidence_score', { ascending: false })
 
@@ -152,9 +152,9 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
         transcript: m.transcript,
         audioClipPath: m.audio_clip_path,
         audioDurationMs: m.audio_duration_ms,
-        mythKey: m.myth_key,
+        illusionKey: m.illusion_key,
         sessionType: m.session_type,
-        mythLayer: m.myth_layer,
+        illusionLayer: m.illusion_layer,
         confidenceScore: m.confidence_score,
         emotionalValence: m.emotional_valence,
         isUserHighlighted: m.is_user_highlighted,
@@ -168,8 +168,8 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
 
       const selection = await selectKeyInsight({
         insights: moments,
-        mythKey,
-        sessionContext: `Session completed for ${mythKey} at ${mythLayer} layer`,
+        illusionKey,
+        sessionContext: `Session completed for ${illusionKey} at ${illusionLayer} layer`,
       })
 
       if (selection.selectedMomentId) {
@@ -179,7 +179,7 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
         await supabase
           .from('user_story')
           .update({
-            [`${mythKey}_key_insight_id`]: keyInsightId,
+            [`${illusionKey}_key_insight_id`]: keyInsightId,
             updated_at: new Date().toISOString(),
           })
           .eq('user_id', userId)
@@ -226,9 +226,9 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
           transcript: m.transcript,
           audioClipPath: m.audio_clip_path,
           audioDurationMs: m.audio_duration_ms,
-          mythKey: m.myth_key,
+          illusionKey: m.illusion_key,
           sessionType: m.session_type,
-          mythLayer: m.myth_layer,
+          illusionLayer: m.illusion_layer,
           confidenceScore: m.confidence_score,
           emotionalValence: m.emotional_valence,
           isUserHighlighted: m.is_user_highlighted,
@@ -259,7 +259,7 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
       }
     }
 
-    console.log(`[session-complete] Completed for ${mythKey}: conviction ${previousConviction} -> ${assessment.newConviction} (delta: ${assessment.delta})`)
+    console.log(`[session-complete] Completed for ${illusionKey}: conviction ${previousConviction} -> ${assessment.newConviction} (delta: ${assessment.delta})`)
 
     return {
       convictionAssessment: {

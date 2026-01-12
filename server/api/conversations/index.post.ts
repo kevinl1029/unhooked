@@ -1,6 +1,6 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { getDefaultModel } from '../../utils/llm'
-import { MYTH_NAMES } from '../../utils/prompts'
+import { ILLUSION_NAMES } from '../../utils/prompts'
 import type { Message } from '../../utils/llm/types'
 
 export default defineEventHandler(async (event) => {
@@ -11,18 +11,18 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
   const defaultModel = getDefaultModel()
-  const { title, model = defaultModel, mythNumber, initialMessages } = body as {
+  const { title, model = defaultModel, illusionNumber, initialMessages } = body as {
     title?: string
     model?: string
-    mythNumber?: number
+    illusionNumber?: number
     initialMessages?: Message[]
   }
 
   const supabase = serverSupabaseServiceRole(event)
 
   // Create the conversation
-  const conversationTitle = mythNumber
-    ? MYTH_NAMES[mythNumber]
+  const conversationTitle = illusionNumber
+    ? ILLUSION_NAMES[illusionNumber]
     : (title || 'New conversation')
 
   const { data: conversation, error: convError } = await supabase
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
       user_id: user.sub,
       title: conversationTitle,
       model,
-      myth_number: mythNumber || null
+      illusion_number: illusionNumber || null
     })
     .select()
     .single()

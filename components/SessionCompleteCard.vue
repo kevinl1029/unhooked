@@ -14,10 +14,10 @@
 
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
       <button
-        v-if="nextMyth"
+        v-if="nextIllusion"
         type="button"
         class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card"
-        @click="$emit('continue', nextMyth)"
+        @click="$emit('continue', nextIllusion)"
       >
         Continue to Next Session
       </button>
@@ -42,11 +42,11 @@
 
 <script setup lang="ts">
 defineProps<{
-  nextMyth: number | null
+  nextIllusion: number | null
 }>()
 
 defineEmits<{
-  continue: [mythNumber: number]
+  continue: [illusionNumber: number]
   dashboard: []
   finish: []
 }>()

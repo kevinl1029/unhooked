@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // 1. Check if user has completed all myths (all 5 myths at visceral layer)
+  // 1. Check if user has completed all illusions (all 5 illusions at visceral layer)
   const { data: userStory } = await supabase
     .from('user_story')
     .select('*')
@@ -36,17 +36,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'User story not found' })
   }
 
-  // Check myth completion status
-  const mythKeys = ['stress_relief', 'pleasure_illusion', 'willpower_myth', 'focus_enhancement', 'identity_belief']
-  const completedMyths: string[] = []
+  // Check illusion completion status
+  const illusionKeys = ['stress_relief', 'pleasure_illusion', 'willpower_myth', 'focus_enhancement', 'identity_belief']
+  const completedIllusions: string[] = []
 
-  for (const mythKey of mythKeys) {
-    // A myth is "complete" when all 3 layers are done
+  for (const illusionKey of illusionKeys) {
+    // An illusion is "complete" when all 3 layers are done
     // For now, we check if conviction exists (indicating at least one session)
     // In production, you'd track layer completion more precisely
-    const conviction = userStory[`${mythKey}_conviction`]
+    const conviction = userStory[`${illusionKey}_conviction`]
     if (conviction !== null && conviction !== undefined) {
-      completedMyths.push(mythKey)
+      completedIllusions.push(illusionKey)
     }
   }
 
@@ -70,9 +70,9 @@ export default defineEventHandler(async (event) => {
     transcript: m.transcript,
     audioClipPath: m.audio_clip_path,
     audioDurationMs: m.audio_duration_ms,
-    mythKey: m.myth_key,
+    illusionKey: m.myth_key,
     sessionType: m.session_type,
-    mythLayer: m.myth_layer,
+    illusionLayer: m.myth_layer,
     confidenceScore: m.confidence_score,
     emotionalValence: m.emotional_valence,
     isUserHighlighted: m.is_user_highlighted,
@@ -114,7 +114,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // 5. Determine readiness
-  const ready = completedMyths.length >= 5 && !ceremonyCompleted && allMoments.length >= 3
+  const ready = completedIllusions.length >= 5 && !ceremonyCompleted && allMoments.length >= 3
 
   return {
     ready,
@@ -128,7 +128,7 @@ export default defineEventHandler(async (event) => {
       already_quit: userStory.already_quit,
     },
     moments_by_type: momentsByType,
-    myths_completed: completedMyths,
+    illusions_completed: completedIllusions,
     total_moments: allMoments.length,
     suggested_journey_moments: suggestedMoments,
   }

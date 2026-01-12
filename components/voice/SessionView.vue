@@ -199,7 +199,7 @@
 import type { Message } from '~/server/utils/llm/types'
 
 interface Props {
-  mythNumber: number
+  illusionNumber: number
   readOnly?: boolean
   existingConversationId?: string | null
   existingMessages?: Message[]
@@ -248,7 +248,7 @@ const {
   requestPermission,
   reset
 } = useVoiceChat({
-  mythNumber: props.mythNumber,
+  illusionNumber: props.illusionNumber,
   onSessionComplete: () => {
     // Will be handled via watch
   }
@@ -467,8 +467,8 @@ const handleSessionComplete = async () => {
   }
 
   try {
-    const result = await completeSession(conversationId.value, props.mythNumber)
-    emit('sessionComplete', result.nextMyth)
+    const result = await completeSession(conversationId.value, props.illusionNumber)
+    emit('sessionComplete', result.nextIllusion)
   } catch (err) {
     console.error('Error completing session:', err)
     emit('sessionComplete', null)

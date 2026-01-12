@@ -135,7 +135,7 @@ export default defineEventHandler(async (event) => {
     already_quit: already_quit || false,
     artifacts: {
       reflective_journey: artifactsMap['reflective_journey'] || null,
-      myths_cheat_sheet: artifactsMap['myths_cheat_sheet'] || null,
+      illusions_cheat_sheet: artifactsMap['illusions_cheat_sheet'] || null,
       final_recording: artifactsMap['final_recording'] || null,
     },
     follow_ups_scheduled: followUps,

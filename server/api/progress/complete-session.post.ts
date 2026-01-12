@@ -1,8 +1,8 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { scheduleCheckIns } from '~/server/utils/scheduling/check-in-scheduler'
 
-// Map myth numbers to myth keys
-const MYTH_KEYS: Record<number, string> = {
+// Map illusion numbers to illusion keys
+const ILLUSION_KEYS: Record<number, string> = {
   1: 'stress_relief',
   2: 'pleasure',
   3: 'willpower',
@@ -12,7 +12,8 @@ const MYTH_KEYS: Record<number, string> = {
 
 interface CompleteSessionBody {
   conversationId: string
-  mythNumber: number
+  illusionNumber?: number
+  mythNumber?: number // Backward compatibility alias
 }
 
 export default defineEventHandler(async (event) => {
@@ -23,12 +24,15 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody<CompleteSessionBody>(event)
 
+  // Support both illusionNumber and mythNumber (backward compatibility)
+  const illusionNumber = body.illusionNumber ?? body.mythNumber
+
   // Validate required fields
   if (!body.conversationId) {
     throw createError({ statusCode: 400, message: 'conversationId is required' })
   }
-  if (!body.mythNumber || body.mythNumber < 1 || body.mythNumber > 5) {
-    throw createError({ statusCode: 400, message: 'mythNumber must be between 1 and 5' })
+  if (!illusionNumber || illusionNumber < 1 || illusionNumber > 5) {
+    throw createError({ statusCode: 400, message: 'illusionNumber must be between 1 and 5' })
   }
 
   const supabase = serverSupabaseServiceRole(event)
@@ -58,23 +62,23 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: fetchError.message })
   }
 
-  // Add mythNumber to myths_completed (deduplicated)
-  const mythsCompleted = currentProgress.myths_completed || []
-  const updatedMythsCompleted = Array.from(new Set([...mythsCompleted, body.mythNumber]))
+  // Add illusionNumber to illusions_completed (deduplicated)
+  const illusionsCompleted = currentProgress.myths_completed || []
+  const updatedIllusionsCompleted = Array.from(new Set([...illusionsCompleted, illusionNumber]))
 
-  // Calculate next myth
-  const mythOrder = currentProgress.myth_order || [1, 2, 3, 4, 5]
-  const nextMyth = mythOrder.find(m => !updatedMythsCompleted.includes(m)) || null
+  // Calculate next illusion
+  const illusionOrder = currentProgress.myth_order || [1, 2, 3, 4, 5]
+  const nextIllusion = illusionOrder.find(m => !updatedIllusionsCompleted.includes(m)) || null
 
   // Check if program is complete
-  const isComplete = updatedMythsCompleted.length >= 5
+  const isComplete = updatedIllusionsCompleted.length >= 5
 
   // Update progress
   const { data: updatedProgress, error: updateError } = await supabase
     .from('user_progress')
     .update({
-      current_myth: nextMyth || currentProgress.current_myth,
-      myths_completed: updatedMythsCompleted,
+      current_myth: nextIllusion || currentProgress.current_myth,
+      myths_completed: updatedIllusionsCompleted,
       program_status: isComplete ? 'completed' : 'in_progress',
       completed_at: isComplete ? new Date().toISOString() : null,
       last_session_at: new Date().toISOString(),
@@ -93,14 +97,14 @@ export default defineEventHandler(async (event) => {
   // Only schedule if program is not complete (user still has sessions to do)
   if (!isComplete) {
     const timezone = currentProgress.timezone || 'America/New_York'
-    const mythKey = MYTH_KEYS[body.mythNumber]
+    const illusionKey = ILLUSION_KEYS[illusionNumber]
 
     scheduleCheckIns({
       userId: user.sub,
       timezone,
       trigger: 'session_complete',
       sessionId: body.conversationId,
-      mythKey,
+      mythKey: illusionKey, // Keep mythKey param name for scheduler compatibility
       sessionEndTime: new Date(),
       supabase,
     }).then((scheduled) => {
@@ -115,7 +119,8 @@ export default defineEventHandler(async (event) => {
 
   return {
     progress: updatedProgress,
-    nextMyth,
+    nextIllusion,
+    nextMyth: nextIllusion, // Backward compatibility alias
     isComplete
   }
 })

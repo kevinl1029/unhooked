@@ -1,7 +1,7 @@
-// Myth 4: "I Need It to Focus / Function"
+// Illusion 4: "I Need It to Focus / Function"
 
-export const MYTH_4_FOCUS_PROMPT = `
-## This Session's Focus: The Focus Myth
+export const ILLUSION_4_FOCUS_PROMPT = `
+## This Session's Focus: The Focus Illusion
 
 **The Belief They Hold:**
 "Nicotine helps me concentrate and get things done. I'm more productive with it. Without it, my mind feels foggy and I can't focus."

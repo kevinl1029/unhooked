@@ -2,9 +2,9 @@ export interface Progress {
   id: string
   user_id: string
   program_status: 'not_started' | 'in_progress' | 'completed'
-  current_myth: number
-  myth_order: number[]
-  myths_completed: number[]
+  current_illusion: number
+  illusion_order: number[]
+  illusions_completed: number[]
   total_sessions: number
   last_reminded_at: string | null
   started_at: string | null
@@ -12,12 +12,22 @@ export interface Progress {
   last_session_at: string | null
   created_at: string
   updated_at: string
+  // Backward-compatible aliases (deprecated)
+  /** @deprecated Use current_illusion instead */
+  current_myth?: number
+  /** @deprecated Use illusion_order instead */
+  myth_order?: number[]
+  /** @deprecated Use illusions_completed instead */
+  myths_completed?: number[]
 }
 
 export interface CompleteSessionResponse {
   progress: Progress
-  nextMyth: number | null
+  nextIllusion: number | null
   isComplete: boolean
+  // Backward-compatible alias (deprecated)
+  /** @deprecated Use nextIllusion instead */
+  nextMyth?: number | null
 }
 
 export const useProgress = () => {
@@ -42,7 +52,7 @@ export const useProgress = () => {
     }
   }
 
-  const completeSession = async (conversationId: string, mythNumber: number) => {
+  const completeSession = async (conversationId: string, illusionNumber: number) => {
     isLoading.value = true
     error.value = null
 
@@ -51,7 +61,7 @@ export const useProgress = () => {
         method: 'POST',
         body: {
           conversationId,
-          mythNumber,
+          illusionNumber,
         },
       })
       progress.value = response.progress
@@ -65,21 +75,27 @@ export const useProgress = () => {
     }
   }
 
-  const getNextMyth = (): number | null => {
+  const getNextIllusion = (): number | null => {
     if (!progress.value) return null
 
-    const { myth_order, myths_completed } = progress.value
+    const { illusion_order, illusions_completed } = progress.value
 
-    // Find first myth in order that isn't completed
-    const nextMyth = myth_order.find(myth => !myths_completed.includes(myth))
+    // Find first illusion in order that isn't completed
+    const nextIllusion = illusion_order.find(illusion => !illusions_completed.includes(illusion))
 
-    return nextMyth ?? null
+    return nextIllusion ?? null
   }
 
-  const isMythCompleted = (mythNumber: number): boolean => {
+  const isIllusionCompleted = (illusionNumber: number): boolean => {
     if (!progress.value) return false
-    return progress.value.myths_completed.includes(mythNumber)
+    return progress.value.illusions_completed.includes(illusionNumber)
   }
+
+  // Backward-compatible aliases (deprecated)
+  /** @deprecated Use getNextIllusion instead */
+  const getNextMyth = getNextIllusion
+  /** @deprecated Use isIllusionCompleted instead */
+  const isMythCompleted = isIllusionCompleted
 
   return {
     progress,
@@ -87,6 +103,9 @@ export const useProgress = () => {
     error,
     fetchProgress,
     completeSession,
+    getNextIllusion,
+    isIllusionCompleted,
+    // Backward-compatible aliases (deprecated)
     getNextMyth,
     isMythCompleted,
   }

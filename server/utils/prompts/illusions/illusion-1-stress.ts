@@ -1,7 +1,7 @@
-// Myth 1: "Nicotine Relieves My Stress"
+// Illusion 1: "Nicotine Relieves My Stress"
 
-export const MYTH_1_STRESS_PROMPT = `
-## This Session's Focus: The Stress Myth
+export const ILLUSION_1_STRESS_PROMPT = `
+## This Session's Focus: The Stress Illusion
 
 **The Belief They Hold:**
 "Nicotine helps me manage stress. When I'm overwhelmed, it calms me down. Without it, I'd be a wreck."

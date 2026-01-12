@@ -2,14 +2,14 @@
  * Unit tests for cross-layer context builder
  */
 import { describe, it, expect } from 'vitest'
-import type { MythLayer } from '~/server/utils/llm/task-types'
+import type { IllusionLayer } from '~/server/utils/llm/task-types'
 
 describe('Cross-Layer Context', () => {
   describe('Layer progression', () => {
     it('should identify previous layers correctly', () => {
-      const layers: MythLayer[] = ['intellectual', 'emotional', 'visceral']
+      const layers: IllusionLayer[] = ['intellectual', 'emotional', 'visceral']
 
-      const getPreviousLayers = (current: MythLayer): MythLayer[] => {
+      const getPreviousLayers = (current: IllusionLayer): IllusionLayer[] => {
         const index = layers.indexOf(current)
         return layers.slice(0, index)
       }
@@ -20,7 +20,7 @@ describe('Cross-Layer Context', () => {
     })
 
     it('should determine if user is returning', () => {
-      const isReturningUser = (layer: MythLayer): boolean => {
+      const isReturningUser = (layer: IllusionLayer): boolean => {
         return layer !== 'intellectual'
       }
 
@@ -37,7 +37,7 @@ describe('Cross-Layer Context', () => {
         { layer: 'emotional', insight: 'I felt relieved understanding this' },
       ]
 
-      const currentLayer: MythLayer = 'visceral'
+      const currentLayer: IllusionLayer = 'visceral'
       const relevantInsights = previousInsights.filter(i =>
         i.layer !== currentLayer
       )

@@ -46,7 +46,7 @@ function buildNarrativePrompt(input: CeremonyNarrativeInput): string {
     id: m.id,
     type: m.momentType,
     transcript: m.transcript,
-    mythKey: m.mythKey,
+    illusionKey: m.illusionKey,
   }))
 
   const quitContext = alreadyQuit
@@ -67,7 +67,7 @@ ${quitContext}
 NARRATIVE STRUCTURE:
 1. Opening (warm, acknowledging their journey)
 2. Origin reflection (where it started)
-3. The myths they believed (rationalizations)
+3. The illusions they believed (rationalizations)
 4. Moments of clarity (insights and breakthroughs)
 5. Transformation (how they've changed)
 6. Looking forward (their commitment to freedom)

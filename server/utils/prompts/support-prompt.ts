@@ -14,8 +14,8 @@ interface SupportContext {
   } | null
   originSummary: string | null
   convictions: Record<string, number | null> | null
-  keyInsights: Array<{ mythKey: string; transcript: string }>
-  recentMoments: Array<{ moment_type: string; transcript: string; myth_key: string }>
+  keyInsights: Array<{ illusionKey: string; transcript: string }>
+  recentMoments: Array<{ moment_type: string; transcript: string; illusion_key: string }>
   personalStakes: string[]
   primaryTriggers: string[]
   ceremonyCompleted: boolean
@@ -94,7 +94,7 @@ export function buildSupportPrompt(context: SupportContext, mode: SupportMode): 
     prompt += '\n\n## Their Key Insights (Use These!)\n'
     prompt += 'These are breakthrough moments from their journey. Reference them naturally:\n\n'
     for (const insight of context.keyInsights) {
-      prompt += `[${insight.mythKey}]: "${insight.transcript}"\n`
+      prompt += `[${insight.illusionKey}]: "${insight.transcript}"\n`
     }
   }
 

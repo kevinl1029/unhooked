@@ -69,7 +69,7 @@ That's the analysis.`
   "confidence": 0.92,
   "emotionalValence": "mixed",
   "keyPhrase": "I realized the stress I was feeling was actually the withdrawal itself",
-  "reasoning": "User expresses a key realization about the stress-relief myth"
+  "reasoning": "User expresses a key realization about the stress-relief illusion"
 }`
 
       const result = parseJsonResponse(response)

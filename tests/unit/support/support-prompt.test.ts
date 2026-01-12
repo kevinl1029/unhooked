@@ -21,10 +21,10 @@ function createMockContext(overrides = {}) {
       pleasure_illusion: 7,
     },
     keyInsights: [
-      { mythKey: 'stress_relief', transcript: 'The anxiety IS the withdrawal' },
+      { illusionKey: 'stress_relief', transcript: 'The anxiety IS the withdrawal' },
     ],
     recentMoments: [
-      { moment_type: 'insight', transcript: 'I feel better already', myth_key: 'stress_relief' },
+      { moment_type: 'insight', transcript: 'I feel better already', illusion_key: 'stress_relief' },
     ],
     personalStakes: ['Be healthy for my kids', 'Save money'],
     primaryTriggers: ['Morning coffee', 'After meals'],

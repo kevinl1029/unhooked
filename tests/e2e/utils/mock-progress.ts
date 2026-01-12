@@ -3,9 +3,9 @@ import { MOCK_USER } from './mock-auth'
 
 export interface MockProgressOptions {
   programStatus?: 'not_started' | 'in_progress' | 'completed'
-  currentMyth?: number
-  mythsCompleted?: number[]
-  mythOrder?: number[]
+  currentIllusion?: number
+  illusionsCompleted?: number[]
+  illusionOrder?: number[]
   totalSessions?: number
 }
 
@@ -18,9 +18,9 @@ export interface MockIntakeOptions {
 
 const DEFAULT_PROGRESS: MockProgressOptions = {
   programStatus: 'in_progress',
-  currentMyth: 1,
-  mythsCompleted: [],
-  mythOrder: [1, 2, 3, 4, 5],
+  currentIllusion: 1,
+  illusionsCompleted: [],
+  illusionOrder: [1, 2, 3, 4, 5],
   totalSessions: 0,
 }
 
@@ -42,9 +42,9 @@ function createMockProgress(options: MockProgressOptions = {}) {
     id: 'mock-progress-id',
     user_id: MOCK_USER.id,
     program_status: merged.programStatus,
-    current_myth: merged.currentMyth,
-    myth_order: merged.mythOrder,
-    myths_completed: merged.mythsCompleted,
+    current_illusion: merged.currentIllusion,
+    illusion_order: merged.illusionOrder,
+    illusions_completed: merged.illusionsCompleted,
     total_sessions: merged.totalSessions,
     last_reminded_at: null,
     started_at: merged.programStatus !== 'not_started' ? now : null,
@@ -102,12 +102,12 @@ export async function mockProgressAPI(
   await page.route('**/api/progress/complete-session', async (route) => {
     const updatedProgress = {
       ...mockProgress,
-      myths_completed: [...(options.mythsCompleted || []), options.currentMyth || 1],
+      illusions_completed: [...(options.illusionsCompleted || []), options.currentIllusion || 1],
       total_sessions: (options.totalSessions || 0) + 1,
     }
 
-    const nextMyth = updatedProgress.myth_order.find(
-      (m: number) => !updatedProgress.myths_completed.includes(m)
+    const nextIllusion = updatedProgress.illusion_order.find(
+      (m: number) => !updatedProgress.illusions_completed.includes(m)
     )
 
     await route.fulfill({
@@ -115,8 +115,8 @@ export async function mockProgressAPI(
       contentType: 'application/json',
       body: JSON.stringify({
         progress: updatedProgress,
-        nextMyth: nextMyth || null,
-        isComplete: updatedProgress.myths_completed.length >= 5,
+        nextIllusion: nextIllusion || null,
+        isComplete: updatedProgress.illusions_completed.length >= 5,
       }),
     })
   })

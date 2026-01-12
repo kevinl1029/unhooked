@@ -12,7 +12,7 @@
         <h1 class="text-4xl font-bold text-white mb-4">The Final Step</h1>
 
         <p class="text-white-85 text-lg mb-6">
-          You've completed all 5 sessions and seen through the myths that kept you hooked.
+          You've completed all 5 sessions and seen through the illusions that kept you hooked.
         </p>
 
         <p class="text-white-65 mb-8">

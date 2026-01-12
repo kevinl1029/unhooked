@@ -1,14 +1,14 @@
 import { getModelRouter, getDefaultModel } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { buildSystemPrompt, buildCheckInSystemPrompt, MYTH_NAMES } from '../utils/prompts'
+import { buildSystemPrompt, buildCheckInSystemPrompt, ILLUSION_NAMES } from '../utils/prompts'
 import {
   detectMoment,
   shouldAttemptDetection,
   getSessionDetectionTracker,
   TRANSCRIPT_CAPTURE_THRESHOLD,
 } from '../utils/llm/tasks/moment-detection'
-import { mythNumberToKey, type SessionType, type MythLayer, type MythKey } from '../utils/llm/task-types'
+import { illusionNumberToKey, type SessionType, type IllusionLayer, type IllusionKey } from '../utils/llm/task-types'
 import { handleSessionComplete } from '../utils/session/session-complete'
 import { buildSessionContext, formatContextForPrompt } from '../utils/personalization/context-builder'
 import { buildCrossLayerContext, formatCrossLayerContext } from '../utils/personalization/cross-layer-context'
@@ -29,26 +29,26 @@ export default defineEventHandler(async (event) => {
   const {
     messages,
     conversationId,
-    mythNumber,
+    illusionNumber,
     model = defaultModel,
     stream = false,
     streamTTS = false,
     inputModality = 'text',
     sessionType = 'core',
-    mythLayer = 'intellectual',
+    illusionLayer = 'intellectual',
     priorMoments = [],
     checkInId,
     checkInPrompt,
   } = body as {
     messages: Message[]
     conversationId?: string
-    mythNumber?: number
+    illusionNumber?: number
     model?: ModelType
     stream?: boolean
     streamTTS?: boolean
     inputModality?: 'text' | 'voice'
     sessionType?: SessionType
-    mythLayer?: MythLayer
+    illusionLayer?: IllusionLayer
     priorMoments?: Array<{ transcript: string; moment_type: string }>
     checkInId?: string
     checkInPrompt?: string
@@ -64,12 +64,12 @@ export default defineEventHandler(async (event) => {
   const router = getModelRouter()
   const supabase = serverSupabaseServiceRole(event)
 
-  // If mythNumber provided, fetch user intake for personalization and build system prompt
+  // If illusionNumber provided, fetch user intake for personalization and build system prompt
   let processedMessages = messages
   const isNewConversation = messages.length === 0
 
-  if (mythNumber) {
-    const mythKey = mythNumberToKey(mythNumber)
+  if (illusionNumber) {
+    const illusionKey = illusionNumberToKey(illusionNumber)
 
     // Fetch basic intake data
     const { data: intake } = await supabase
@@ -100,23 +100,23 @@ export default defineEventHandler(async (event) => {
       abandonedSessionContext += '\n\nAcknowledge you remember where you left off and continue naturally from their previous insights.'
     }
 
-    if (mythKey) {
+    if (illusionKey) {
       // Build session context with captured moments
       const sessionContext = await buildSessionContext(
         supabase,
         user.sub,
-        mythKey,
+        illusionKey,
         sessionType
       )
       personalizationContext = formatContextForPrompt(sessionContext)
 
       // For returning users (Layer 2+), build cross-layer context and bridge message
-      if (mythLayer !== 'intellectual') {
+      if (illusionLayer !== 'intellectual') {
         const crossLayerCtx = await buildCrossLayerContext(
           supabase,
           user.sub,
-          mythKey,
-          mythLayer
+          illusionKey,
+          illusionLayer
         )
         personalizationContext += formatCrossLayerContext(crossLayerCtx)
 
@@ -128,7 +128,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const systemPrompt = buildSystemPrompt({
-      mythNumber,
+      illusionNumber,
       userContext,
       isNewConversation,
       personalizationContext,
@@ -154,7 +154,7 @@ export default defineEventHandler(async (event) => {
 
   // Get or create conversation
   let convId = conversationId
-  const conversationMythKey = mythNumber ? mythNumberToKey(mythNumber) : null
+  const conversationIllusionKey = illusionNumber ? illusionNumberToKey(illusionNumber) : null
 
   if (!convId) {
     // Create new conversation with enhanced tracking
@@ -163,12 +163,12 @@ export default defineEventHandler(async (event) => {
       .insert({
         user_id: user.sub,
         model,
-        title: mythNumber ? MYTH_NAMES[mythNumber] : (messages.length > 0 ? messages[0]?.content.slice(0, 50) : 'New conversation'),
-        myth_number: mythNumber || null,
+        title: illusionNumber ? ILLUSION_NAMES[illusionNumber] : (messages.length > 0 ? messages[0]?.content.slice(0, 50) : 'New conversation'),
+        illusion_number: illusionNumber || null,
         // New Phase 4A fields
         session_type: sessionType,
-        myth_key: conversationMythKey,
-        myth_layer: mythLayer,
+        illusion_key: conversationIllusionKey,
+        illusion_layer: illusionLayer,
       })
       .select('id')
       .single()
@@ -212,7 +212,7 @@ export default defineEventHandler(async (event) => {
       // Start moment detection in parallel (if eligible)
       // Only detect on user messages with 20+ words, and within rate limit
       if (
-        conversationMythKey &&
+        conversationIllusionKey &&
         shouldAttemptDetection(lastUserMessage.content) &&
         detectionTracker.canDetect(convId)
       ) {
@@ -224,7 +224,7 @@ export default defineEventHandler(async (event) => {
             const result = await detectMoment({
               userMessage: lastUserMessage.content,
               recentHistory: messages.slice(-6),
-              currentMythKey: conversationMythKey,
+              currentIllusionKey: conversationIllusionKey,
               sessionType,
             })
 
@@ -236,9 +236,9 @@ export default defineEventHandler(async (event) => {
                 message_id: savedMessageId,
                 moment_type: result.momentType,
                 transcript: result.keyPhrase || lastUserMessage.content, // Use key phrase if available
-                myth_key: conversationMythKey,
+                illusion_key: conversationIllusionKey,
                 session_type: sessionType,
-                myth_layer: mythLayer,
+                illusion_layer: illusionLayer,
                 confidence_score: result.confidence,
                 emotional_valence: result.emotionalValence,
                 // Audio capture deferred for MVP
@@ -353,8 +353,8 @@ export default defineEventHandler(async (event) => {
                 // Reset detection tracker for this conversation
                 detectionTracker.resetCount(convId)
 
-                // Run conviction assessment and post-session tasks (only for core sessions with myth)
-                if (sessionType === 'core' && conversationMythKey) {
+                // Run conviction assessment and post-session tasks (only for core sessions with illusion)
+                if (sessionType === 'core' && conversationIllusionKey) {
                   // Wait for moment detection to complete first
                   if (momentDetectionPromise) {
                     await momentDetectionPromise
@@ -366,8 +366,8 @@ export default defineEventHandler(async (event) => {
                   handleSessionComplete({
                     userId: user.sub,
                     conversationId: convId,
-                    mythKey: conversationMythKey as MythKey,
-                    mythLayer,
+                    illusionKey: conversationIllusionKey as IllusionKey,
+                    illusionLayer,
                     messages: processedMessages,
                     supabase,
                   }).catch(err => {
@@ -438,8 +438,8 @@ export default defineEventHandler(async (event) => {
         // Reset detection tracker for this conversation
         detectionTracker.resetCount(convId)
 
-        // Run conviction assessment and post-session tasks (only for core sessions with myth)
-        if (sessionType === 'core' && conversationMythKey) {
+        // Run conviction assessment and post-session tasks (only for core sessions with illusion)
+        if (sessionType === 'core' && conversationIllusionKey) {
           // Wait for moment detection to complete first
           if (momentDetectionPromise) {
             await momentDetectionPromise
@@ -451,8 +451,8 @@ export default defineEventHandler(async (event) => {
           handleSessionComplete({
             userId: user.sub,
             conversationId: convId,
-            mythKey: conversationMythKey as MythKey,
-            mythLayer,
+            illusionKey: conversationIllusionKey as IllusionKey,
+            illusionLayer,
             messages: processedMessages,
             supabase,
           }).catch(err => {

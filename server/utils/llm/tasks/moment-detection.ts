@@ -11,7 +11,7 @@ import type {
   MomentType,
   EmotionalValence,
 } from '../task-types'
-import { MYTH_DATA, type MythKey } from '../task-types'
+import { ILLUSION_DATA, type IllusionKey } from '../task-types'
 
 // Minimum word count to trigger moment detection
 const MIN_WORD_COUNT = 20
@@ -35,8 +35,8 @@ export function shouldAttemptDetection(message: string): boolean {
  * Build the moment detection prompt
  */
 function buildDetectionPrompt(input: MomentDetectionInput): string {
-  const mythData = MYTH_DATA[input.currentMythKey as MythKey]
-  const mythDisplayName = mythData?.displayName || input.currentMythKey
+  const illusionData = ILLUSION_DATA[input.currentIllusionKey as IllusionKey]
+  const illusionDisplayName = illusionData?.displayName || input.currentIllusionKey
 
   const recentHistoryText = input.recentHistory
     .slice(-6) // Last 4-6 messages
@@ -50,7 +50,7 @@ USER MESSAGE: "${input.userMessage}"
 RECENT CONTEXT:
 ${recentHistoryText}
 
-CURRENT MYTH BEING DISCUSSED: ${input.currentMythKey} (${mythDisplayName})
+CURRENT ILLUSION BEING DISCUSSED: ${input.currentIllusionKey} (${illusionDisplayName})
 
 Identify if this message contains any of these moment types:
 - ORIGIN_STORY: How they started, context of addiction beginning

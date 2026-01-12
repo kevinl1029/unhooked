@@ -1,7 +1,7 @@
-// Myth 3: "Quitting Requires Willpower and Is Hard"
+// Illusion 3: "Quitting Requires Willpower and Is Hard"
 
-export const MYTH_3_WILLPOWER_PROMPT = `
-## This Session's Focus: The Willpower Myth
+export const ILLUSION_3_WILLPOWER_PROMPT = `
+## This Session's Focus: The Willpower Illusion
 
 **The Belief They Hold:**
 "Quitting is incredibly hard. It requires massive willpower and determination. I'm afraid I won't be strong enough."
@@ -17,7 +17,7 @@ Quitting is only hard if you believe you're giving something up. Once you see th
 - "What if the challenge isn't resisting nicotine, but letting go of the belief that you need it?"
 
 **The Reframe Moment:**
-Help them see that willpower is only needed when you want something but deny yourself. If you genuinely don't want it, there's no internal fight. The goal isn't to white-knuckle through cravings—it's to stop wanting it in the first place. Once they see through the myths (stress relief, pleasure, etc.), the desire evaporates.
+Help them see that willpower is only needed when you want something but deny yourself. If you genuinely don't want it, there's no internal fight. The goal isn't to white-knuckle through cravings—it's to stop wanting it in the first place. Once they see through the illusions (stress relief, pleasure, etc.), the desire evaporates.
 
 **Watch For:**
 - Fear of failure from past attempts - validate that those were hard because they still believed nicotine helped

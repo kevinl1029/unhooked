@@ -5,9 +5,9 @@ const mockProgress: Progress = {
   id: 'test-id',
   user_id: 'user-123',
   program_status: 'in_progress',
-  current_myth: 1,
-  myth_order: [1, 2, 3, 4, 5],
-  myths_completed: [1],
+  current_illusion: 1,
+  illusion_order: [1, 2, 3, 4, 5],
+  illusions_completed: [1],
   total_sessions: 3,
   last_reminded_at: null,
   started_at: '2024-01-01T00:00:00Z',
@@ -22,48 +22,48 @@ describe('useProgress', () => {
     vi.clearAllMocks()
   })
 
-  describe('getNextMyth', () => {
+  describe('getNextIllusion', () => {
     it('returns null when progress is not loaded', () => {
-      const { getNextMyth } = useProgress()
-      expect(getNextMyth()).toBeNull()
+      const { getNextIllusion } = useProgress()
+      expect(getNextIllusion()).toBeNull()
     })
 
-    it('returns the first uncompleted myth from myth_order', () => {
-      const { progress, getNextMyth } = useProgress()
+    it('returns the first uncompleted illusion from illusion_order', () => {
+      const { progress, getNextIllusion } = useProgress()
       progress.value = mockProgress
 
-      expect(getNextMyth()).toBe(2)
+      expect(getNextIllusion()).toBe(2)
     })
 
-    it('returns null when all myths are completed', () => {
-      const { progress, getNextMyth } = useProgress()
+    it('returns null when all illusions are completed', () => {
+      const { progress, getNextIllusion } = useProgress()
       progress.value = {
         ...mockProgress,
-        myths_completed: [1, 2, 3, 4, 5],
+        illusions_completed: [1, 2, 3, 4, 5],
       }
 
-      expect(getNextMyth()).toBeNull()
+      expect(getNextIllusion()).toBeNull()
     })
   })
 
-  describe('isMythCompleted', () => {
+  describe('isIllusionCompleted', () => {
     it('returns false when progress is not loaded', () => {
-      const { isMythCompleted } = useProgress()
-      expect(isMythCompleted(1)).toBe(false)
+      const { isIllusionCompleted } = useProgress()
+      expect(isIllusionCompleted(1)).toBe(false)
     })
 
-    it('returns true for completed myths', () => {
-      const { progress, isMythCompleted } = useProgress()
+    it('returns true for completed illusions', () => {
+      const { progress, isIllusionCompleted } = useProgress()
       progress.value = mockProgress
 
-      expect(isMythCompleted(1)).toBe(true)
+      expect(isIllusionCompleted(1)).toBe(true)
     })
 
-    it('returns false for uncompleted myths', () => {
-      const { progress, isMythCompleted } = useProgress()
+    it('returns false for uncompleted illusions', () => {
+      const { progress, isIllusionCompleted } = useProgress()
       progress.value = mockProgress
 
-      expect(isMythCompleted(2)).toBe(false)
+      expect(isIllusionCompleted(2)).toBe(false)
     })
   })
 

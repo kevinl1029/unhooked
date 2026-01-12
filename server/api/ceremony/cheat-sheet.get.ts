@@ -1,10 +1,10 @@
 /**
  * Cheat Sheet Endpoint
- * Generates or retrieves the myths cheat sheet artifact
+ * Generates or retrieves the illusions cheat sheet artifact
  */
 
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { generateCheatSheet, saveCheatSheetArtifact } from '../../utils/ceremony/cheat-sheet-generator'
+import { generateIllusionsCheatSheet, saveCheatSheetArtifact } from '../../utils/ceremony/cheat-sheet-generator'
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     .from('ceremony_artifacts')
     .select('id, content_json, ceremony_completed_at, created_at')
     .eq('user_id', user.sub)
-    .eq('artifact_type', 'myths_cheat_sheet')
+    .eq('artifact_type', 'illusions_cheat_sheet')
     .single()
 
   // If exists and ceremony completed, return cached version
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Generate fresh cheat sheet
-  const cheatSheet = await generateCheatSheet(supabase, user.sub)
+  const cheatSheet = await generateIllusionsCheatSheet(supabase, user.sub)
 
   // Check if ceremony is completed
   const { data: userStory } = await supabase

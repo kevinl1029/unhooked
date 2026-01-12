@@ -12,8 +12,8 @@ interface PriorMoment {
 
 interface ResumeResponse {
   should_restart: boolean
-  myth_key?: string
-  myth_layer?: string
+  illusion_key?: string
+  illusion_layer?: string
   prior_moments?: PriorMoment[]
   abandoned_conversation_id?: string
 }
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event): Promise<ResumeResponse> => {
 
   const { data: incomplete } = await supabase
     .from('conversations')
-    .select('id, myth_key, myth_layer, created_at')
+    .select('id, illusion_key, illusion_layer, created_at')
     .eq('user_id', user.sub)
     .eq('session_type', 'core')
     .is('completed_at', null)
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event): Promise<ResumeResponse> => {
     .limit(1)
     .single()
 
-  if (incomplete && incomplete.myth_key) {
+  if (incomplete && incomplete.illusion_key) {
     // Get any moments captured before abandonment
     const { data: capturedMoments } = await supabase
       .from('captured_moments')
@@ -63,8 +63,8 @@ export default defineEventHandler(async (event): Promise<ResumeResponse> => {
     // Return context for new session (don't resume old conversation)
     return {
       should_restart: true,
-      myth_key: incomplete.myth_key,
-      myth_layer: incomplete.myth_layer || 'intellectual',
+      illusion_key: incomplete.illusion_key,
+      illusion_layer: incomplete.illusion_layer || 'intellectual',
       prior_moments: capturedMoments || [],
       abandoned_conversation_id: incomplete.id,
     }

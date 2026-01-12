@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const mythKey = query.myth_key as string | undefined
+  const illusionKey = query.illusion_key as string | undefined
   const momentType = query.moment_type as string | undefined
   const limit = parseInt(query.limit as string) || 50
   const offset = parseInt(query.offset as string) || 0
@@ -25,8 +25,8 @@ export default defineEventHandler(async (event) => {
     .order('created_at', { ascending: false })
 
   // Apply optional filters
-  if (mythKey) {
-    queryBuilder = queryBuilder.eq('myth_key', mythKey)
+  if (illusionKey) {
+    queryBuilder = queryBuilder.eq('illusion_key', illusionKey)
   }
   if (momentType) {
     queryBuilder = queryBuilder.eq('moment_type', momentType)

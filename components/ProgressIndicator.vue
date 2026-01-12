@@ -2,18 +2,18 @@
   <div class="flex flex-col items-center">
     <!-- Progress circles -->
     <div class="flex items-center justify-center gap-1.5 md:gap-3 mb-3">
-      <template v-for="(myth, index) in mythOrder" :key="myth">
-        <!-- Myth circle -->
+      <template v-for="(illusion, index) in illusionOrder" :key="illusion">
+        <!-- Illusion circle -->
         <div class="flex flex-col items-center gap-1.5">
           <NuxtLink
-            v-if="isMythClickable(myth)"
-            :to="getMythLink(myth)"
+            v-if="isIllusionClickable(illusion)"
+            :to="getIllusionLink(illusion)"
             class="block w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300 hover:scale-110"
-            :class="getMythClasses(myth)"
+            :class="getIllusionClasses(illusion)"
           >
             <!-- Checkmark for completed -->
             <svg
-              v-if="isMythCompleted(myth)"
+              v-if="isIllusionCompleted(illusion)"
               class="w-5 h-5 md:w-6 md:h-6 text-white"
               fill="none"
               viewBox="0 0 24 24"
@@ -22,7 +22,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
             </svg>
             <!-- Dot for current -->
-            <div v-else-if="isCurrent(myth)" class="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
+            <div v-else-if="isCurrent(illusion)" class="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
             <!-- Lock icon for future -->
             <svg
               v-else
@@ -37,7 +37,7 @@
           <div
             v-else
             class="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300"
-            :class="getMythClasses(myth)"
+            :class="getIllusionClasses(illusion)"
           >
             <!-- Lock icon for future non-clickable -->
             <svg
@@ -50,17 +50,17 @@
             </svg>
           </div>
 
-          <!-- Myth name below circle -->
-          <span class="text-[0.625rem] md:text-sm text-center transition-all duration-300 max-w-[50px] md:max-w-none leading-tight" :class="getMythTextClasses(myth)">
-            {{ getAbbreviatedMythName(myth) }}
+          <!-- Illusion name below circle -->
+          <span class="text-[0.625rem] md:text-sm text-center transition-all duration-300 max-w-[50px] md:max-w-none leading-tight" :class="getIllusionTextClasses(illusion)">
+            {{ getAbbreviatedIllusionName(illusion) }}
           </span>
         </div>
 
         <!-- Connecting line -->
         <div
-          v-if="index < mythOrder.length - 1"
+          v-if="index < illusionOrder.length - 1"
           class="h-0.5 w-4 md:w-6 transition-colors duration-300 mb-6"
-          :class="isMythCompleted(myth) ? 'bg-brand-accent' : 'bg-brand-border'"
+          :class="isIllusionCompleted(illusion) ? 'bg-brand-accent' : 'bg-brand-border'"
         />
       </template>
     </div>
@@ -68,51 +68,51 @@
 </template>
 
 <script setup lang="ts">
-import { MYTH_NAMES } from '~/server/utils/prompts'
+import { ILLUSION_NAMES } from '~/server/utils/prompts'
 
 const props = defineProps<{
-  mythOrder: number[]
-  mythsCompleted: number[]
-  currentMyth: number
+  illusionOrder: number[]
+  illusionsCompleted: number[]
+  currentIllusion: number
 }>()
 
-const isMythCompleted = (mythNumber: number): boolean => {
-  return props.mythsCompleted.includes(mythNumber)
+const isIllusionCompleted = (illusionNumber: number): boolean => {
+  return props.illusionsCompleted.includes(illusionNumber)
 }
 
-const isCurrent = (mythNumber: number): boolean => {
-  return mythNumber === props.currentMyth
+const isCurrent = (illusionNumber: number): boolean => {
+  return illusionNumber === props.currentIllusion
 }
 
-const isMythClickable = (mythNumber: number): boolean => {
-  // Completed myths are clickable (to view transcript)
-  // Current myth is clickable (to start/continue session)
-  return isMythCompleted(mythNumber) || isCurrent(mythNumber)
+const isIllusionClickable = (illusionNumber: number): boolean => {
+  // Completed illusions are clickable (to view transcript)
+  // Current illusion is clickable (to start/continue session)
+  return isIllusionCompleted(illusionNumber) || isCurrent(illusionNumber)
 }
 
-const getMythClasses = (mythNumber: number): string => {
-  if (isMythCompleted(mythNumber)) {
+const getIllusionClasses = (illusionNumber: number): string => {
+  if (isIllusionCompleted(illusionNumber)) {
     return 'bg-brand-accent border-brand-accent text-white'
-  } else if (isCurrent(mythNumber)) {
+  } else if (isCurrent(illusionNumber)) {
     return 'border-brand-accent bg-brand-accent/20 text-brand-accent'
   } else {
     return 'border-brand-border bg-brand-border/30 text-white-65'
   }
 }
 
-const getMythLink = (mythNumber: number): string => {
-  if (isMythCompleted(mythNumber)) {
-    return `/session/${mythNumber}?view=transcript`
+const getIllusionLink = (illusionNumber: number): string => {
+  if (isIllusionCompleted(illusionNumber)) {
+    return `/session/${illusionNumber}?view=transcript`
   } else {
-    return `/session/${mythNumber}`
+    return `/session/${illusionNumber}`
   }
 }
 
-const getMythName = (mythNumber: number): string => {
-  return MYTH_NAMES[mythNumber] || `Myth ${mythNumber}`
+const getIllusionName = (illusionNumber: number): string => {
+  return ILLUSION_NAMES[illusionNumber] || `Illusion ${illusionNumber}`
 }
 
-const getAbbreviatedMythName = (mythNumber: number): string => {
+const getAbbreviatedIllusionName = (illusionNumber: number): string => {
   const abbreviations: Record<number, string> = {
     1: 'Stress',
     2: 'Pleasure',
@@ -120,13 +120,13 @@ const getAbbreviatedMythName = (mythNumber: number): string => {
     4: 'Focus',
     5: 'Identity',
   }
-  return abbreviations[mythNumber] || `Myth ${mythNumber}`
+  return abbreviations[illusionNumber] || `Illusion ${illusionNumber}`
 }
 
-const getMythTextClasses = (mythNumber: number): string => {
-  if (isMythCompleted(mythNumber)) {
+const getIllusionTextClasses = (illusionNumber: number): string => {
+  if (isIllusionCompleted(illusionNumber)) {
     return 'text-white-85 font-medium'
-  } else if (isCurrent(mythNumber)) {
+  } else if (isCurrent(illusionNumber)) {
     return 'text-brand-accent font-semibold'
   } else {
     return 'text-white-65 font-normal'

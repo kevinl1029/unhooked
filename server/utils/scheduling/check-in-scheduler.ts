@@ -4,7 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { MythKey, CheckInType } from '../llm/task-types'
+import type { IllusionKey, CheckInType } from '../llm/task-types'
 import { personalizeCheckIn } from '../llm/tasks/checkin-personalization'
 import crypto from 'crypto'
 
@@ -20,7 +20,7 @@ interface ScheduleConfig {
   timezone: string
   trigger: 'session_complete' | 'program_start' | 'daily_refresh'
   sessionId?: string
-  mythKey?: string
+  illusionKey?: string
   sessionEndTime?: Date
   supabase: SupabaseClient
 }
@@ -157,7 +157,7 @@ async function createCheckIn(
   type: CheckInType,
   scheduledFor: Date,
   timezone: string,
-  triggerMythKey?: string,
+  triggerIllusionKey?: string,
   triggerSessionId?: string,
   promptTemplate?: string
 ): Promise<ScheduledCheckIn | null> {
@@ -170,7 +170,7 @@ async function createCheckIn(
       scheduled_for: scheduledFor.toISOString(),
       timezone,
       check_in_type: type,
-      trigger_myth_key: triggerMythKey || null,
+      trigger_illusion_key: triggerIllusionKey || null,
       trigger_session_id: triggerSessionId || null,
       prompt_template: promptTemplate || getDefaultPromptTemplate(type),
       magic_link_token: magicLinkToken,
@@ -212,7 +212,7 @@ function getDefaultPromptTemplate(type: CheckInType): string {
  * Uses rolling 3-day window until ceremony is complete
  */
 export async function scheduleCheckIns(config: ScheduleConfig): Promise<ScheduledCheckIn[]> {
-  const { userId, timezone, trigger, sessionId, mythKey, sessionEndTime, supabase } = config
+  const { userId, timezone, trigger, sessionId, illusionKey, sessionEndTime, supabase } = config
   const scheduled: ScheduledCheckIn[] = []
   const now = new Date()
 
@@ -245,7 +245,7 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
           'post_session',
           twoHoursLater,
           timezone,
-          mythKey,
+          illusionKey,
           sessionId
         )
         if (checkIn) {

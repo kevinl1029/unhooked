@@ -33,7 +33,7 @@ describe('Session Resume', () => {
     it('should ignore completed sessions', () => {
       const session = {
         id: 'conv-1',
-        myth_key: 'stress_relief',
+        illusion_key: 'stress_relief',
         completed_at: new Date().toISOString(),
       }
 
@@ -67,7 +67,7 @@ describe('Session Resume', () => {
 
       const response = {
         should_restart: true,
-        myth_key: 'stress_relief',
+        illusion_key: 'stress_relief',
         prior_moments: capturedMoments,
       }
 
@@ -83,14 +83,14 @@ describe('Session Resume', () => {
       const response = hasAbandonedSession
         ? {
             should_restart: true,
-            myth_key: 'stress_relief',
-            myth_layer: 'intellectual',
+            illusion_key: 'stress_relief',
+            illusion_layer: 'intellectual',
             prior_moments: [],
           }
         : { should_restart: false }
 
       expect(response.should_restart).toBe(true)
-      expect(response).toHaveProperty('myth_key')
+      expect(response).toHaveProperty('illusion_key')
     })
 
     it('should return should_restart false when no abandoned session', () => {
@@ -99,21 +99,21 @@ describe('Session Resume', () => {
       const response = hasAbandonedSession
         ? {
             should_restart: true,
-            myth_key: 'stress_relief',
-            myth_layer: 'intellectual',
+            illusion_key: 'stress_relief',
+            illusion_layer: 'intellectual',
             prior_moments: [],
           }
         : { should_restart: false }
 
       expect(response.should_restart).toBe(false)
-      expect(response).not.toHaveProperty('myth_key')
+      expect(response).not.toHaveProperty('illusion_key')
     })
 
     it('should include abandoned conversation id for tracking', () => {
       const response = {
         should_restart: true,
-        myth_key: 'stress_relief',
-        myth_layer: 'intellectual',
+        illusion_key: 'stress_relief',
+        illusion_layer: 'intellectual',
         prior_moments: [],
         abandoned_conversation_id: 'conv-123',
       }

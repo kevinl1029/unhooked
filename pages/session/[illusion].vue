@@ -10,7 +10,7 @@
         </svg>
         Exit
       </NuxtLink>
-      <h1 class="text-2xl md:text-3xl font-bold text-white text-right">{{ mythName }}</h1>
+      <h1 class="text-2xl md:text-3xl font-bold text-white text-right">{{ illusionName }}</h1>
     </div>
 
     <div class="flex-1 flex flex-col space-y-6 min-h-0">
@@ -18,7 +18,7 @@
         <!-- Voice Session View (default) -->
         <VoiceSessionView
           v-if="!isTranscriptView && !useTextMode"
-          :myth-number="mythNumber"
+          :illusion-number="illusionNumber"
           :read-only="sessionComplete"
           :existing-conversation-id="existingConversationId"
           :existing-messages="existingMessages"
@@ -41,7 +41,7 @@
       <SessionCompleteCard
         v-if="sessionComplete"
         class="flex-shrink-0"
-        :next-myth="nextMyth"
+        :next-illusion="nextIllusion"
         @continue="handleContinue"
         @dashboard="handleDashboard"
         @finish="handleFinish"
@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
-import { MYTH_NAMES, getMythOpening } from '~/server/utils/prompts'
+import { ILLUSION_NAMES, getIllusionOpening } from '~/server/utils/prompts'
 
 type ClientMessage = Message
 
@@ -65,8 +65,8 @@ const route = useRoute()
 const router = useRouter()
 const { completeSession, fetchProgress } = useProgress()
 
-const mythNumber = computed(() => parseInt(route.params.myth as string))
-const mythName = computed(() => MYTH_NAMES[mythNumber.value] || 'Unknown Myth')
+const illusionNumber = computed(() => parseInt(route.params.illusion as string))
+const illusionName = computed(() => ILLUSION_NAMES[illusionNumber.value] || 'Unknown Illusion')
 const isTranscriptView = computed(() => route.query.view === 'transcript')
 const useTextMode = computed(() => route.query.mode === 'text')
 
@@ -75,7 +75,7 @@ const conversationId = ref<string | null>(null)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const sessionComplete = ref(false)
-const nextMyth = ref<number | null>(null)
+const nextIllusion = ref<number | null>(null)
 
 // For voice session view
 const existingConversationId = ref<string | null>(null)
@@ -103,9 +103,9 @@ async function initializeSession() {
   try {
     isLoading.value = true
 
-    // Check if there's an existing incomplete conversation for this myth
+    // Check if there's an existing incomplete conversation for this illusion
     const { data: existingConversations } = await useFetch('/api/conversations', {
-      query: { mythNumber: mythNumber.value }
+      query: { illusionNumber: illusionNumber.value }
     })
 
     if (existingConversations.value && existingConversations.value.length > 0) {
@@ -152,7 +152,7 @@ async function sendOpeningMessage() {
       },
       body: JSON.stringify({
         messages: [], // Empty array - no user message to start
-        mythNumber: mythNumber.value,
+        illusionNumber: illusionNumber.value,
         stream: true
       })
     })
@@ -221,7 +221,7 @@ async function loadTranscript() {
     isLoading.value = true
 
     const { data: conversations } = await useFetch('/api/conversations', {
-      query: { mythNumber: mythNumber.value }
+      query: { illusionNumber: illusionNumber.value }
     })
 
     if (conversations.value && conversations.value.length > 0) {
@@ -267,7 +267,7 @@ async function handleSend(message: string) {
       body: JSON.stringify({
         messages: messages.value,
         conversationId: conversationId.value,
-        mythNumber: mythNumber.value,
+        illusionNumber: illusionNumber.value,
         stream: true
       })
     })
@@ -347,8 +347,8 @@ async function handleSessionComplete() {
   if (!conversationId.value) return
 
   try {
-    const result = await completeSession(conversationId.value, mythNumber.value)
-    nextMyth.value = result.nextMyth
+    const result = await completeSession(conversationId.value, illusionNumber.value)
+    nextIllusion.value = result.nextIllusion ?? result.nextMyth ?? null
     sessionComplete.value = true
     await fetchProgress()
   } catch (err) {
@@ -357,8 +357,8 @@ async function handleSessionComplete() {
 }
 
 // Voice session handlers
-async function handleVoiceSessionComplete(nextMythNum: number | null) {
-  nextMyth.value = nextMythNum
+async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
+  nextIllusion.value = nextIllusionNum
   sessionComplete.value = true
   await fetchProgress()
 }
@@ -367,15 +367,15 @@ function handleError(message: string) {
   error.value = message
 }
 
-async function handleContinue(nextMythNumber: number) {
+async function handleContinue(nextIllusionNumber: number) {
   // Reset state
   messages.value = []
   conversationId.value = null
   sessionComplete.value = false
-  nextMyth.value = null
+  nextIllusion.value = null
 
   // Navigate to next session
-  await router.push(`/session/${nextMythNumber}`)
+  await router.push(`/session/${nextIllusionNumber}`)
 
   // Initialize the new session
   await initializeSession()

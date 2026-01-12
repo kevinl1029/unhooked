@@ -1,17 +1,17 @@
-// Prompt builder utilities for myth-focused sessions
+// Prompt builder utilities for illusion-focused sessions
 import { BASE_SYSTEM_PROMPT, buildPersonalizationContext as buildPersonalization } from './base-system'
 import type { UserContext } from './base-system'
-import { MYTH_1_STRESS_PROMPT } from './myths/myth-1-stress'
-import { MYTH_2_PLEASURE_PROMPT } from './myths/myth-2-pleasure'
-import { MYTH_3_WILLPOWER_PROMPT } from './myths/myth-3-willpower'
-import { MYTH_4_FOCUS_PROMPT } from './myths/myth-4-focus'
-import { MYTH_5_IDENTITY_PROMPT } from './myths/myth-5-identity'
+import { ILLUSION_1_STRESS_PROMPT } from './illusions/illusion-1-stress'
+import { ILLUSION_2_PLEASURE_PROMPT } from './illusions/illusion-2-pleasure'
+import { ILLUSION_3_WILLPOWER_PROMPT } from './illusions/illusion-3-willpower'
+import { ILLUSION_4_FOCUS_PROMPT } from './illusions/illusion-4-focus'
+import { ILLUSION_5_IDENTITY_PROMPT } from './illusions/illusion-5-identity'
 
 export type { UserContext }
 
 // Extended options for buildSystemPrompt
 export interface BuildSystemPromptOptions {
-  mythNumber: number
+  illusionNumber: number
   userContext?: UserContext
   isNewConversation?: boolean
   // Phase 4C additions
@@ -20,20 +20,20 @@ export interface BuildSystemPromptOptions {
   abandonedSessionContext?: string // For abandoned session moments
 }
 
-export const MYTH_NAMES: Record<number, string> = {
-  1: 'The Stress Myth',
-  2: 'The Pleasure Myth',
-  3: 'The Willpower Myth',
-  4: 'The Focus Myth',
-  5: 'The Identity Myth',
+export const ILLUSION_NAMES: Record<number, string> = {
+  1: 'The Stress Illusion',
+  2: 'The Pleasure Illusion',
+  3: 'The Willpower Illusion',
+  4: 'The Focus Illusion',
+  5: 'The Identity Illusion',
 }
 
-const MYTH_PROMPTS: Record<number, string> = {
-  1: MYTH_1_STRESS_PROMPT,
-  2: MYTH_2_PLEASURE_PROMPT,
-  3: MYTH_3_WILLPOWER_PROMPT,
-  4: MYTH_4_FOCUS_PROMPT,
-  5: MYTH_5_IDENTITY_PROMPT,
+const ILLUSION_PROMPTS: Record<number, string> = {
+  1: ILLUSION_1_STRESS_PROMPT,
+  2: ILLUSION_2_PLEASURE_PROMPT,
+  3: ILLUSION_3_WILLPOWER_PROMPT,
+  4: ILLUSION_4_FOCUS_PROMPT,
+  5: ILLUSION_5_IDENTITY_PROMPT,
 }
 
 /**
@@ -41,23 +41,23 @@ const MYTH_PROMPTS: Record<number, string> = {
  * Supports both legacy signature and new options-based signature
  */
 export function buildSystemPrompt(
-  mythNumberOrOptions: number | BuildSystemPromptOptions,
+  illusionNumberOrOptions: number | BuildSystemPromptOptions,
   userContext?: UserContext,
   isNewConversation = false
 ): string {
   // Handle both old and new signatures
   let options: BuildSystemPromptOptions
 
-  if (typeof mythNumberOrOptions === 'number') {
-    // Legacy signature: buildSystemPrompt(mythNumber, userContext, isNewConversation)
+  if (typeof illusionNumberOrOptions === 'number') {
+    // Legacy signature: buildSystemPrompt(illusionNumber, userContext, isNewConversation)
     options = {
-      mythNumber: mythNumberOrOptions,
+      illusionNumber: illusionNumberOrOptions,
       userContext,
       isNewConversation,
     }
   } else {
     // New options-based signature
-    options = mythNumberOrOptions
+    options = illusionNumberOrOptions
   }
 
   let prompt = BASE_SYSTEM_PROMPT
@@ -72,10 +72,10 @@ export function buildSystemPrompt(
     prompt += options.personalizationContext
   }
 
-  // Add myth-specific prompt
-  const mythPrompt = MYTH_PROMPTS[options.mythNumber]
-  if (mythPrompt) {
-    prompt += '\n\n' + mythPrompt
+  // Add illusion-specific prompt
+  const illusionPrompt = ILLUSION_PROMPTS[options.illusionNumber]
+  if (illusionPrompt) {
+    prompt += '\n\n' + illusionPrompt
   }
 
   // Add bridge context for returning users (Phase 4C)
@@ -92,12 +92,12 @@ export function buildSystemPrompt(
 
   // Add opening instruction for new conversations
   if (options.isNewConversation && !options.bridgeContext && !options.abandonedSessionContext) {
-    const openingMessage = MYTH_OPENING_MESSAGES[options.mythNumber]
+    const openingMessage = ILLUSION_OPENING_MESSAGES[options.illusionNumber]
     if (openingMessage) {
       prompt += '\n\n## Starting This Session\n\n'
-      prompt += 'This is the beginning of this myth session. Start the conversation with this opening:\n\n'
+      prompt += 'This is the beginning of this illusion session. Start the conversation with this opening:\n\n'
       prompt += `"${openingMessage}"\n\n`
-      prompt += 'Use this as your first message to welcome them and begin exploring this myth.'
+      prompt += 'Use this as your first message to welcome them and begin exploring this illusion.'
     }
   }
 
@@ -108,9 +108,9 @@ export function buildPersonalizationContext(userContext: UserContext): string {
   return buildPersonalization(userContext)
 }
 
-// Opening messages for each myth session
+// Opening messages for each illusion session
 // These are shown immediately when user enters a session, creating the first exchange
-export const MYTH_OPENING_MESSAGES: Record<number, string> = {
+export const ILLUSION_OPENING_MESSAGES: Record<number, string> = {
   1: `Hey there. I want to explore something with you that might feel really true right now: the idea that nicotine helps with stress.
 
 Before we dive in, I'm curious—what made you want to start with this one? When you think about nicotine and stress, what comes to mind?`,
@@ -132,9 +132,9 @@ Does that resonate with you? When you're working, studying, or trying to get som
 Do any of those thoughts sound familiar? What do you believe about yourself when it comes to nicotine and quitting?`
 }
 
-// Get the opening greeting for a specific myth
-export function getMythOpening(mythNumber: number): string {
-  return MYTH_OPENING_MESSAGES[mythNumber] || `Let's explore ${MYTH_NAMES[mythNumber]} together. What brings you to this session?`
+// Get the opening greeting for a specific illusion
+export function getIllusionOpening(illusionNumber: number): string {
+  return ILLUSION_OPENING_MESSAGES[illusionNumber] || `Let's explore ${ILLUSION_NAMES[illusionNumber]} together. What brings you to this session?`
 }
 
 /**
@@ -168,3 +168,24 @@ Start by speaking the check-in prompt naturally, as if you're asking them direct
 
 Wait for their response before saying anything else.`
 }
+
+// ============================================
+// Backward-compatible aliases (deprecated)
+// ============================================
+
+/** @deprecated Use BuildSystemPromptOptions with illusionNumber instead */
+export interface LegacyBuildSystemPromptOptions {
+  mythNumber: number
+  userContext?: UserContext
+  isNewConversation?: boolean
+  personalizationContext?: string
+  bridgeContext?: string
+  abandonedSessionContext?: string
+}
+
+/** @deprecated Use ILLUSION_NAMES instead */
+export const MYTH_NAMES = ILLUSION_NAMES
+/** @deprecated Use ILLUSION_OPENING_MESSAGES instead */
+export const MYTH_OPENING_MESSAGES = ILLUSION_OPENING_MESSAGES
+/** @deprecated Use getIllusionOpening instead */
+export const getMythOpening = getIllusionOpening

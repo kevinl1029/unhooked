@@ -15,9 +15,9 @@ function createMockMoment(overrides: Partial<CapturedMoment> = {}): CapturedMome
     transcript: 'Test transcript',
     audioClipPath: null,
     audioDurationMs: null,
-    mythKey: 'stress_relief',
+    illusionKey: 'stress_relief',
     sessionType: 'core',
-    mythLayer: 'intellectual',
+    illusionLayer: 'intellectual',
     confidenceScore: 0.85,
     emotionalValence: 'positive',
     isUserHighlighted: false,
@@ -72,18 +72,18 @@ describe('Context Builder', () => {
       expect(limited.length).toBeLessThanOrEqual(MAX_MOMENTS)
     })
 
-    it('should filter by current myth', () => {
+    it('should filter by current illusion', () => {
       const moments = [
-        createMockMoment({ id: '1', mythKey: 'stress_relief' }),
-        createMockMoment({ id: '2', mythKey: 'pleasure_illusion' }),
-        createMockMoment({ id: '3', mythKey: 'stress_relief' }),
+        createMockMoment({ id: '1', illusionKey: 'stress_relief' }),
+        createMockMoment({ id: '2', illusionKey: 'pleasure_illusion' }),
+        createMockMoment({ id: '3', illusionKey: 'stress_relief' }),
       ]
 
-      const targetMyth = 'stress_relief'
-      const filtered = moments.filter(m => m.mythKey === targetMyth)
+      const targetIllusion = 'stress_relief'
+      const filtered = moments.filter(m => m.illusionKey === targetIllusion)
 
       expect(filtered.length).toBe(2)
-      expect(filtered.every(m => m.mythKey === 'stress_relief')).toBe(true)
+      expect(filtered.every(m => m.illusionKey === 'stress_relief')).toBe(true)
     })
   })
 
@@ -126,11 +126,11 @@ describe('Context Builder', () => {
       const userStory = {
         stress_relief_conviction: 7,
         pleasure_illusion_conviction: 5,
-        willpower_myth_conviction: 3,
+        willpower_illusion_conviction: 3,
       }
 
-      const mythKey = 'stress_relief'
-      const conviction = userStory[`${mythKey}_conviction` as keyof typeof userStory]
+      const illusionKey = 'stress_relief'
+      const conviction = userStory[`${illusionKey}_conviction` as keyof typeof userStory]
 
       expect(conviction).toBe(7)
     })
@@ -138,8 +138,8 @@ describe('Context Builder', () => {
     it('should handle missing conviction scores', () => {
       const userStory: Record<string, number> = {}
 
-      const mythKey = 'stress_relief'
-      const conviction = userStory[`${mythKey}_conviction`] ?? 0
+      const illusionKey = 'stress_relief'
+      const conviction = userStory[`${illusionKey}_conviction`] ?? 0
 
       expect(conviction).toBe(0)
     })

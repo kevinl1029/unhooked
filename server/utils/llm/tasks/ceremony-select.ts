@@ -36,7 +36,7 @@ function buildSelectionPrompt(input: CeremonySelectInput): string {
     id: m.id,
     type: m.momentType,
     transcript: m.transcript,
-    mythKey: m.mythKey,
+    illusionKey: m.illusionKey,
     confidence: m.confidenceScore,
     emotionalValence: m.emotionalValence,
   }))
@@ -54,7 +54,7 @@ SELECTION CRITERIA:
 2. Prioritize emotional impact and authenticity
 3. Select moments that show genuine breakthroughs
 4. Include at least one origin story if available
-5. Include diverse myth coverage if possible
+5. Include diverse illusion coverage if possible
 6. Prefer higher confidence scores when choosing between similar moments
 7. Target ${maxMoments} moments total (can be fewer if quality requires it)
 

@@ -3,16 +3,16 @@
  * Create a new captured moment
  */
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import type { MomentType, EmotionalValence, SessionType, MythLayer } from '~/server/utils/llm/task-types'
+import type { MomentType, EmotionalValence, SessionType, IllusionLayer } from '~/server/utils/llm/task-types'
 
 interface CreateMomentBody {
   conversation_id: string
   message_id?: string
   moment_type: MomentType
   transcript: string
-  myth_key?: string
+  illusion_key?: string
   session_type: SessionType
-  myth_layer?: MythLayer
+  illusion_layer?: IllusionLayer
   confidence_score?: number
   emotional_valence?: EmotionalValence
 }
@@ -62,9 +62,9 @@ export default defineEventHandler(async (event) => {
       message_id: body.message_id || null,
       moment_type: body.moment_type,
       transcript: body.transcript, // Stored verbatim, no cleanup
-      myth_key: body.myth_key || null,
+      illusion_key: body.illusion_key || null,
       session_type: body.session_type,
-      myth_layer: body.myth_layer || null,
+      illusion_layer: body.illusion_layer || null,
       confidence_score: body.confidence_score ?? 0.8,
       emotional_valence: body.emotional_valence || null,
       // Audio capture deferred for MVP

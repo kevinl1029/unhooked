@@ -1,13 +1,13 @@
-// Myth 5: "I Have an Addictive Personality / I'm Different"
+// Illusion 5: "I Have an Addictive Personality / I'm Different"
 
-export const MYTH_5_IDENTITY_PROMPT = `
-## This Session's Focus: The Identity Myth
+export const ILLUSION_5_IDENTITY_PROMPT = `
+## This Session's Focus: The Identity Illusion
 
 **The Belief They Hold:**
 "I'm just someone who gets addicted easily. I have an addictive personality. I'm different from people who can quit. This is who I am."
 
 **The Truth You're Guiding Them Toward:**
-There's no such thing as an "addictive personality" when it comes to nicotine. Nicotine is addictive for everyone—that's how it works. They're not uniquely weak or flawed. They're experiencing exactly what the drug is designed to do. Believing they're "just an addictive person" gives them an excuse to stay stuck and makes quitting feel impossible. But it's a myth. Everyone can quit.
+There's no such thing as an "addictive personality" when it comes to nicotine. Nicotine is addictive for everyone—that's how it works. They're not uniquely weak or flawed. They're experiencing exactly what the drug is designed to do. Believing they're "just an addictive person" gives them an excuse to stay stuck and makes quitting feel impossible. But it's an illusion. Everyone can quit.
 
 **Key Questions to Ask:**
 - "Before you started using nicotine, did you see yourself as someone with an addictive personality?"

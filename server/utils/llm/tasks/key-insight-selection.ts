@@ -1,6 +1,6 @@
 /**
  * Key Insight Selection Task
- * Selects the most impactful insight from multiple candidates for a myth
+ * Selects the most impactful insight from multiple candidates for an illusion
  */
 
 import { getTaskExecutor, parseJsonResponse } from '../task-executor'
@@ -9,14 +9,14 @@ import type {
   KeyInsightSelectionOutput,
   CapturedMoment,
 } from '../task-types'
-import { MYTH_DATA, type MythKey } from '../task-types'
+import { ILLUSION_DATA, type IllusionKey } from '../task-types'
 
 /**
  * Build the key insight selection prompt
  */
 function buildSelectionPrompt(input: KeyInsightSelectionInput): string {
-  const mythData = MYTH_DATA[input.mythKey as MythKey]
-  const mythDisplayName = mythData?.displayName || input.mythKey
+  const illusionData = ILLUSION_DATA[input.illusionKey as IllusionKey]
+  const illusionDisplayName = illusionData?.displayName || input.illusionKey
 
   // Format insights as numbered list
   const insightsText = input.insights
@@ -29,7 +29,7 @@ function buildSelectionPrompt(input: KeyInsightSelectionInput): string {
     })
     .join('\n\n')
 
-  return `You are selecting the most impactful insight from a user's nicotine cessation journey for "${mythDisplayName}".
+  return `You are selecting the most impactful insight from a user's nicotine cessation journey for "${illusionDisplayName}".
 
 SESSION CONTEXT:
 ${input.sessionContext}
@@ -75,7 +75,7 @@ function parseSelectionResponse(response: string): KeyInsightSelectionOutput {
 
 /**
  * Select the key insight from multiple candidates
- * Called at session end when multiple insights exist for the same myth
+ * Called at session end when multiple insights exist for the same illusion
  */
 export async function selectKeyInsight(input: KeyInsightSelectionInput): Promise<KeyInsightSelectionOutput> {
   // If only one insight, just return it

@@ -5,7 +5,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { MythKey, MythLayer, SessionType, MomentType } from '../llm/task-types'
+import type { IllusionKey, IllusionLayer, SessionType, MomentType } from '../llm/task-types'
 
 // Types for personalization context
 export interface UserContext {
@@ -81,26 +81,26 @@ async function getUserStory(
 }
 
 /**
- * Get moments by myth with 1 per type limit
+ * Get moments by illusion with 1 per type limit
  */
-async function getMomentsByMyth(
+async function getMomentsByIllusion(
   supabase: SupabaseClient,
   userId: string,
-  mythKey: string,
+  illusionKey: string,
   limit: number = 8
 ): Promise<Array<{
   id: string
   moment_type: MomentType
   transcript: string
-  myth_layer: MythLayer | null
+  illusion_layer: IllusionLayer | null
   confidence_score: number
   created_at: string
 }>> {
   const { data } = await supabase
     .from('captured_moments')
-    .select('id, moment_type, transcript, myth_layer, confidence_score, created_at')
+    .select('id, moment_type, transcript, illusion_layer, confidence_score, created_at')
     .eq('user_id', userId)
-    .eq('myth_key', mythKey)
+    .eq('illusion_key', illusionKey)
     .order('confidence_score', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit * 2) // Fetch more to select 1 per type
@@ -120,24 +120,24 @@ async function getMomentsByMyth(
 
 /**
  * Build session context for personalization
- * MVP uses simple selection: 5-8 moments total, 1 per type from current myth only
+ * MVP uses simple selection: 5-8 moments total, 1 per type from current illusion only
  */
 export async function buildSessionContext(
   supabase: SupabaseClient,
   userId: string,
-  mythKey: string,
+  illusionKey: string,
   sessionType: SessionType
 ): Promise<PersonalizationContext> {
   // Fetch all relevant data in parallel
-  const [intake, story, mythMoments] = await Promise.all([
+  const [intake, story, illusionMoments] = await Promise.all([
     getUserIntake(supabase, userId),
     getUserStory(supabase, userId),
-    getMomentsByMyth(supabase, userId, mythKey, 8),
+    getMomentsByIllusion(supabase, userId, illusionKey, 8),
   ])
 
   // Helper to get moments by type
   const getMomentsByType = (type: MomentType): string[] =>
-    mythMoments
+    illusionMoments
       .filter(m => m.moment_type === type)
       .slice(0, 1)
       .map(m => m.transcript)
@@ -157,9 +157,9 @@ export async function buildSessionContext(
     },
 
     beliefContext: {
-      currentConviction: (story?.[`${mythKey}_conviction`] as number) || 0,
+      currentConviction: (story?.[`${illusionKey}_conviction`] as number) || 0,
       previousInsights: getMomentsByType('insight'),
-      resistancePoints: (story?.[`${mythKey}_resistance_notes`] as string) || null,
+      resistancePoints: (story?.[`${illusionKey}_resistance_notes`] as string) || null,
     },
 
     momentContext: {

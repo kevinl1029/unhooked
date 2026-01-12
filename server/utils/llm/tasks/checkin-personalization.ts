@@ -10,14 +10,14 @@ import type {
   CapturedMoment,
   CheckInType,
 } from '../task-types'
-import { MYTH_DATA, type MythKey } from '../task-types'
+import { ILLUSION_DATA, type IllusionKey } from '../task-types'
 
 /**
  * Build the check-in personalization prompt
  */
 function buildPersonalizationPrompt(input: CheckInPersonalizationInput): string {
-  const currentMythData = MYTH_DATA[input.currentMythKey as MythKey]
-  const currentMythName = currentMythData?.displayName || input.currentMythKey
+  const currentIllusionData = ILLUSION_DATA[input.currentIllusionKey as IllusionKey]
+  const currentIllusionName = currentIllusionData?.displayName || input.currentIllusionKey
 
   // Format recent moments
   const momentsText = input.recentMoments.length > 0
@@ -27,21 +27,21 @@ function buildPersonalizationPrompt(input: CheckInPersonalizationInput): string 
         .join('\n')
     : 'No recent moments captured'
 
-  // Format completed myths
-  const completedMythsText = input.mythsCompleted.length > 0
-    ? input.mythsCompleted
-        .map(key => MYTH_DATA[key as MythKey]?.shortName || key)
+  // Format completed illusions
+  const completedIllusionsText = input.illusionsCompleted.length > 0
+    ? input.illusionsCompleted
+        .map(key => ILLUSION_DATA[key as IllusionKey]?.shortName || key)
         .join(', ')
     : 'None yet'
 
   // Get check-in type context
   const checkInContext = getCheckInTypeContext(input.checkInType)
 
-  // Trigger myth context (for post-session check-ins)
-  let triggerMythContext = ''
-  if (input.triggerMythKey) {
-    const triggerMythData = MYTH_DATA[input.triggerMythKey as MythKey]
-    triggerMythContext = `\nTHIS CHECK-IN FOLLOWS A SESSION ON: ${triggerMythData?.displayName || input.triggerMythKey}`
+  // Trigger illusion context (for post-session check-ins)
+  let triggerIllusionContext = ''
+  if (input.triggerIllusionKey) {
+    const triggerIllusionData = ILLUSION_DATA[input.triggerIllusionKey as IllusionKey]
+    triggerIllusionContext = `\nTHIS CHECK-IN FOLLOWS A SESSION ON: ${triggerIllusionData?.displayName || input.triggerIllusionKey}`
   }
 
   const userName = input.userFirstName ? input.userFirstName : 'the user'
@@ -50,11 +50,11 @@ function buildPersonalizationPrompt(input: CheckInPersonalizationInput): string 
 
 CHECK-IN TYPE: ${input.checkInType}
 ${checkInContext}
-${triggerMythContext}
+${triggerIllusionContext}
 
-CURRENT MYTH BEING WORKED ON: ${currentMythName}
+CURRENT ILLUSION BEING WORKED ON: ${currentIllusionName}
 
-MYTHS COMPLETED: ${completedMythsText}
+ILLUSIONS COMPLETED: ${completedIllusionsText}
 
 RECENT MOMENTS FROM THEIR JOURNEY:
 ${momentsText}
@@ -89,7 +89,7 @@ Goal: Set intention, notice any morning cravings, reflect on how they feel about
 Goal: Reflect on the day, notice any patterns, celebrate wins or process challenges.`
 
     case 'post_session':
-      return `CONTEXT: Post-session check-in (2 hours after completing a myth session).
+      return `CONTEXT: Post-session check-in (2 hours after completing an illusion session).
 Goal: Let insights settle, notice if they've thought about what was discussed, capture any new realizations.`
 
     default:

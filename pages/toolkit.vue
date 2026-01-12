@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * Toolkit Page (Myths Cheat Sheet)
- * In-app only view of the myths the user has seen through
+ * Toolkit Page (Illusions Cheat Sheet)
+ * In-app only view of the illusions the user has seen through
  */
 
 definePageMeta({
   middleware: 'auth',
 })
 
-interface MythEntry {
-  mythKey: string
+interface IllusionEntry {
+  illusionKey: string
   name: string
   myth: string
   truth: string
@@ -18,7 +18,7 @@ interface MythEntry {
 }
 
 interface CheatSheetData {
-  entries: MythEntry[]
+  entries: IllusionEntry[]
   generatedAt: string
 }
 
@@ -49,7 +49,7 @@ const isFinal = computed(() => data.value?.is_final)
         </NuxtLink>
 
         <h1 class="text-3xl font-bold text-white mb-2">Your Toolkit</h1>
-        <p class="text-white-65">The myths you've seen through</p>
+        <p class="text-white-65">The illusions you've seen through</p>
       </div>
 
       <!-- Loading state -->
@@ -71,10 +71,10 @@ const isFinal = computed(() => data.value?.is_final)
 
       <!-- Cheat sheet content -->
       <div v-else-if="cheatSheet" class="space-y-6">
-        <!-- Myth cards -->
+        <!-- Illusion cards -->
         <div
           v-for="entry in cheatSheet.entries"
-          :key="entry.mythKey"
+          :key="entry.illusionKey"
           class="glass rounded-card p-6 border border-brand-border"
         >
           <h2 class="text-xl font-semibold text-white mb-4">

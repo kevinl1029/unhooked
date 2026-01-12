@@ -1,7 +1,7 @@
 /**
  * GET /api/moments/for-context
  * Get moments optimized for prompt injection
- * Returns simple selection: 5-8 moments, 1 per type from current myth
+ * Returns simple selection: 5-8 moments, 1 per type from current illusion
  */
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import type { CapturedMoment } from '~/server/utils/llm/task-types'
@@ -13,21 +13,21 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const mythKey = query.myth_key as string | undefined
+  const illusionKey = query.illusion_key as string | undefined
   const sessionType = query.session_type as string | undefined
 
-  if (!mythKey) {
-    throw createError({ statusCode: 400, message: 'myth_key is required' })
+  if (!illusionKey) {
+    throw createError({ statusCode: 400, message: 'illusion_key is required' })
   }
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // Fetch moments for the current myth, ordered by recency
+  // Fetch moments for the current illusion, ordered by recency
   const { data: moments, error } = await supabase
     .from('captured_moments')
     .select('*')
     .eq('user_id', user.sub)
-    .eq('myth_key', mythKey)
+    .eq('illusion_key', illusionKey)
     .order('created_at', { ascending: false })
     .limit(50) // Fetch enough to select 1 per type
 
@@ -59,9 +59,9 @@ export default defineEventHandler(async (event) => {
         transcript: moment.transcript,
         audioClipPath: moment.audio_clip_path,
         audioDurationMs: moment.audio_duration_ms,
-        mythKey: moment.myth_key,
+        illusionKey: moment.illusion_key,
         sessionType: moment.session_type,
-        mythLayer: moment.myth_layer,
+        illusionLayer: moment.illusion_layer,
         confidenceScore: moment.confidence_score,
         emotionalValence: moment.emotional_valence,
         isUserHighlighted: moment.is_user_highlighted,

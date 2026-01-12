@@ -8,7 +8,7 @@ import { scheduleCheckIns } from '~/server/utils/scheduling/check-in-scheduler'
 interface ScheduleCheckInsBody {
   trigger: 'session_complete' | 'program_start' | 'daily_refresh'
   session_id?: string
-  myth_key?: string
+  illusion_key?: string
 }
 
 export default defineEventHandler(async (event) => {
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     timezone,
     trigger: body.trigger,
     sessionId: body.session_id,
-    mythKey: body.myth_key,
+    illusionKey: body.illusion_key,
     sessionEndTime: body.trigger === 'session_complete' ? new Date() : undefined,
     supabase,
   })

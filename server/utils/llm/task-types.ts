@@ -65,12 +65,12 @@ export type EmotionalValence = 'positive' | 'negative' | 'neutral' | 'mixed'
 
 export type SessionType = 'core' | 'check_in' | 'ceremony' | 'reinforcement'
 
-export type MythLayer = 'intellectual' | 'emotional' | 'identity'
+export type IllusionLayer = 'intellectual' | 'emotional' | 'identity'
 
 export interface MomentDetectionInput {
   userMessage: string
   recentHistory: Message[]
-  currentMythKey: string
+  currentIllusionKey: string
   sessionType: SessionType
 }
 
@@ -89,7 +89,7 @@ export interface MomentDetectionOutput {
 
 export interface ConvictionAssessmentInput {
   conversationTranscript: Message[]
-  mythKey: string
+  illusionKey: string
   previousConviction: number
   previousInsights: string[]
   existingTriggers: string[]
@@ -119,9 +119,9 @@ export interface CapturedMoment {
   transcript: string
   audioClipPath: string | null
   audioDurationMs: number | null
-  mythKey: string | null
+  illusionKey: string | null
   sessionType: SessionType | null
-  mythLayer: MythLayer | null
+  illusionLayer: IllusionLayer | null
   confidenceScore: number
   emotionalValence: EmotionalValence | null
   isUserHighlighted: boolean
@@ -133,7 +133,7 @@ export interface CapturedMoment {
 
 export interface KeyInsightSelectionInput {
   insights: CapturedMoment[]
-  mythKey: string
+  illusionKey: string
   sessionContext: string
 }
 
@@ -150,10 +150,10 @@ export type CheckInType = 'post_session' | 'morning' | 'evening'
 
 export interface CheckInPersonalizationInput {
   checkInType: CheckInType
-  triggerMythKey?: string
+  triggerIllusionKey?: string
   recentMoments: CapturedMoment[]
-  mythsCompleted: string[]
-  currentMythKey: string
+  illusionsCompleted: string[]
+  currentIllusionKey: string
   userFirstName?: string
 }
 
@@ -229,53 +229,53 @@ export interface CeremonyMomentSelectOutput {
 // Cheat Sheet Types
 // ============================================
 
-export interface MythCheatSheetEntry {
-  myth_key: string
-  myth_number: number
+export interface IllusionCheatSheetEntry {
+  illusion_key: string
+  illusion_number: number
   display_name: string
-  the_myth: string
+  the_illusion: string
   the_truth: string
   your_insight: string | null
   your_insight_audio_path: string | null
 }
 
-export interface MythsCheatSheet {
-  myths: MythCheatSheetEntry[]
+export interface IllusionsCheatSheet {
+  illusions: IllusionCheatSheetEntry[]
   generated_at: string
 }
 
 /**
- * Validates that data matches the MythsCheatSheet interface
+ * Validates that data matches the IllusionsCheatSheet interface
  */
-export function validateCheatSheet(data: unknown): data is MythsCheatSheet {
+export function validateCheatSheet(data: unknown): data is IllusionsCheatSheet {
   if (!data || typeof data !== 'object') return false
 
   const sheet = data as Record<string, unknown>
 
-  if (!Array.isArray(sheet.myths)) return false
+  if (!Array.isArray(sheet.illusions)) return false
   if (typeof sheet.generated_at !== 'string') return false
 
-  for (const myth of sheet.myths) {
-    if (typeof myth !== 'object' || myth === null) return false
-    const m = myth as Record<string, unknown>
+  for (const illusion of sheet.illusions) {
+    if (typeof illusion !== 'object' || illusion === null) return false
+    const i = illusion as Record<string, unknown>
 
-    if (typeof m.myth_key !== 'string') return false
-    if (typeof m.myth_number !== 'number') return false
-    if (typeof m.display_name !== 'string') return false
-    if (typeof m.the_myth !== 'string') return false
-    if (typeof m.the_truth !== 'string') return false
-    if (m.your_insight !== null && typeof m.your_insight !== 'string') return false
-    if (m.your_insight_audio_path !== null && typeof m.your_insight_audio_path !== 'string') return false
+    if (typeof i.illusion_key !== 'string') return false
+    if (typeof i.illusion_number !== 'number') return false
+    if (typeof i.display_name !== 'string') return false
+    if (typeof i.the_illusion !== 'string') return false
+    if (typeof i.the_truth !== 'string') return false
+    if (i.your_insight !== null && typeof i.your_insight !== 'string') return false
+    if (i.your_insight_audio_path !== null && typeof i.your_insight_audio_path !== 'string') return false
   }
 
   return true
 }
 
 // ============================================
-// Myth Reference Data
+// Illusion Reference Data
 // ============================================
 
-export const MYTH_KEYS = [
+export const ILLUSION_KEYS = [
   'stress_relief',
   'pleasure',
   'willpower',
@@ -283,28 +283,49 @@ export const MYTH_KEYS = [
   'identity',
 ] as const
 
-export type MythKey = typeof MYTH_KEYS[number]
+export type IllusionKey = typeof ILLUSION_KEYS[number]
 
-export const MYTH_DATA: Record<MythKey, { number: number; displayName: string; shortName: string }> = {
-  stress_relief: { number: 1, displayName: 'The Stress Relief Myth', shortName: 'Stress' },
-  pleasure: { number: 2, displayName: 'The Pleasure Myth', shortName: 'Pleasure' },
-  willpower: { number: 3, displayName: 'The Willpower Myth', shortName: 'Willpower' },
-  focus: { number: 4, displayName: 'The Focus Myth', shortName: 'Focus' },
-  identity: { number: 5, displayName: 'The Identity Myth', shortName: 'Identity' },
+export const ILLUSION_DATA: Record<IllusionKey, { number: number; displayName: string; shortName: string }> = {
+  stress_relief: { number: 1, displayName: 'The Stress Relief Illusion', shortName: 'Stress' },
+  pleasure: { number: 2, displayName: 'The Pleasure Illusion', shortName: 'Pleasure' },
+  willpower: { number: 3, displayName: 'The Willpower Illusion', shortName: 'Willpower' },
+  focus: { number: 4, displayName: 'The Focus Illusion', shortName: 'Focus' },
+  identity: { number: 5, displayName: 'The Identity Illusion', shortName: 'Identity' },
 }
 
 /**
- * Convert myth number to myth key
+ * Convert illusion number to illusion key
  */
-export function mythNumberToKey(mythNumber: number): MythKey | null {
-  const entry = Object.entries(MYTH_DATA).find(([_, data]) => data.number === mythNumber)
-  return entry ? (entry[0] as MythKey) : null
+export function illusionNumberToKey(illusionNumber: number): IllusionKey | null {
+  const entry = Object.entries(ILLUSION_DATA).find(([_, data]) => data.number === illusionNumber)
+  return entry ? (entry[0] as IllusionKey) : null
 }
 
 /**
- * Convert myth key to myth number
+ * Convert illusion key to illusion number
  */
-export function mythKeyToNumber(mythKey: string): number | null {
-  const data = MYTH_DATA[mythKey as MythKey]
+export function illusionKeyToNumber(illusionKey: string): number | null {
+  const data = ILLUSION_DATA[illusionKey as IllusionKey]
   return data ? data.number : null
 }
+
+// ============================================
+// Backward-compatible aliases (deprecated)
+// ============================================
+
+/** @deprecated Use IllusionLayer instead */
+export type MythLayer = IllusionLayer
+/** @deprecated Use IllusionKey instead */
+export type MythKey = IllusionKey
+/** @deprecated Use ILLUSION_KEYS instead */
+export const MYTH_KEYS = ILLUSION_KEYS
+/** @deprecated Use ILLUSION_DATA instead */
+export const MYTH_DATA = ILLUSION_DATA
+/** @deprecated Use illusionNumberToKey instead */
+export const mythNumberToKey = illusionNumberToKey
+/** @deprecated Use illusionKeyToNumber instead */
+export const mythKeyToNumber = illusionKeyToNumber
+/** @deprecated Use IllusionCheatSheetEntry instead */
+export type MythCheatSheetEntry = IllusionCheatSheetEntry
+/** @deprecated Use IllusionsCheatSheet instead */
+export type MythsCheatSheet = IllusionsCheatSheet

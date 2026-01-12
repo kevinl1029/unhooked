@@ -17,7 +17,7 @@ describe('User Status Detection', () => {
     it('should detect in_progress when program active', () => {
       const progress = {
         program_status: 'in_progress',
-        myths_completed: [1, 2],
+        illusions_completed: [1, 2],
       }
       const ceremonyCompletedAt = null
 
@@ -30,10 +30,10 @@ describe('User Status Detection', () => {
       expect(phase).toBe('in_progress')
     })
 
-    it('should detect ceremony_ready when all myths done', () => {
+    it('should detect ceremony_ready when all illusions done', () => {
       const progress = {
         program_status: 'completed',
-        myths_completed: [1, 2, 3, 4, 5],
+        illusions_completed: [1, 2, 3, 4, 5],
       }
       const ceremonyCompletedAt = null
 
@@ -49,7 +49,7 @@ describe('User Status Detection', () => {
     it('should detect post_ceremony after ceremony', () => {
       const progress = {
         program_status: 'completed',
-        myths_completed: [1, 2, 3, 4, 5],
+        illusions_completed: [1, 2, 3, 4, 5],
       }
       const ceremonyCompletedAt = '2026-01-09T15:00:00Z'
 
@@ -64,31 +64,31 @@ describe('User Status Detection', () => {
   })
 
   describe('Next session calculation', () => {
-    it('should find next myth in order', () => {
-      const mythOrder = [1, 3, 2, 5, 4]
-      const mythsCompleted = [1, 3]
+    it('should find next illusion in order', () => {
+      const illusionOrder = [1, 3, 2, 5, 4]
+      const illusionsCompleted = [1, 3]
 
-      const nextMyth = mythOrder.find(m => !mythsCompleted.includes(m))
+      const nextIllusion = illusionOrder.find(m => !illusionsCompleted.includes(m))
 
-      expect(nextMyth).toBe(2)
+      expect(nextIllusion).toBe(2)
     })
 
     it('should return null when all complete', () => {
-      const mythOrder = [1, 2, 3, 4, 5]
-      const mythsCompleted = [1, 2, 3, 4, 5]
+      const illusionOrder = [1, 2, 3, 4, 5]
+      const illusionsCompleted = [1, 2, 3, 4, 5]
 
-      const nextMyth = mythOrder.find(m => !mythsCompleted.includes(m)) || null
+      const nextIllusion = illusionOrder.find(m => !illusionsCompleted.includes(m)) || null
 
-      expect(nextMyth).toBeNull()
+      expect(nextIllusion).toBeNull()
     })
 
     it('should handle empty completion list', () => {
-      const mythOrder = [1, 2, 3, 4, 5]
-      const mythsCompleted: number[] = []
+      const illusionOrder = [1, 2, 3, 4, 5]
+      const illusionsCompleted: number[] = []
 
-      const nextMyth = mythOrder.find(m => !mythsCompleted.includes(m))
+      const nextIllusion = illusionOrder.find(m => !illusionsCompleted.includes(m))
 
-      expect(nextMyth).toBe(1)
+      expect(nextIllusion).toBe(1)
     })
   })
 
@@ -97,24 +97,24 @@ describe('User Status Detection', () => {
       const artifacts = {
         reflective_journey: { id: 'journey-1' },
         final_recording: { id: 'recording-1', audio_path: 'path/to/audio' },
-        myths_cheat_sheet: { id: 'sheet-1' },
+        illusions_cheat_sheet: { id: 'sheet-1' },
       }
 
       expect(!!artifacts.reflective_journey).toBe(true)
       expect(!!artifacts.final_recording).toBe(true)
-      expect(!!artifacts.myths_cheat_sheet).toBe(true)
+      expect(!!artifacts.illusions_cheat_sheet).toBe(true)
     })
 
     it('should handle missing artifacts', () => {
       const artifacts = {
         reflective_journey: null,
         final_recording: { id: 'recording-1' },
-        myths_cheat_sheet: null,
+        illusions_cheat_sheet: null,
       }
 
       expect(!!artifacts.reflective_journey).toBe(false)
       expect(!!artifacts.final_recording).toBe(true)
-      expect(!!artifacts.myths_cheat_sheet).toBe(false)
+      expect(!!artifacts.illusions_cheat_sheet).toBe(false)
     })
   })
 

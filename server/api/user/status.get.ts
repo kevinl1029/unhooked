@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
       artifacts = {
         reflective_journey: artifactsData.find(a => a.artifact_type === 'reflective_journey'),
         final_recording: artifactsData.find(a => a.artifact_type === 'final_recording'),
-        myths_cheat_sheet: artifactsData.find(a => a.artifact_type === 'myths_cheat_sheet'),
+        illusions_cheat_sheet: artifactsData.find(a => a.artifact_type === 'illusions_cheat_sheet'),
       }
     }
 
@@ -75,15 +75,15 @@ export default defineEventHandler(async (event) => {
   // For in-progress users, get next session info
   let nextSession = null
   if (phase === 'in_progress' && progress) {
-    const mythOrder = progress.myth_order || [1, 2, 3, 4, 5]
-    const mythsCompleted = progress.myths_completed || []
-    const nextMyth = mythOrder.find((m: number) => !mythsCompleted.includes(m))
+    const illusionOrder = progress.illusion_order || [1, 2, 3, 4, 5]
+    const illusionsCompleted = progress.illusions_completed || []
+    const nextIllusion = illusionOrder.find((m: number) => !illusionsCompleted.includes(m))
 
-    if (nextMyth) {
+    if (nextIllusion) {
       nextSession = {
-        mythNumber: nextMyth,
+        illusionNumber: nextIllusion,
         // In production, we'd track layer progress too
-        // For MVP, we just show the myth
+        // For MVP, we just show the illusion
       }
     }
   }
@@ -92,9 +92,9 @@ export default defineEventHandler(async (event) => {
     phase,
     progress: progress ? {
       program_status: progress.program_status,
-      current_myth: progress.current_myth,
-      myths_completed: progress.myths_completed || [],
-      myth_order: progress.myth_order || [1, 2, 3, 4, 5],
+      current_illusion: progress.current_illusion,
+      illusions_completed: progress.illusions_completed || [],
+      illusion_order: progress.illusion_order || [1, 2, 3, 4, 5],
       total_sessions: progress.total_sessions,
       started_at: progress.started_at,
     } : null,

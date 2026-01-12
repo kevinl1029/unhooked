@@ -176,13 +176,13 @@
           <h2 class="text-2xl font-bold text-white mb-6 text-center">Your Progress</h2>
           <div class="mb-6">
             <ProgressIndicator
-              :myth-order="status?.progress?.myth_order || [1, 2, 3, 4, 5]"
-              :myths-completed="status?.progress?.myths_completed || []"
-              :current-myth="5"
+              :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
+              :illusions-completed="status?.progress?.illusions_completed || []"
+              :current-illusion="5"
             />
           </div>
           <p class="text-center text-white-85">
-            <span class="font-semibold text-brand-accent">All myths explored</span>
+            <span class="font-semibold text-brand-accent">All illusions explored</span>
           </p>
         </div>
 
@@ -214,15 +214,15 @@
 
           <div class="mb-6">
             <ProgressIndicator
-              :myth-order="status?.progress?.myth_order || [1, 2, 3, 4, 5]"
-              :myths-completed="status?.progress?.myths_completed || []"
-              :current-myth="status?.progress?.current_myth || 1"
+              :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
+              :illusions-completed="status?.progress?.illusions_completed || []"
+              :current-illusion="status?.progress?.current_illusion || 1"
             />
           </div>
 
           <p class="text-center text-white-85">
-            <span class="font-semibold text-brand-accent">{{ mythsCompletedCount }}</span>
-            <span> of 5 myths explored</span>
+            <span class="font-semibold text-brand-accent">{{ illusionsCompletedCount }}</span>
+            <span> of 5 illusions explored</span>
           </p>
         </div>
 
@@ -238,10 +238,10 @@
           </div>
 
           <NuxtLink
-            :to="`/session/${status?.next_session?.mythNumber || status?.progress?.current_myth || 1}`"
+            :to="`/session/${status?.next_session?.illusionNumber || status?.progress?.current_illusion || 1}`"
             class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card inline-block"
           >
-            {{ mythsCompletedCount === 0 ? 'Start First Session' : 'Continue' }}
+            {{ illusionsCompletedCount === 0 ? 'Start First Session' : 'Continue' }}
           </NuxtLink>
         </div>
       </div>
@@ -269,7 +269,7 @@
           <ul class="space-y-3 text-white-85">
             <li class="flex items-start gap-3">
               <span class="text-brand-accent">1.</span>
-              <span>5 conversational sessions exploring the myths that keep people hooked</span>
+              <span>5 conversational sessions exploring the illusions that keep people hooked</span>
             </li>
             <li class="flex items-start gap-3">
               <span class="text-brand-accent">2.</span>
@@ -328,7 +328,7 @@
 </template>
 
 <script setup lang="ts">
-import { MYTH_NAMES } from '~/server/utils/prompts'
+import { ILLUSION_NAMES } from '~/server/utils/prompts'
 
 definePageMeta({
   middleware: 'auth'
@@ -349,7 +349,7 @@ const {
   hasFinalRecording,
   hasCheatSheet,
   nextFollowUp,
-  mythsCompletedCount,
+  illusionsCompletedCount,
   ceremonyDate,
 } = useUserStatus()
 
@@ -397,12 +397,12 @@ onMounted(async () => {
 
 // Computed
 const nextSessionTitle = computed(() => {
-  if (!status.value?.progress) return 'Session 1: The Stress Myth'
+  if (!status.value?.progress) return 'Session 1: The Stress Illusion'
 
-  const mythNumber = status.value.next_session?.mythNumber || status.value.progress.current_myth
-  const mythName = MYTH_NAMES[mythNumber] || `Myth ${mythNumber}`
+  const illusionNumber = status.value.next_session?.illusionNumber || status.value.progress.current_illusion
+  const illusionName = ILLUSION_NAMES[illusionNumber] || `Illusion ${illusionNumber}`
 
-  return `Continue: ${mythName}`
+  return `Continue: ${illusionName}`
 })
 
 const nextSessionDescription = computed(() => {
@@ -413,11 +413,11 @@ const nextSessionDescription = computed(() => {
     2: 'Learn why the "pleasure" is just an illusion masking withdrawal.',
     3: 'Understand why quitting has nothing to do with willpower.',
     4: 'See how nicotine disrupts focus rather than enhancing it.',
-    5: 'Break free from the myth that addiction defines who you are.',
+    5: 'Break free from the illusion that addiction defines who you are.',
   }
 
-  const mythNumber = status.value.next_session?.mythNumber || status.value.progress.current_myth
-  return descriptions[mythNumber] || 'Continue your journey.'
+  const illusionNumber = status.value.next_session?.illusionNumber || status.value.progress.current_illusion
+  return descriptions[illusionNumber] || 'Continue your journey.'
 })
 
 // Methods
