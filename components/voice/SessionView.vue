@@ -238,6 +238,9 @@ const emit = defineEmits<{
 // Progress tracking
 const { completeSession } = useProgress()
 
+// Wake lock to prevent screen dimming during session
+const { request: requestWakeLock, release: releaseWakeLock } = useWakeLock()
+
 // Voice chat composable
 const {
   messages,
@@ -336,6 +339,9 @@ const displayMessages = computed(() => {
 
 // Initialize on mount
 onMounted(async () => {
+  // Request wake lock to prevent screen dimming during session
+  await requestWakeLock()
+
   // Check if we have existing messages/conversation
   if (props.existingMessages.length > 0 && props.existingConversationId) {
     // Load existing conversation (transcript view or resume)
@@ -430,6 +436,8 @@ onUnmounted(() => {
   if (audioLevelFrame) {
     cancelAnimationFrame(audioLevelFrame)
   }
+  // Release wake lock when leaving the session
+  releaseWakeLock()
 })
 
 // Methods
