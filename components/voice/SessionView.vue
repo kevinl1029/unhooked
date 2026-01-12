@@ -130,6 +130,25 @@
           </div>
         </div>
 
+        <!-- Paused State -->
+        <div v-else-if="isPaused" class="text-center space-y-3">
+          <p class="text-white-65 text-sm">Paused</p>
+          <div class="flex justify-center gap-4">
+            <button
+              class="px-6 py-3 rounded-pill font-semibold bg-brand-glass text-white border border-brand-border"
+              @click="handleResumeAudio"
+            >
+              Resume
+            </button>
+            <button
+              class="px-6 py-3 rounded-pill font-semibold bg-brand-glass text-white-65 border border-brand-border"
+              @click="handleSkipAudio"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+
         <!-- Recording State -->
         <div v-else-if="isRecording" class="text-center space-y-3">
           <VoiceAudioWaveform
@@ -242,6 +261,8 @@ const {
   stopRecordingAndSend,
   loadConversation,
   pauseAudio,
+  resumeAudio,
+  isPaused,
   stopAudio,
   getAudioLevel,
   checkPermission,
@@ -285,7 +306,8 @@ const displayMessages = computed(() => {
   // Show streaming transcript while text is being streamed OR while streaming TTS audio plays
   // isTextStreaming: text tokens arriving from LLM
   // isStreamingMode: streaming TTS audio is playing
-  const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value) && currentTranscript.value
+  // isPaused: audio is paused but not finished
+  const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value || isPaused.value) && currentTranscript.value
 
   if (showStreamingTranscript) {
     // Always use currentTranscript for the message content (full text from LLM)
@@ -294,13 +316,16 @@ const displayMessages = computed(() => {
 
     // Check if last message is already the streaming assistant message
     const lastMsg = allMessages[allMessages.length - 1]
-    if (lastMsg?.role !== 'assistant' || !isAISpeaking.value) {
+    // Add streaming message only if last message isn't assistant
+    // When speaking or paused, update existing message instead of adding new one
+    const isActivePlayback = isAISpeaking.value || isPaused.value
+    if (lastMsg?.role !== 'assistant') {
       // Add streaming message
       allMessages.push({
         role: 'assistant',
         content: displayContent
       })
-    } else {
+    } else if (isActivePlayback) {
       // Update the last assistant message with current streaming content
       lastMsg.content = displayContent
     }
@@ -443,6 +468,10 @@ const handleStopRecording = async () => {
 
 const handlePauseAudio = () => {
   pauseAudio()
+}
+
+const handleResumeAudio = () => {
+  resumeAudio()
 }
 
 const handleSkipAudio = () => {

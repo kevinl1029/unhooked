@@ -19,6 +19,7 @@ interface TranscribeResponse {
 export const useVoiceSession = () => {
   // State
   const isAISpeaking = ref(false)
+  const isPaused = ref(false)
   const isRecording = ref(false)
   const isProcessing = ref(false)
   const isTranscribing = ref(false) // True specifically during speech-to-text transcription
@@ -58,9 +59,10 @@ export const useVoiceSession = () => {
     },
     onAudioComplete: () => {
       // Audio playback finished - update state
-      console.log('[onAudioComplete] Audio finished - setting isAISpeaking=false, streamingModeFlag=false')
+      console.log('[onAudioComplete] Audio finished - setting isAISpeaking=false, streamingModeFlag=false, isPaused=false')
       isAISpeaking.value = false
       streamingModeFlag.value = false
+      isPaused.value = false
     },
     onAudioStart: () => {
       // First audio chunk started playing - update state immediately
@@ -271,24 +273,47 @@ export const useVoiceSession = () => {
   }
 
   // Pause audio playback
-  const pauseAudio = () => {
-    if (audioElement && isAISpeaking.value) {
-      audioElement.pause()
-      isAISpeaking.value = false
-      stopWordTracking()
+  const pauseAudio = async () => {
+    if (!isAISpeaking.value) return
+
+    // Pause streaming TTS if active
+    if (streamingTTS.isPlaying.value) {
+      await streamingTTS.pause()
     }
+
+    // Pause batch mode audio if active
+    if (audioElement) {
+      audioElement.pause()
+    }
+
+    stopWordTracking()
+    isAISpeaking.value = false
+    isPaused.value = true
   }
 
   // Resume audio playback
-  const resumeAudio = () => {
-    if (audioElement && !isAISpeaking.value) {
-      audioElement.play().then(() => {
+  const resumeAudio = async () => {
+    if (!isPaused.value) return
+
+    // Resume streaming TTS if it was being used
+    if (streamingModeFlag.value) {
+      await streamingTTS.resume()
+      isAISpeaking.value = true
+      isPaused.value = false
+      return
+    }
+
+    // Resume batch mode audio
+    if (audioElement) {
+      try {
+        await audioElement.play()
         isAISpeaking.value = true
+        isPaused.value = false
         startWordTracking()
-      }).catch((e) => {
+      } catch (e) {
         console.error('[useVoiceSession] Resume failed:', e)
         error.value = 'Failed to resume audio'
-      })
+      }
     }
   }
 
@@ -309,6 +334,9 @@ export const useVoiceSession = () => {
       isAISpeaking.value = false
       streamingModeFlag.value = false
     }
+
+    // Always reset paused state when stopping
+    isPaused.value = false
   }
 
   // Start recording user's voice
@@ -449,6 +477,7 @@ export const useVoiceSession = () => {
   return {
     // State
     isAISpeaking: readonly(isAISpeaking),
+    isPaused: readonly(isPaused),
     isRecording: readonly(isRecording),
     isProcessing: readonly(isProcessing),
     isTranscribing: readonly(isTranscribing),

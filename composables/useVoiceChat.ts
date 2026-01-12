@@ -309,6 +309,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
 
     // Voice session state passthrough
     isAISpeaking: voiceSession.isAISpeaking,
+    isPaused: voiceSession.isPaused,
     isRecording: voiceSession.isRecording,
     isTranscribing: voiceSession.isTranscribing,
     isAudioReady: voiceSession.isAudioReady,
