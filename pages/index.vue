@@ -1,28 +1,146 @@
-<template>
-  <div class="max-w-2xl mx-auto text-center py-16 animate-fade-in-up">
-    <p class="eyebrow text-white mb-4">Break Free Forever</p>
-    <h1 class="text-hero-mobile md:text-hero font-bold text-white mb-6">
-      Unhooked
-    </h1>
-    <p class="text-xl text-white-85 mb-8 leading-relaxed">
-      Break free from nicotine — not through willpower, but by eliminating the desire.
-    </p>
-    <NuxtLink
-      to="/login"
-      class="btn-primary inline-block text-white px-8 py-3 rounded-pill font-semibold shadow-card"
-    >
-      Get Started
-    </NuxtLink>
-  </div>
-</template>
-
 <script setup lang="ts">
-const user = useSupabaseUser()
+import LandingHero from '~/components/landing/LandingHero.vue'
+import LandingMoment from '~/components/landing/LandingMoment.vue'
+import LandingReason from '~/components/landing/LandingReason.vue'
+import LandingHowItWorks from '~/components/landing/LandingHowItWorks.vue'
+import LandingWhoFor from '~/components/landing/LandingWhoFor.vue'
+import LandingFounder from '~/components/landing/LandingFounder.vue'
+import LandingPricing from '~/components/landing/LandingPricing.vue'
+import LandingFAQ from '~/components/landing/LandingFAQ.vue'
+import LandingFinalCTA from '~/components/landing/LandingFinalCTA.vue'
+import LandingFooter from '~/components/landing/LandingFooter.vue'
+import LandingStickyCTA from '~/components/landing/LandingStickyCTA.vue'
+import LandingDivider from '~/components/landing/LandingDivider.vue'
 
-// Redirect authenticated users to dashboard
-watch(user, (newUser) => {
-  if (newUser) {
-    navigateTo('/dashboard')
+// Page meta for SEO
+useHead({
+  title: 'Unhooked — Freedom from Nicotine',
+  meta: [
+    { name: 'description', content: 'Permanently remove your desire for nicotine — without willpower, substitutes, or lifelong resistance.' }
+  ]
+})
+
+// Use a blank layout for landing page (no app header)
+definePageMeta({
+  layout: false,
+})
+
+const showStickyCta = ref(false)
+
+// Handle CTA clicks (analytics can be added later, checkout in PR2)
+function handleCtaClick() {
+  // In PR2, this will trigger checkout
+  // For now, scroll to pricing section
+  const pricingSection = document.getElementById('pricing')
+  if (pricingSection) {
+    pricingSection.scrollIntoView({ behavior: 'smooth' })
   }
-}, { immediate: true })
+}
+
+// Scroll-triggered animations and sticky CTA visibility
+onMounted(() => {
+  // Fade-in animation observer
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible')
+      }
+    })
+  }, observerOptions)
+
+  document.querySelectorAll('.fade-in').forEach(el => {
+    observer.observe(el)
+  })
+
+  // Sequential stacked line animation
+  const stackedObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const lines = entry.target.querySelectorAll('.stacked-line')
+        lines.forEach((line, index) => {
+          setTimeout(() => {
+            line.classList.add('visible')
+          }, index * 350)
+        })
+        stackedObserver.unobserve(entry.target)
+      }
+    })
+  }, { threshold: 0.3 })
+
+  document.querySelectorAll('.stacked-lines').forEach(el => {
+    stackedObserver.observe(el)
+  })
+
+  // Smart sticky CTA behavior - hide when hero, pricing, or final CTA visible
+  const heroSection = document.querySelector('.hero')
+  const pricingSection = document.querySelector('.pricing-section')
+  const finalCtaSection = document.querySelector('.final-cta-section')
+
+  const ctaObserverOptions = {
+    threshold: 0.2,
+    rootMargin: '0px'
+  }
+
+  let heroVisible = false
+  let pricingVisible = false
+  let finalCtaVisible = false
+
+  const updateStickyCta = () => {
+    showStickyCta.value = !heroVisible && !pricingVisible && !finalCtaVisible
+  }
+
+  const ctaObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.target.classList.contains('hero')) {
+        heroVisible = entry.isIntersecting
+      }
+      if (entry.target.classList.contains('pricing-section')) {
+        pricingVisible = entry.isIntersecting
+      }
+      if (entry.target.classList.contains('final-cta-section')) {
+        finalCtaVisible = entry.isIntersecting
+      }
+    })
+    updateStickyCta()
+  }, ctaObserverOptions)
+
+  if (heroSection) ctaObserver.observe(heroSection)
+  if (pricingSection) ctaObserver.observe(pricingSection)
+  if (finalCtaSection) ctaObserver.observe(finalCtaSection)
+})
 </script>
+
+<template>
+  <main class="landing-page">
+    <LandingHero :on-cta-click="handleCtaClick" />
+
+    <LandingMoment />
+    <LandingDivider />
+
+    <LandingReason />
+    <LandingDivider />
+
+    <LandingHowItWorks />
+    <LandingDivider />
+
+    <LandingWhoFor />
+    <LandingDivider />
+
+    <LandingFounder />
+
+    <LandingPricing :on-cta-click="handleCtaClick" />
+
+    <LandingFAQ />
+
+    <LandingFinalCTA :on-cta-click="handleCtaClick" />
+
+    <LandingFooter />
+
+    <LandingStickyCTA :visible="showStickyCta" :on-cta-click="handleCtaClick" />
+  </main>
+</template>

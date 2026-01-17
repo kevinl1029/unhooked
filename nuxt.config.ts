@@ -22,7 +22,7 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: '/login',
       callback: '/auth/callback',
-      exclude: ['/', '/login', '/test-login'],
+      exclude: ['/', '/login', '/test-login', '/checkout/*'],
     }
   },
 

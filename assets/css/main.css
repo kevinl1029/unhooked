@@ -75,3 +75,801 @@ body {
 .animate-fade-in-up {
   animation: fadeInUp 0.5s ease-out forwards;
 }
+
+/* ==========================================================================
+   Landing Page Styles
+   ========================================================================== */
+
+/* CSS Custom Properties for Landing Page */
+:root {
+  --color-primary-start: #fc4a1a;
+  --color-primary-end: #f7b733;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: rgba(255, 255, 255, 0.85);
+  --color-text-tertiary: rgba(255, 255, 255, 0.65);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+  --radius-button: 9999px;
+}
+
+/* Landing Page Container */
+.landing-page {
+  min-height: 100vh;
+  color: var(--color-text-primary);
+}
+
+/* Container utility */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* Section utility */
+.section {
+  padding: 4rem 0;
+}
+
+/* Divider */
+.divider {
+  width: 60px;
+  height: 1px;
+  background: var(--color-glass-border);
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   Landing Page Animations
+   ========================================================================== */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.8s ease;
+}
+
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stacked line animations */
+.stacked-line {
+  opacity: 0;
+  transform: translateY(15px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.stacked-line.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ==========================================================================
+   Hero Section
+   ========================================================================== */
+
+.hero {
+  padding: 80px 0 100px;
+  text-align: center;
+}
+
+.hero-content {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  color: var(--color-primary-end);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease forwards 0.2s;
+}
+
+.hero-title {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  max-width: 800px;
+  margin: 0 auto 28px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease forwards 0.4s;
+}
+
+.hero-title em {
+  font-style: italic;
+  color: var(--color-primary-end);
+}
+
+.hero-subtitle {
+  font-size: 1.2rem;
+  color: var(--color-text-secondary);
+  max-width: 520px;
+  margin: 0 auto 48px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease forwards 0.6s;
+}
+
+.hero-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  opacity: 0;
+  animation: fadeUp 0.8s ease forwards 0.8s;
+}
+
+.price-note {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.price-note strong {
+  color: var(--color-text-primary);
+}
+
+.secondary-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  margin-top: 8px;
+  transition: color 0.3s ease;
+}
+
+.secondary-cta:hover {
+  color: var(--color-primary-end);
+}
+
+.secondary-cta svg {
+  transition: transform 0.3s ease;
+}
+
+.secondary-cta:hover svg {
+  transform: translateY(3px);
+}
+
+/* ==========================================================================
+   Content Sections
+   ========================================================================== */
+
+.content-section {
+  padding: 80px 0;
+}
+
+.content-container {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.section-title {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 600;
+  margin-bottom: 2rem;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.section-text {
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  line-height: 1.8;
+  margin-bottom: 24px;
+}
+
+.pull-quote {
+  font-size: 1.75rem;
+  color: var(--color-primary-end);
+  line-height: 1.3;
+  margin: 48px 0;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Stacked Lines */
+.stacked-lines {
+  margin: 48px 0;
+}
+
+.stacked-lines .stacked-line {
+  color: var(--color-text-secondary);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.stacked-lines.beliefs .stacked-line:first-child {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  margin-bottom: 28px;
+}
+
+.stacked-lines.observations .stacked-line.intro {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  margin-bottom: 24px;
+}
+
+.stacked-lines.observations .stacked-line.arrow {
+  padding-left: 8px;
+  color: var(--color-text-secondary);
+}
+
+.stacked-lines.observations .stacked-line.arrow::before {
+  content: '\2192 ';
+  color: var(--color-primary-end);
+}
+
+/* Centered Statement (How It Works opening) */
+.centered-statement {
+  text-align: center;
+  margin-bottom: 48px;
+  padding: 40px 0;
+}
+
+.centered-statement p {
+  font-size: 1.3rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+
+.centered-statement p.emphasis {
+  font-size: 1.5rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  margin-bottom: 0;
+}
+
+/* What's Included */
+.whats-included {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--color-glass-border);
+}
+
+.included-item {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  padding-left: 24px;
+  position: relative;
+}
+
+.included-item::before {
+  content: '\2713';
+  position: absolute;
+  left: 0;
+  color: var(--color-primary-end);
+}
+
+/* Qualification section */
+.qualification-break {
+  height: 64px;
+}
+
+.stacked-lines.disqualifications .stacked-line,
+.stacked-lines.qualifications .stacked-line {
+  margin-bottom: 28px;
+}
+
+.closing-line {
+  font-size: 1.4rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  margin-top: 48px;
+  text-align: center;
+}
+
+/* Founder Section */
+.founder-section .section-text {
+  margin-bottom: 20px;
+}
+
+.founder-section .section-text em {
+  font-style: italic;
+  color: var(--color-text-primary);
+}
+
+.founder-section .closing-statement {
+  font-size: 1.2rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  margin-top: 32px;
+}
+
+.founder-signature {
+  color: var(--color-text-primary);
+  font-size: 1.1rem;
+  margin-top: 24px;
+}
+
+/* ==========================================================================
+   Landing Page Buttons
+   ========================================================================== */
+
+.landing-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px 36px;
+  border-radius: var(--radius-button);
+  font-size: 1.05rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  text-align: center;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.landing-page .btn:hover {
+  transform: translateY(-2px);
+}
+
+.landing-page .btn-primary {
+  background: linear-gradient(135deg, var(--color-primary-start), var(--color-primary-end));
+  color: #fff;
+  box-shadow: 0 4px 24px rgba(252, 74, 26, 0.3);
+}
+
+.landing-page .btn-primary:hover {
+  box-shadow: 0 6px 32px rgba(252, 74, 26, 0.4);
+}
+
+.landing-page .btn-primary svg {
+  transition: transform 0.3s ease;
+}
+
+.landing-page .btn-primary:hover svg {
+  transform: translateX(4px);
+}
+
+.landing-page .btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-glass-border);
+}
+
+.landing-page .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-full {
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-large {
+  padding: 20px 48px;
+  font-size: 1.1rem;
+}
+
+/* ==========================================================================
+   Pricing Section
+   ========================================================================== */
+
+.pricing-section {
+  padding: 80px 0;
+}
+
+.pricing-card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 32px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 56px 48px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 60px rgba(252, 74, 26, 0.25),
+    0 0 100px rgba(247, 183, 51, 0.15);
+}
+
+.pricing-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-primary-start), var(--color-primary-end));
+}
+
+.founding-badge {
+  display: inline-block;
+  background: rgba(247, 183, 51, 0.15);
+  color: var(--color-primary-end);
+  padding: 8px 20px;
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 28px;
+}
+
+.pricing-title {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: var(--color-text-primary);
+}
+
+.price {
+  margin-bottom: 12px;
+}
+
+.price-amount {
+  font-size: 4rem;
+  color: var(--color-text-primary);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.price-amount sup {
+  font-size: 1.5rem;
+  vertical-align: super;
+  margin-right: 2px;
+}
+
+.value-anchor {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  margin-bottom: 24px;
+}
+
+.pricing-description {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.guarantee {
+  margin-top: 20px;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.guarantee svg {
+  color: var(--color-primary-end);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.launch-note {
+  margin-top: 20px;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   FAQ Section
+   ========================================================================== */
+
+.faq-section {
+  padding: 80px 0;
+}
+
+.faq-list {
+  margin-top: 32px;
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--color-glass-border);
+}
+
+.faq-question {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 0;
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: 1.05rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.faq-question:hover {
+  color: var(--color-primary-end);
+}
+
+.faq-icon {
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+  color: var(--color-text-secondary);
+}
+
+.faq-item.expanded .faq-icon {
+  transform: rotate(180deg);
+}
+
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.faq-item.expanded .faq-answer {
+  max-height: 300px;
+  padding-bottom: 24px;
+}
+
+.faq-answer p {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* ==========================================================================
+   Final CTA Section
+   ========================================================================== */
+
+.final-cta-section {
+  padding: 100px 0;
+  text-align: center;
+}
+
+.final-cta-primary {
+  margin-bottom: 80px;
+}
+
+.final-cta-headline {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 32px;
+  letter-spacing: -0.02em;
+}
+
+.final-cta-subtext {
+  margin-top: 16px;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.final-cta-secondary {
+  padding-top: 48px;
+  border-top: 1px solid var(--color-glass-border);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.email-headline {
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: 12px;
+}
+
+.email-body {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  margin-bottom: 24px;
+}
+
+.email-form {
+  display: flex;
+  gap: 12px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.email-input {
+  flex: 1;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-button);
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.email-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.email-input:focus {
+  outline: none;
+  border-color: var(--color-primary-end);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.footer {
+  padding: 3rem 0;
+  border-top: 1px solid var(--color-glass-border);
+  text-align: center;
+}
+
+.footer-copyright {
+  color: var(--color-text-tertiary);
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-links a {
+  color: var(--color-text-tertiary);
+  font-size: 0.85rem;
+  transition: color 0.3s ease;
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: var(--color-text-secondary);
+}
+
+.footer-divider {
+  color: var(--color-text-tertiary);
+}
+
+/* ==========================================================================
+   Sticky CTA (Mobile Only)
+   ========================================================================== */
+
+.sticky-cta {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background: rgba(4, 31, 33, 0.95);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--color-glass-border);
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.4, 0.0, 0.2, 1),
+              opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.sticky-cta.visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-block {
+  display: flex;
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.1rem;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* ==========================================================================
+   Mobile Responsive
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .sticky-cta {
+    display: block;
+  }
+
+  .footer {
+    padding-bottom: 6rem;
+  }
+
+  .hero {
+    padding: 60px 0 80px;
+  }
+
+  .hero-title {
+    font-size: 2.25rem;
+  }
+
+  .section-title {
+    font-size: 1.75rem;
+  }
+
+  .section-text {
+    font-size: 1rem;
+  }
+
+  .pull-quote {
+    font-size: 1.5rem;
+  }
+
+  .pricing-card {
+    padding: 40px 28px;
+  }
+
+  .price-amount {
+    font-size: 3rem;
+  }
+
+  .content-section {
+    padding: 60px 0;
+  }
+
+  .stacked-lines .stacked-line {
+    font-size: 1.05rem;
+  }
+
+  .centered-statement p {
+    font-size: 1.15rem;
+  }
+
+  .centered-statement p.emphasis {
+    font-size: 1.3rem;
+  }
+
+  .closing-line {
+    font-size: 1.25rem;
+  }
+
+  .email-form {
+    flex-direction: column;
+  }
+
+  .email-input,
+  .email-form .btn {
+    width: 100%;
+  }
+
+  .final-cta-section {
+    padding: 80px 0;
+  }
+
+  .final-cta-primary {
+    margin-bottom: 60px;
+  }
+
+  .btn-large {
+    padding: 18px 32px;
+    font-size: 1rem;
+  }
+}
