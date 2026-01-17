@@ -781,6 +781,44 @@ body {
   white-space: nowrap;
 }
 
+.email-form .btn:disabled,
+.email-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.email-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.email-success-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10b981;
+}
+
+.email-success-message {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #10b981;
+}
+
+.email-error {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 12px;
+  text-align: center;
+}
+
 /* ==========================================================================
    Footer
    ========================================================================== */

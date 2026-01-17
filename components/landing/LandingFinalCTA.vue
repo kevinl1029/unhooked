@@ -4,14 +4,43 @@ import CheckoutButton from './CheckoutButton.vue'
 const config = useRuntimeConfig()
 const appEnabled = computed(() => config.public.appEnabled)
 
-const email = ref('')
+const { utmParams } = useUtmTracking()
 
-function handleEmailSubmit(e: Event) {
+const email = ref('')
+const isSubmitting = ref(false)
+const submitState = ref<'idle' | 'success' | 'error'>('idle')
+const errorMessage = ref('')
+
+async function handleEmailSubmit(e: Event) {
   e.preventDefault()
-  // TODO: Integrate with email service in future PR
-  console.log('Email submitted:', email.value)
-  alert("Thanks! We'll be in touch.")
-  email.value = ''
+
+  if (!email.value.trim() || isSubmitting.value) return
+
+  isSubmitting.value = true
+  submitState.value = 'idle'
+  errorMessage.value = ''
+
+  try {
+    await $fetch('/api/subscribe', {
+      method: 'POST',
+      body: {
+        email: email.value.trim(),
+        source: appEnabled.value ? 'landing_page_nurture' : 'landing_page_waitlist',
+        ...utmParams.value
+      }
+    })
+
+    submitState.value = 'success'
+    email.value = ''
+
+  } catch (err: unknown) {
+    submitState.value = 'error'
+    // Use specific error messages from API, or fallback
+    const fetchError = err as { data?: { statusMessage?: string } }
+    errorMessage.value = fetchError.data?.statusMessage || 'Something went wrong. Please try again.'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -40,18 +69,41 @@ function handleEmailSubmit(e: Event) {
             : "Join the waitlist for early access and founding member pricing."
           }}
         </p>
-        <form class="email-form" @submit="handleEmailSubmit">
+
+        <!-- Success State - Form transforms to success message -->
+        <div v-if="submitState === 'success'" class="email-success">
+          <div class="email-success-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <p class="email-success-message">Check your inbox</p>
+        </div>
+
+        <!-- Form State -->
+        <form v-else class="email-form" @submit="handleEmailSubmit">
           <input
             type="email"
             v-model="email"
             placeholder="Your email"
             class="email-input"
+            :disabled="isSubmitting"
             required
           />
-          <button type="submit" class="btn btn-secondary">
-            {{ appEnabled ? 'Send it to me' : 'Join the Waitlist' }}
+          <button
+            type="submit"
+            class="btn btn-secondary"
+            :disabled="isSubmitting"
+          >
+            <span v-if="isSubmitting">Sending...</span>
+            <span v-else>{{ appEnabled ? 'Send it to me' : 'Join the Waitlist' }}</span>
           </button>
         </form>
+
+        <!-- Error Message -->
+        <p v-if="submitState === 'error'" class="email-error">
+          {{ errorMessage }}
+        </p>
       </div>
     </div>
   </section>
