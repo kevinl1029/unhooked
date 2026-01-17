@@ -67,12 +67,18 @@
 </template>
 
 <script setup lang="ts">
+const config = useRuntimeConfig()
 const { signInWithEmail, user } = useAuth()
 
 const email = ref('')
 const loading = ref(false)
 const submitted = ref(false)
 const error = ref('')
+
+// Redirect to landing if app is disabled
+if (!config.public.appEnabled) {
+  navigateTo('/')
+}
 
 // Redirect if already logged in
 watch(user, (newUser) => {

@@ -98,6 +98,9 @@ export default defineNuxtConfig({
     public: {
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      // Feature flag: Set to 'true' to enable app access (checkout, login, dashboard)
+      // In production, set to 'false' for landing-page-only mode
+      appEnabled: process.env.NUXT_PUBLIC_APP_ENABLED !== 'false',
     }
   },
 

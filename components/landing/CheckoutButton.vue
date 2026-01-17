@@ -1,13 +1,16 @@
 <template>
   <div class="checkout-button-wrapper" :class="{ 'checkout-button-block': block }">
     <button
-      @click="handleCheckout"
+      @click="handleClick"
       :disabled="isLoading"
       :class="buttonClasses"
     >
       <template v-if="isLoading">
         <span class="loading-spinner"></span>
         Loading...
+      </template>
+      <template v-else-if="!appEnabled">
+        <slot name="waitlist">Join the Waitlist</slot>
       </template>
       <template v-else>
         <slot>I'm ready</slot>
@@ -18,6 +21,9 @@
 </template>
 
 <script setup lang="ts">
+const config = useRuntimeConfig()
+const appEnabled = computed(() => config.public.appEnabled)
+
 const props = defineProps<{
   block?: boolean
   large?: boolean
@@ -36,6 +42,28 @@ const { utmParams } = useUtmTracking()
 
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+
+function handleClick() {
+  if (!appEnabled.value) {
+    scrollToWaitlist()
+  } else {
+    handleCheckout()
+  }
+}
+
+function scrollToWaitlist() {
+  const emailForm = document.querySelector('.final-cta-secondary')
+  if (emailForm) {
+    emailForm.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // Focus the email input after scrolling
+    setTimeout(() => {
+      const emailInput = emailForm.querySelector('input[type="email"]') as HTMLInputElement
+      if (emailInput) {
+        emailInput.focus()
+      }
+    }, 500)
+  }
+}
 
 async function handleCheckout() {
   isLoading.value = true
