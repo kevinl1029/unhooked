@@ -92,17 +92,24 @@ export default defineEventHandler(async (event) => {
       // 2. Add to Resend audience (if configured)
       if (config.resendAudienceId) {
         try {
-          await resend.contacts.create({
+          console.log('Adding contact to Resend audience...')
+          const { error: contactError } = await resend.contacts.create({
             email: email,
             firstName: name?.split(' ')[0] || '',
             lastName: name?.split(' ').slice(1).join(' ') || '',
             audienceId: config.resendAudienceId,
           })
-          // Small delay to avoid Resend rate limit (2 req/sec on free tier)
-          await new Promise(resolve => setTimeout(resolve, 600))
+          if (contactError) {
+            console.error('Resend contact create error:', contactError)
+          } else {
+            console.log('Contact added to audience successfully')
+          }
         } catch (err) {
           console.error('Failed to add to Resend audience:', err)
         }
+        // Delay to avoid Resend rate limit (2 req/sec on free tier)
+        console.log('Waiting 1s before sending email...')
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
 
       // 3. Send welcome email (controlled by feature flag)
