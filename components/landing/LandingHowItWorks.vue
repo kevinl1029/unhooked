@@ -13,9 +13,9 @@
 
       <div class="stacked-lines observations">
         <p class="stacked-line intro">You'll start to notice things.</p>
-        <p class="stacked-line arrow">The "stress relief" that's actually just withdrawal ending.</p>
-        <p class="stacked-line arrow">The "focus" that's actually your attention being held hostage.</p>
-        <p class="stacked-line arrow">The "identity" that was never true in the first place.</p>
+        <p class="stacked-line arrow">→ The "stress relief" that's actually just withdrawal ending.</p>
+        <p class="stacked-line arrow">→ The "focus" that's actually your attention being held hostage.</p>
+        <p class="stacked-line arrow">→ The "identity" that was never true in the first place.</p>
       </div>
 
       <p class="section-text">And somewhere along the way, the wanting quiets down. Not because you're fighting it. Because there's nothing left to want.</p>

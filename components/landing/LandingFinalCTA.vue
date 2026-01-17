@@ -18,7 +18,7 @@ function handleEmailSubmit(e: Event) {
       <!-- Path A: Ready Now -->
       <div class="final-cta-primary">
         <h2 class="final-cta-headline">Ready to become someone who doesn't want it anymore?</h2>
-        <CheckoutButton class="final-cta-checkout-btn">
+        <CheckoutButton :large="true">
           Become a founding member — $199
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7"/>

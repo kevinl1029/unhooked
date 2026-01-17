@@ -1,20 +1,37 @@
 <template>
-  <button
-    @click="handleCheckout"
-    :disabled="isLoading"
-    class="btn btn-primary"
-  >
-    <template v-if="isLoading">
-      <span class="loading-spinner"></span>
-      Loading...
-    </template>
-    <template v-else>
-      <slot>I'm ready</slot>
-    </template>
-  </button>
+  <div class="checkout-button-wrapper" :class="{ 'checkout-button-block': block }">
+    <button
+      @click="handleCheckout"
+      :disabled="isLoading"
+      :class="buttonClasses"
+    >
+      <template v-if="isLoading">
+        <span class="loading-spinner"></span>
+        Loading...
+      </template>
+      <template v-else>
+        <slot>I'm ready</slot>
+      </template>
+    </button>
+    <p v-if="error" class="checkout-error">{{ error }}</p>
+  </div>
 </template>
 
 <script setup lang="ts">
+const props = defineProps<{
+  block?: boolean
+  large?: boolean
+  full?: boolean
+}>()
+
+const buttonClasses = computed(() => [
+  'btn',
+  'btn-primary',
+  { 'btn-block': props.block },
+  { 'btn-large': props.large },
+  { 'btn-full': props.full },
+])
+
 const { utmParams } = useUtmTracking()
 
 const isLoading = ref(false)

@@ -380,8 +380,7 @@ body {
   color: var(--color-text-secondary);
 }
 
-.stacked-lines.observations .stacked-line.arrow::before {
-  content: '\2192 ';
+.stacked-lines.observations .stacked-line.arrow::first-letter {
   color: var(--color-primary-end);
 }
 
@@ -981,4 +980,44 @@ body {
     padding: 18px 32px;
     font-size: 1rem;
   }
+}
+
+/* ==========================================================================
+   Checkout Button Component
+   ========================================================================== */
+
+.checkout-button-wrapper {
+  display: inline-block;
+}
+
+.checkout-button-wrapper.checkout-button-block {
+  display: block;
+  width: 100%;
+}
+
+.checkout-button-wrapper.checkout-button-block .btn {
+  width: 100%;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.checkout-error {
+  color: #f87171;
+  font-size: 0.9rem;
+  margin-top: 12px;
+  text-align: center;
 }
