@@ -10,16 +10,7 @@ const EMAIL_REPLY_TO = 'kevin@getunhooked.app'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
-  // Debug: log config presence (not values)
-  console.log('Webhook config check:', {
-    hasStripeKey: !!config.stripeSecretKey,
-    hasResendKey: !!config.resendApiKey,
-    resendKeyPrefix: config.resendApiKey?.substring(0, 6),
-    sendEmails: config.sendEmails,
-  })
-
   const stripe = new Stripe(config.stripeSecretKey)
-
   const resend = new Resend(config.resendApiKey)
 
   // Get raw body for signature verification
@@ -59,7 +50,19 @@ export default defineEventHandler(async (event) => {
         return { received: true }
       }
 
-      // 1. Upsert into founding_members table (idempotent for webhook retries)
+      // 1. Check if we've already processed this session (idempotency check)
+      const { data: existingMember } = await supabase
+        .from('founding_members')
+        .select('welcome_email_sent')
+        .eq('stripe_session_id', session.id)
+        .single()
+
+      if (existingMember?.welcome_email_sent) {
+        console.log('Email already sent for this session, skipping:', session.id)
+        return { received: true }
+      }
+
+      // 2. Upsert into founding_members table (idempotent for webhook retries)
       const { error: dbError } = await supabase
         .from('founding_members')
         .upsert({
@@ -89,36 +92,29 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, message: 'Database insert failed' })
       }
 
-      // 2. Add to Resend audience (if configured)
+      // 3. Add to Resend audience (if configured)
       if (config.resendAudienceId) {
         try {
-          console.log('Adding contact to Resend audience...')
-          const { error: contactError } = await resend.contacts.create({
+          await resend.contacts.create({
             email: email,
             firstName: name?.split(' ')[0] || '',
             lastName: name?.split(' ').slice(1).join(' ') || '',
             audienceId: config.resendAudienceId,
           })
-          if (contactError) {
-            console.error('Resend contact create error:', contactError)
-          } else {
-            console.log('Contact added to audience successfully')
-          }
         } catch (err) {
           console.error('Failed to add to Resend audience:', err)
         }
         // Delay to avoid Resend rate limit (2 req/sec on free tier)
-        console.log('Waiting 1s before sending email...')
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
 
-      // 3. Send welcome email (controlled by feature flag)
+      // 4. Send welcome email (controlled by feature flag)
       const shouldSendEmails = config.sendEmails !== 'false'
       const firstName = name?.split(' ')[0] || 'there'
 
       if (shouldSendEmails) {
         try {
-          const { data, error: emailError } = await resend.emails.send({
+          const { error: emailError } = await resend.emails.send({
             from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
             to: email,
             replyTo: EMAIL_REPLY_TO,
@@ -128,9 +124,7 @@ export default defineEventHandler(async (event) => {
 
           if (emailError) {
             console.error('Resend API error:', emailError)
-            // Don't update welcome_email_sent if there was an error
           } else {
-            console.log('Welcome email sent successfully:', data?.id)
             // Update email sent status only on success
             await supabase
               .from('founding_members')
@@ -144,8 +138,6 @@ export default defineEventHandler(async (event) => {
         } catch (err) {
           console.error('Failed to send welcome email:', err)
         }
-      } else {
-        console.log('Email sending disabled (SEND_EMAILS=false). Would have sent welcome email to:', email)
       }
     }
   }
