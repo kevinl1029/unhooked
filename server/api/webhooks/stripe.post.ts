@@ -98,6 +98,8 @@ export default defineEventHandler(async (event) => {
             lastName: name?.split(' ').slice(1).join(' ') || '',
             audienceId: config.resendAudienceId,
           })
+          // Small delay to avoid Resend rate limit (2 req/sec on free tier)
+          await new Promise(resolve => setTimeout(resolve, 600))
         } catch (err) {
           console.error('Failed to add to Resend audience:', err)
         }
