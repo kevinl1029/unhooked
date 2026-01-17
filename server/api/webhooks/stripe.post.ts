@@ -10,6 +10,14 @@ const EMAIL_REPLY_TO = 'kevin@getunhooked.app'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
+  // Debug: log config presence (not values)
+  console.log('Webhook config check:', {
+    hasStripeKey: !!config.stripeSecretKey,
+    hasResendKey: !!config.resendApiKey,
+    resendKeyPrefix: config.resendApiKey?.substring(0, 6),
+    sendEmails: config.sendEmails,
+  })
+
   const stripe = new Stripe(config.stripeSecretKey)
 
   const resend = new Resend(config.resendApiKey)
@@ -101,7 +109,7 @@ export default defineEventHandler(async (event) => {
 
       if (shouldSendEmails) {
         try {
-          await resend.emails.send({
+          const { data, error: emailError } = await resend.emails.send({
             from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
             to: email,
             replyTo: EMAIL_REPLY_TO,
@@ -109,14 +117,20 @@ export default defineEventHandler(async (event) => {
             html: getWelcomeEmailHtml(firstName),
           })
 
-          // Update email sent status
-          await supabase
-            .from('founding_members')
-            .update({
-              welcome_email_sent: true,
-              welcome_email_sent_at: new Date().toISOString(),
-            })
-            .eq('stripe_session_id', session.id)
+          if (emailError) {
+            console.error('Resend API error:', emailError)
+            // Don't update welcome_email_sent if there was an error
+          } else {
+            console.log('Welcome email sent successfully:', data?.id)
+            // Update email sent status only on success
+            await supabase
+              .from('founding_members')
+              .update({
+                welcome_email_sent: true,
+                welcome_email_sent_at: new Date().toISOString(),
+              })
+              .eq('stripe_session_id', session.id)
+          }
 
         } catch (err) {
           console.error('Failed to send welcome email:', err)
