@@ -50,22 +50,11 @@ export default defineEventHandler(async (event) => {
         return { received: true }
       }
 
-      // 1. Check if we've already processed this session (idempotency check)
-      const { data: existingMember } = await supabase
-        .from('founding_members')
-        .select('welcome_email_sent')
-        .eq('stripe_session_id', session.id)
-        .single()
-
-      if (existingMember?.welcome_email_sent) {
-        console.log('Email already sent for this session, skipping:', session.id)
-        return { received: true }
-      }
-
-      // 2. Upsert into founding_members table (idempotent for webhook retries)
+      // 1. Try to insert the founding member record
+      // If this session was already processed, the unique constraint will cause an error
       const { error: dbError } = await supabase
         .from('founding_members')
-        .upsert({
+        .insert({
           stripe_session_id: session.id,
           stripe_customer_id: session.customer as string,
           stripe_payment_intent_id: session.payment_intent as string,
@@ -81,18 +70,19 @@ export default defineEventHandler(async (event) => {
           utm_content: metadata.utm_content || null,
           referrer: metadata.referrer || null,
           landing_page_variant: metadata.landing_page_variant || 'v1',
-        }, {
-          onConflict: 'stripe_session_id',
-          ignoreDuplicates: true
         })
 
+      // Check for unique constraint violation (code 23505) - means duplicate webhook
       if (dbError) {
+        if (dbError.code === '23505') {
+          console.log('Session already processed (duplicate webhook), skipping:', session.id)
+          return { received: true }
+        }
         console.error('Failed to insert founding member:', dbError)
-        // Fail the webhook so Stripe retries - data consistency is critical
         throw createError({ statusCode: 500, message: 'Database insert failed' })
       }
 
-      // 3. Add to Resend audience (if configured)
+      // 2. Add to Resend audience (if configured)
       if (config.resendAudienceId) {
         try {
           await resend.contacts.create({
@@ -108,7 +98,7 @@ export default defineEventHandler(async (event) => {
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
 
-      // 4. Send welcome email (controlled by feature flag)
+      // 3. Send welcome email (controlled by feature flag)
       const shouldSendEmails = config.sendEmails !== 'false'
       const firstName = name?.split(' ')[0] || 'there'
 
