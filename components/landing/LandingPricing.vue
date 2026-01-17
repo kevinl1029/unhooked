@@ -1,7 +1,5 @@
 <script setup lang="ts">
-defineProps<{
-  onCtaClick?: () => void
-}>()
+import CheckoutButton from './CheckoutButton.vue'
 </script>
 
 <template>
@@ -18,13 +16,12 @@ defineProps<{
 
         <p class="pricing-description">The complete program: conversations, check-ins, your final session, and follow-up support for the first 90 days.</p>
 
-        <!-- This will be replaced with CheckoutButton in PR2 -->
-        <button class="btn btn-primary btn-full" @click="onCtaClick?.()">
+        <CheckoutButton class="pricing-checkout-btn">
           Become a founding member
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7"/>
           </svg>
-        </button>
+        </CheckoutButton>
 
         <p class="guarantee">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

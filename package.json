@@ -22,7 +22,8 @@
     "@nuxtjs/supabase": "^2.0.3",
     "groq-sdk": "^0.37.0",
     "nuxt": "^4.2.2",
-    "resend": "^6.7.0"
+    "resend": "^6.7.0",
+    "stripe": "^20.2.0"
   },
   "devDependencies": {
     "@nuxt/test-utils": "^3.19.1",

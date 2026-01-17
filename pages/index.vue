@@ -27,16 +27,6 @@ definePageMeta({
 
 const showStickyCta = ref(false)
 
-// Handle CTA clicks (analytics can be added later, checkout in PR2)
-function handleCtaClick() {
-  // In PR2, this will trigger checkout
-  // For now, scroll to pricing section
-  const pricingSection = document.getElementById('pricing')
-  if (pricingSection) {
-    pricingSection.scrollIntoView({ behavior: 'smooth' })
-  }
-}
-
 // Scroll-triggered animations and sticky CTA visibility
 onMounted(() => {
   // Fade-in animation observer
@@ -117,7 +107,7 @@ onMounted(() => {
 
 <template>
   <main class="landing-page">
-    <LandingHero :on-cta-click="handleCtaClick" />
+    <LandingHero />
 
     <LandingMoment />
     <LandingDivider />
@@ -133,14 +123,14 @@ onMounted(() => {
 
     <LandingFounder />
 
-    <LandingPricing :on-cta-click="handleCtaClick" />
+    <LandingPricing />
 
     <LandingFAQ />
 
-    <LandingFinalCTA :on-cta-click="handleCtaClick" />
+    <LandingFinalCTA />
 
     <LandingFooter />
 
-    <LandingStickyCTA :visible="showStickyCta" :on-cta-click="handleCtaClick" />
+    <LandingStickyCTA :visible="showStickyCta" />
   </main>
 </template>

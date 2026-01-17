@@ -1,7 +1,5 @@
 <script setup lang="ts">
-defineProps<{
-  onCtaClick?: () => void
-}>()
+import CheckoutButton from './CheckoutButton.vue'
 
 function scrollToSection(sectionId: string) {
   const element = document.getElementById(sectionId)
@@ -19,12 +17,12 @@ function scrollToSection(sectionId: string) {
         <h1 class="hero-title">Become someone who <em>doesn't want</em> nicotine anymore</h1>
         <p class="hero-subtitle">Imagine walking past your vape and feeling... nothing. That's where this goes.</p>
         <div class="hero-actions">
-          <a href="#pricing" class="btn btn-primary" @click="onCtaClick?.()">
+          <CheckoutButton class="hero-checkout-btn">
             I'm ready
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
-          </a>
+          </CheckoutButton>
           <p class="price-note"><strong>$199</strong> founding member price · 30-day guarantee</p>
           <a href="#moment" class="secondary-cta" @click.prevent="scrollToSection('moment')">
             Show me how it works

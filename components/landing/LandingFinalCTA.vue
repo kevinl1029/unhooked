@@ -1,7 +1,5 @@
 <script setup lang="ts">
-defineProps<{
-  onCtaClick?: () => void
-}>()
+import CheckoutButton from './CheckoutButton.vue'
 
 const email = ref('')
 
@@ -20,13 +18,12 @@ function handleEmailSubmit(e: Event) {
       <!-- Path A: Ready Now -->
       <div class="final-cta-primary">
         <h2 class="final-cta-headline">Ready to become someone who doesn't want it anymore?</h2>
-        <!-- This will be replaced with CheckoutButton in PR2 -->
-        <button class="btn btn-primary btn-large" @click="onCtaClick?.()">
+        <CheckoutButton class="final-cta-checkout-btn">
           Become a founding member — $199
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7"/>
           </svg>
-        </button>
+        </CheckoutButton>
         <p class="final-cta-subtext">30-day guarantee · Founding member pricing until launch</p>
       </div>
 

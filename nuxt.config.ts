@@ -28,7 +28,10 @@ export default defineNuxtConfig({
 
   googleFonts: {
     families: {
-      Inter: [400, 500, 600, 700],
+      Inter: {
+        wght: [400, 500, 600, 700],
+        ital: [400, 700],
+      },
     },
     display: 'swap',
   },
@@ -83,10 +86,18 @@ export default defineNuxtConfig({
 
     // Email Configuration (Phase 4B)
     resendApiKey: process.env.RESEND_API_KEY,
+    resendAudienceId: process.env.RESEND_AUDIENCE_ID,
+    sendEmails: process.env.SEND_EMAILS || 'true',
+
+    // Stripe Configuration
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    stripePriceId: process.env.STRIPE_PRICE_ID,
 
     // Client-side (public)
     public: {
-      appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     }
   },
 
