@@ -35,26 +35,34 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email)
 }
 
-// Welcome email content - PLACEHOLDER
-// See Email Content Specification (TBD) for final copy
 function getWelcomeEmailHtml(): string {
   return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-      <p style="font-size: 18px; line-height: 1.6; color: #333;">
-        [Welcome email content - see Email Content Specification]
-      </p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #333; font-size: 16px; line-height: 1.6;">
+      <p style="margin: 0 0 24px 0;">Hey,</p>
 
-      <p style="font-size: 18px; line-height: 1.6; color: #333;">
-        — Kevin
-      </p>
+      <p style="margin: 0 0 24px 0;">You're in! When Unhooked launches, you'll be first to know—and you'll have access to our founding member price of $199 (instead of $299).</p>
+
+      <p style="margin: 0 0 24px 0;"><strong>Here's what Unhooked is:</strong></p>
+
+      <p style="margin: 0 0 24px 0;">A 10-14 day voice-guided program that helps you become someone who genuinely doesn't want nicotine anymore. No patches. No willpower battles. No white-knuckling through cravings.</p>
+
+      <p style="margin: 0 0 24px 0;">Instead, we systematically dismantle the five psychological illusions that make you think you need nicotine—until the desire simply isn't there.</p>
+
+      <p style="margin: 0 0 24px 0;"><strong>What happens next:</strong></p>
+
+      <p style="margin: 0 0 24px 0;">I'll email you when we're ready to open doors. Founding member spots are limited, so keep an eye out.</p>
+
+      <p style="margin: 0 0 24px 0;">Talk soon,<br>Kevin<br>Founder, Unhooked</p>
+
+      <p style="margin: 0 0 24px 0;">P.S. — Have questions before launch? Just reply to this email.</p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 40px 0;">
 
-      <p style="font-size: 14px; color: #666;">
+      <p style="font-size: 14px; color: #666; margin: 0 0 12px 0;">
         <a href="https://getunhooked.app" style="color: #0891b2;">getunhooked.app</a>
       </p>
 
-      <p style="font-size: 12px; color: #999;">
+      <p style="font-size: 12px; color: #999; margin: 0;">
         You're receiving this because you signed up at getunhooked.app.<br>
         Reply to this email if you'd like to unsubscribe.
       </p>
@@ -90,7 +98,7 @@ async function sendWelcomeEmailAndAddToAudience(
         from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
         to: email,
         replyTo: EMAIL_REPLY_TO,
-        subject: '[PLACEHOLDER] Welcome to Unhooked', // Subject TBD - will be updated with final copy
+        subject: "You're on the list",
         html: getWelcomeEmailHtml()
       })
     } catch (emailError) {
