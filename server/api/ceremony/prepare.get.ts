@@ -11,10 +11,11 @@ interface MomentsByType {
   origin_story: CapturedMoment[]
   rationalization: CapturedMoment[]
   insight: CapturedMoment[]
-  breakthrough: CapturedMoment[]
-  observation: CapturedMoment[]
+  emotional_breakthrough: CapturedMoment[]
+  real_world_observation: CapturedMoment[]
+  identity_statement: CapturedMoment[]
   commitment: CapturedMoment[]
-  resistance: CapturedMoment[]
+  fear_resistance: CapturedMoment[]
 }
 
 export default defineEventHandler(async (event) => {
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Check illusion completion status
-  const illusionKeys = ['stress_relief', 'pleasure_illusion', 'willpower_myth', 'focus_enhancement', 'identity_belief']
+  const illusionKeys = ['stress_relief', 'pleasure', 'willpower', 'focus', 'identity']
   const completedIllusions: string[] = []
 
   for (const illusionKey of illusionKeys) {
@@ -70,9 +71,9 @@ export default defineEventHandler(async (event) => {
     transcript: m.transcript,
     audioClipPath: m.audio_clip_path,
     audioDurationMs: m.audio_duration_ms,
-    illusionKey: m.myth_key,
+    illusionKey: m.illusion_key,
     sessionType: m.session_type,
-    illusionLayer: m.myth_layer,
+    illusionLayer: m.illusion_layer,
     confidenceScore: m.confidence_score,
     emotionalValence: m.emotional_valence,
     isUserHighlighted: m.is_user_highlighted,
@@ -87,10 +88,11 @@ export default defineEventHandler(async (event) => {
     origin_story: [],
     rationalization: [],
     insight: [],
-    breakthrough: [],
-    observation: [],
+    emotional_breakthrough: [],
+    real_world_observation: [],
+    identity_statement: [],
     commitment: [],
-    resistance: [],
+    fear_resistance: [],
   }
 
   for (const moment of allMoments) {
