@@ -47,11 +47,33 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
 
   try {
     // 1. Fetch user story for context
-    const { data: userStory } = await supabase
+    let { data: userStory } = await supabase
       .from('user_story')
       .select('*')
       .eq('user_id', userId)
       .single()
+
+    // Create user_story if it doesn't exist (defensive fallback)
+    // This handles edge cases where intake didn't create the row
+    if (!userStory) {
+      console.log(`[session-complete] Creating missing user_story for user ${userId}`)
+      const { data: newUserStory, error: createError } = await supabase
+        .from('user_story')
+        .insert({
+          user_id: userId,
+          primary_triggers: [],
+          personal_stakes: [],
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('[session-complete] Failed to create user_story:', createError)
+        throw new Error('Failed to create user_story - cannot proceed with session completion')
+      }
+
+      userStory = newUserStory
+    }
 
     // Get previous conviction for this illusion
     const previousConviction = userStory?.[`${illusionKey}_conviction`] ?? 0

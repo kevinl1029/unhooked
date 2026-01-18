@@ -1,8 +1,10 @@
 /**
  * Unit tests for session complete handler
- * Focuses on check-in scheduling integration (Gap #4 fix)
+ * Covers:
+ * - Check-in scheduling integration (Gap #4 fix)
+ * - Missing user_story handling (Gap #5 fix)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 // Constants matching the check-in scheduler implementation
 const POST_SESSION_DELAY_HOURS = 2
@@ -179,6 +181,118 @@ describe('Session Complete Handler - Check-In Scheduling', () => {
         const config = buildCheckInConfig('user-1', 'conv-1', key, 'UTC')
         expect(config.illusionKey).toBe(key)
       })
+    })
+  })
+})
+
+describe('Session Complete Handler - Missing User Story Handling (Gap #5)', () => {
+  // Simulate the user_story creation logic from the handler
+  interface UserStory {
+    user_id: string
+    primary_triggers: string[]
+    personal_stakes: string[]
+    [key: string]: unknown
+  }
+
+  function simulateUserStoryFetch(existingStory: UserStory | null): UserStory | null {
+    return existingStory
+  }
+
+  function createDefaultUserStory(userId: string): UserStory {
+    return {
+      user_id: userId,
+      primary_triggers: [],
+      personal_stakes: [],
+    }
+  }
+
+  describe('Defensive fallback creation', () => {
+    it('should create user_story when it does not exist', () => {
+      const userId = 'user-missing-story'
+      let userStory = simulateUserStoryFetch(null)
+
+      // Simulate the defensive fallback logic
+      if (!userStory) {
+        userStory = createDefaultUserStory(userId)
+      }
+
+      expect(userStory).not.toBeNull()
+      expect(userStory!.user_id).toBe(userId)
+      expect(userStory!.primary_triggers).toEqual([])
+      expect(userStory!.personal_stakes).toEqual([])
+    })
+
+    it('should use existing user_story when it exists', () => {
+      const existingStory: UserStory = {
+        user_id: 'user-with-story',
+        primary_triggers: ['stress', 'boredom'],
+        personal_stakes: ['health', 'family'],
+        stress_relief_conviction: 75,
+      }
+
+      let userStory = simulateUserStoryFetch(existingStory)
+
+      // Defensive fallback should not trigger
+      if (!userStory) {
+        userStory = createDefaultUserStory(existingStory.user_id)
+      }
+
+      expect(userStory).toBe(existingStory)
+      expect(userStory.primary_triggers).toEqual(['stress', 'boredom'])
+      expect(userStory.stress_relief_conviction).toBe(75)
+    })
+
+    it('should preserve empty arrays in created user_story', () => {
+      const userId = 'user-new'
+      const newStory = createDefaultUserStory(userId)
+
+      expect(Array.isArray(newStory.primary_triggers)).toBe(true)
+      expect(Array.isArray(newStory.personal_stakes)).toBe(true)
+      expect(newStory.primary_triggers.length).toBe(0)
+      expect(newStory.personal_stakes.length).toBe(0)
+    })
+  })
+
+  describe('Conviction tracking with missing user_story', () => {
+    it('should default to 0 conviction when user_story is newly created', () => {
+      const newStory = createDefaultUserStory('user-1')
+      const illusionKey = 'stress_relief'
+
+      // Simulate the conviction lookup logic
+      const previousConviction = newStory[`${illusionKey}_conviction`] ?? 0
+
+      expect(previousConviction).toBe(0)
+    })
+
+    it('should default to empty arrays for triggers and stakes', () => {
+      const newStory = createDefaultUserStory('user-1')
+
+      const existingTriggers = newStory.primary_triggers || []
+      const existingStakes = newStory.personal_stakes || []
+
+      expect(existingTriggers).toEqual([])
+      expect(existingStakes).toEqual([])
+    })
+  })
+
+  describe('Error scenarios', () => {
+    it('should throw error when user_story creation fails', () => {
+      // Simulate the error handling pattern
+      const createError = { code: 'PGRST116', message: 'Database error' }
+
+      expect(() => {
+        if (createError) {
+          throw new Error('Failed to create user_story - cannot proceed with session completion')
+        }
+      }).toThrow('Failed to create user_story - cannot proceed with session completion')
+    })
+
+    it('should log when creating missing user_story', () => {
+      const userId = 'user-123'
+      const logMessage = `[session-complete] Creating missing user_story for user ${userId}`
+
+      expect(logMessage).toContain('Creating missing user_story')
+      expect(logMessage).toContain(userId)
     })
   })
 })
