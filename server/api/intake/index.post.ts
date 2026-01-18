@@ -96,6 +96,19 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: progressError.message })
   }
 
+  // Upsert user_story data (copies triggers from intake)
+  const { error: storyError } = await supabase
+    .from('user_story')
+    .upsert({
+      user_id: userId,
+      primary_triggers: body.triggers || [],
+      personal_stakes: [],
+    })
+
+  if (storyError && storyError.code !== '23505') {
+    console.error('Failed to create user_story:', storyError)
+  }
+
   return {
     intake: intakeData,
     progress: progressData
