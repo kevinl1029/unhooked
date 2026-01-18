@@ -27,6 +27,10 @@ definePageMeta({
 
 const showStickyCta = ref(false)
 
+// Analytics
+const { trackEvent } = useAnalytics()
+const { initSectionTracking } = useSectionTracking()
+
 // Scroll-triggered animations and sticky CTA visibility
 onMounted(() => {
   // Fade-in animation observer
@@ -102,6 +106,35 @@ onMounted(() => {
   if (heroSection) ctaObserver.observe(heroSection)
   if (pricingSection) ctaObserver.observe(pricingSection)
   if (finalCtaSection) ctaObserver.observe(finalCtaSection)
+
+  // Initialize section view tracking for analytics
+  const cleanupSectionTracking = initSectionTracking()
+
+  // Scroll depth tracking
+  const scrollThresholds = [25, 50, 75, 100]
+  const scrollTracked = new Set<number>()
+
+  function handleScroll() {
+    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight
+    if (scrollHeight <= 0) return
+
+    const scrollPercent = Math.round((window.scrollY / scrollHeight) * 100)
+
+    scrollThresholds.forEach((threshold) => {
+      if (scrollPercent >= threshold && !scrollTracked.has(threshold)) {
+        scrollTracked.add(threshold)
+        trackEvent(`Scroll: ${threshold}%`)
+      }
+    })
+  }
+
+  window.addEventListener('scroll', handleScroll, { passive: true })
+
+  // Cleanup on unmount
+  onUnmounted(() => {
+    cleanupSectionTracking?.()
+    window.removeEventListener('scroll', handleScroll)
+  })
 })
 </script>
 

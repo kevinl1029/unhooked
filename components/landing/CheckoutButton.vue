@@ -24,10 +24,13 @@
 const config = useRuntimeConfig()
 const appEnabled = computed(() => config.public.appEnabled)
 
+const { trackEvent, ANALYTICS_EVENTS } = useAnalytics()
+
 const props = defineProps<{
   block?: boolean
   large?: boolean
   full?: boolean
+  trackingLocation?: 'hero' | 'pricing' | 'final' | 'sticky'
 }>()
 
 const buttonClasses = computed(() => [
@@ -44,6 +47,17 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 
 function handleClick() {
+  // Track the CTA click with location context
+  if (props.trackingLocation) {
+    const eventMap = {
+      hero: ANALYTICS_EVENTS.CTA_CLICK_HERO,
+      pricing: ANALYTICS_EVENTS.CTA_CLICK_PRICING,
+      final: ANALYTICS_EVENTS.CTA_CLICK_FINAL,
+      sticky: ANALYTICS_EVENTS.CTA_CLICK_STICKY,
+    }
+    trackEvent(eventMap[props.trackingLocation])
+  }
+
   if (!appEnabled.value) {
     scrollToWaitlist()
   } else {
@@ -68,6 +82,9 @@ function scrollToWaitlist() {
 async function handleCheckout() {
   isLoading.value = true
   error.value = null
+
+  // Track checkout initiation
+  trackEvent(ANALYTICS_EVENTS.CHECKOUT_STARTED)
 
   try {
     const { url } = await $fetch('/api/checkout/create-session', {

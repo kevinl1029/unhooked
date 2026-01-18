@@ -2,7 +2,7 @@
 </script>
 
 <template>
-  <section class="section content-section fade-in">
+  <section id="reason" class="section content-section fade-in">
     <div class="container content-container">
       <h2 class="section-title">The real reason you're still hooked</h2>
       <p class="section-text">You've tried before. Maybe patches, maybe cold turkey, maybe sheer force of will. And when it didn't stick, you blamed yourself.</p>

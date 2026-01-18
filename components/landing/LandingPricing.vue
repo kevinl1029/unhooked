@@ -19,7 +19,7 @@ const appEnabled = computed(() => config.public.appEnabled)
 
         <p class="pricing-description">The complete program: conversations, check-ins, your final session, and follow-up support for the first 90 days.</p>
 
-        <CheckoutButton :full="true">
+        <CheckoutButton tracking-location="pricing" :full="true">
           <template #default>
             Become a founding member
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

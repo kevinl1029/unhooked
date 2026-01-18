@@ -2,7 +2,7 @@
 </script>
 
 <template>
-  <section class="section content-section fade-in">
+  <section id="who-for" class="section content-section fade-in">
     <div class="container content-container">
       <h2 class="section-title">This isn't for everyone</h2>
 

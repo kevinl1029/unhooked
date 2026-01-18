@@ -2,7 +2,7 @@
 </script>
 
 <template>
-  <section class="section content-section fade-in">
+  <section id="how-it-works" class="section content-section fade-in">
     <div class="container content-container">
       <div class="centered-statement">
         <p>This isn't an app that tracks your cravings.</p>

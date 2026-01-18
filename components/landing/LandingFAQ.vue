@@ -34,7 +34,7 @@ const faqItems = [
 </script>
 
 <template>
-  <section class="section faq-section fade-in">
+  <section id="faq" class="section faq-section fade-in">
     <div class="container content-container">
       <h2 class="section-title">Questions you might have</h2>
 

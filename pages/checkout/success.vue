@@ -86,6 +86,8 @@ useHead({
   title: "You're In — Unhooked",
 })
 
+const { trackRevenue, ANALYTICS_EVENTS } = useAnalytics()
+
 const route = useRoute()
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -114,6 +116,11 @@ onMounted(async () => {
     customerEmail.value = data.email || ''
     customerName.value = data.name || ''
     loading.value = false
+
+    // Track successful purchase with revenue
+    if (data.status === 'paid' && data.amount) {
+      trackRevenue(ANALYTICS_EVENTS.PURCHASE_COMPLETE, data.amount / 100) // Convert cents to dollars
+    }
 
   } catch (err: any) {
     console.error('Failed to fetch session:', err)

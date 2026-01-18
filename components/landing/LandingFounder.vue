@@ -2,7 +2,7 @@
 </script>
 
 <template>
-  <section class="section content-section founder-section fade-in">
+  <section id="founder" class="section content-section founder-section fade-in">
     <div class="container content-container">
       <h2 class="section-title">Why I built this</h2>
       <p class="section-text">I vaped for years. It started casually. Then it was always there—before meetings, after meals, during every break. I didn't think of myself as "addicted." I just needed it.</p>

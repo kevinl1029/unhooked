@@ -1,3 +1,25 @@
+// Determine analytics domain based on environment
+function getAnalyticsDomain(): string | null {
+  // Local development: no analytics
+  if (process.env.NODE_ENV !== 'production') {
+    return null
+  }
+
+  // Vercel provides VERCEL_ENV: 'production' | 'preview' | 'development'
+  const vercelEnv = process.env.VERCEL_ENV
+
+  if (vercelEnv === 'production') {
+    return 'getunhooked.app'
+  } else if (vercelEnv === 'preview') {
+    return 'staging.getunhooked.app'
+  }
+
+  // Fallback for non-Vercel production builds
+  return 'getunhooked.app'
+}
+
+const analyticsDomain = getAnalyticsDomain()
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
 
@@ -8,7 +30,16 @@ export default defineNuxtConfig({
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
-      ]
+      ],
+      script: analyticsDomain
+        ? [
+            {
+              src: 'https://plausible.io/js/script.js',
+              defer: true,
+              'data-domain': analyticsDomain,
+            },
+          ]
+        : [],
     }
   },
 

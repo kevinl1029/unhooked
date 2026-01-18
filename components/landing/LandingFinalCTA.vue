@@ -4,6 +4,7 @@ import CheckoutButton from './CheckoutButton.vue'
 const config = useRuntimeConfig()
 const appEnabled = computed(() => config.public.appEnabled)
 
+const { trackEvent, ANALYTICS_EVENTS } = useAnalytics()
 const { utmParams } = useUtmTracking()
 
 const email = ref('')
@@ -33,6 +34,11 @@ async function handleEmailSubmit(e: Event) {
     submitState.value = 'success'
     email.value = ''
 
+    // Track successful email capture
+    trackEvent(ANALYTICS_EVENTS.EMAIL_SUBMITTED, {
+      source: appEnabled.value ? 'nurture' : 'waitlist',
+    })
+
   } catch (err: unknown) {
     submitState.value = 'error'
     // Use specific error messages from API, or fallback
@@ -45,12 +51,12 @@ async function handleEmailSubmit(e: Event) {
 </script>
 
 <template>
-  <section class="section final-cta-section fade-in">
+  <section id="final-cta" class="section final-cta-section fade-in">
     <div class="container content-container">
       <!-- Path A: Ready Now (or waitlist if app disabled) -->
       <div v-if="appEnabled" class="final-cta-primary">
         <h2 class="final-cta-headline">Ready to become someone who doesn't want it anymore?</h2>
-        <CheckoutButton :large="true">
+        <CheckoutButton tracking-location="final" :large="true">
           Become a founding member — $199
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7"/>

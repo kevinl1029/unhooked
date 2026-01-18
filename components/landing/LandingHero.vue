@@ -13,14 +13,14 @@ function scrollToSection(sectionId: string) {
 </script>
 
 <template>
-  <section class="section hero">
+  <section id="hero" class="section hero">
     <div class="container">
       <div class="hero-content">
         <span class="hero-eyebrow">You're closer than you think</span>
         <h1 class="hero-title">Become someone who <em>doesn't want</em> nicotine anymore</h1>
         <p class="hero-subtitle">Imagine walking past your vape and feeling... nothing. That's where this goes.</p>
         <div class="hero-actions">
-          <CheckoutButton class="hero-checkout-btn">
+          <CheckoutButton tracking-location="hero" class="hero-checkout-btn">
             <template #default>
               I'm ready
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
