@@ -12,11 +12,90 @@ import LandingFooter from '~/components/landing/LandingFooter.vue'
 import LandingStickyCTA from '~/components/landing/LandingStickyCTA.vue'
 import LandingDivider from '~/components/landing/LandingDivider.vue'
 
-// Page meta for SEO
+// SEO Schema
+const { organizationSchema, websiteSchema, softwareAppSchema } = useSeoSchema()
+
+// FAQ items for schema (must match LandingFAQ.vue)
+const faqItems = [
+  {
+    question: "When does the program start?",
+    answer: "Founding members get access in April 2026. You'll be first to know when it's ready."
+  },
+  {
+    question: "What if the product never launches?",
+    answer: "If we haven't launched by Summer 2026, you get an automatic full refund. But we're committed—founding members are why we're building this."
+  },
+  {
+    question: "What if it doesn't work for me?",
+    answer: "Full refund within 30 days of starting. No questions, no hassle."
+  },
+  {
+    question: "Can I do this while still vaping?",
+    answer: "Yes—we encourage it. This isn't about forcing yourself to stop. You'll naturally stop once the illusions dissolve. Most people have their last vape as part of the program, not before it."
+  },
+  {
+    question: "Do I need to set aside a lot of time?",
+    answer: "Each session is about 10-15 minutes. Check-ins are 2-3 minutes. You can do this during a lunch break or after the kids are in bed."
+  },
+  {
+    question: "What happens after the program?",
+    answer: "You'll get check-ins at 30, 60, and 90 days to make sure the shift is sticking. And you can always come back if you need a refresher."
+  }
+]
+
+const faqSchema = generateFaqSchema(faqItems)
+
+// SEO meta tags
+const seoTitle = 'Unhooked — Quit Vaping & Smoking Without Willpower'
+const seoDescription = 'Stop vaping, quit smoking, or break free from Zyn. Unhooked eliminates your desire for nicotine—no patches, no willpower, no substitutes. 30-day guarantee.'
+const seoUrl = 'https://getunhooked.app'
+const seoImage = 'https://getunhooked.app/og-image.png'
+
 useHead({
-  title: 'Unhooked — Freedom from Nicotine',
+  title: seoTitle,
   meta: [
-    { name: 'description', content: 'Permanently remove your desire for nicotine — without willpower, substitutes, or lifelong resistance.' }
+    // Primary meta tags
+    { name: 'description', content: seoDescription },
+    { name: 'keywords', content: 'quit vaping, quit smoking, quit zyn, nicotine cessation, stop vaping, stop smoking, nicotine addiction help, quit nicotine pouches' },
+
+    // Open Graph / Facebook
+    { property: 'og:type', content: 'website' },
+    { property: 'og:url', content: seoUrl },
+    { property: 'og:title', content: seoTitle },
+    { property: 'og:description', content: seoDescription },
+    { property: 'og:image', content: seoImage },
+    { property: 'og:image:width', content: '1200' },
+    { property: 'og:image:height', content: '630' },
+    { property: 'og:image:alt', content: 'Unhooked - Quit Vaping & Smoking For Good' },
+
+    // Twitter
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:url', content: seoUrl },
+    { name: 'twitter:title', content: seoTitle },
+    { name: 'twitter:description', content: seoDescription },
+    { name: 'twitter:image', content: seoImage },
+    { name: 'twitter:image:alt', content: 'Unhooked - Quit Vaping & Smoking For Good' }
+  ],
+  link: [
+    { rel: 'canonical', href: seoUrl }
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(organizationSchema)
+    },
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(websiteSchema)
+    },
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(softwareAppSchema)
+    },
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(faqSchema)
+    }
   ]
 })
 

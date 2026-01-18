@@ -1,0 +1,9 @@
+{
+  "name": "Unhooked",
+  "short_name": "Unhooked",
+  "description": "Quit vaping and smoking permanently with AI-powered nicotine cessation",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#041f21",
+  "theme_color": "#104e54"
+}

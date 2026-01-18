@@ -3,11 +3,28 @@ export default defineNuxtConfig({
 
   app: {
     head: {
+      htmlAttrs: {
+        lang: 'en'
+      },
+      charset: 'utf-8',
       viewport: 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover',
       meta: [
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
-        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'theme-color', content: '#104e54' },
+        { name: 'author', content: 'Unhooked' },
+        { name: 'robots', content: 'index, follow' },
+        // Default OG fallbacks (pages should override)
+        { property: 'og:site_name', content: 'Unhooked' },
+        { property: 'og:locale', content: 'en_US' }
+      ],
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+        { rel: 'manifest', href: '/site.webmanifest' }
       ]
     }
   },
