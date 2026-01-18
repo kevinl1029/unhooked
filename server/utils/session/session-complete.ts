@@ -9,6 +9,7 @@ import type { IllusionKey, IllusionLayer, CapturedMoment, UserIntakeData } from 
 import { assessConviction } from '../llm/tasks/conviction-assessment'
 import { selectKeyInsight } from '../llm/tasks/key-insight-selection'
 import { summarizeOriginStory, shouldGenerateSummary } from '../llm/tasks/story-summarization'
+import { scheduleCheckIns } from '../scheduling/check-in-scheduler'
 
 interface SessionCompleteInput {
   userId: string
@@ -257,6 +258,35 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
           console.log(`[session-complete] Stored origin summary: "${summary.summary.slice(0, 50)}..."`)
         }
       }
+    }
+
+    // 8. Schedule check-ins
+    // Fetch user's timezone from user_progress
+    const { data: userProgress } = await supabase
+      .from('user_progress')
+      .select('timezone')
+      .eq('user_id', userId)
+      .single()
+
+    const userTimezone = userProgress?.timezone || 'America/New_York'
+
+    try {
+      const scheduledCheckIns = await scheduleCheckIns({
+        userId,
+        timezone: userTimezone,
+        trigger: 'session_complete',
+        sessionId: conversationId,
+        illusionKey,
+        sessionEndTime: new Date(),
+        supabase,
+      })
+
+      if (scheduledCheckIns.length > 0) {
+        console.log(`[session-complete] Scheduled ${scheduledCheckIns.length} check-in(s)`)
+      }
+    } catch (checkInError) {
+      // Don't fail the whole handler if check-in scheduling fails
+      console.error('[session-complete] Failed to schedule check-ins:', checkInError)
     }
 
     console.log(`[session-complete] Completed for ${illusionKey}: conviction ${previousConviction} -> ${assessment.newConviction} (delta: ${assessment.delta})`)
