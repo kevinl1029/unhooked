@@ -108,7 +108,7 @@ export default defineEventHandler(async (event) => {
             from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
             to: email,
             replyTo: EMAIL_REPLY_TO,
-            subject: "Welcome to Unhooked — You're In",
+            subject: "You just made the hardest part easy",
             html: getWelcomeEmailHtml(firstName),
           })
 
@@ -146,30 +146,38 @@ function getWelcomeEmailHtml(firstName: string): string {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
 
-  <h1 style="color: #0D9488; margin-bottom: 24px;">Welcome to Unhooked, ${firstName}.</h1>
+  <p style="font-size: 18px; margin-bottom: 24px;">Hey ${firstName}!</p>
 
-  <p>You're officially a founding member. Thank you for believing in this before it even exists.</p>
+  <p>You just did something most people never do — you decided to stop <em>wanting</em> nicotine, not just stop using it.</p>
 
-  <p>Here's what happens next:</p>
+  <p>That shift is <em>everything</em>.</p>
+
+  <p>Unhooked isn't about willpower or white-knuckling through cravings. It's about dismantling the mental hooks that make you feel like you need nicotine in the first place. By the time you finish, you won't be resisting cigarettes or vapes — you simply won't want them!</p>
+
+  <p>That's the transformation waiting for you.</p>
+
+  <p><strong>What happens next:</strong></p>
 
   <ul style="padding-left: 20px;">
-    <li><strong>Your access is being prepared.</strong> You'll be among the first to experience Unhooked when it launches in April 2026.</li>
-    <li><strong>I'll be in touch personally.</strong> As a founding member, you have a direct line to me. Reply to this email anytime.</li>
-    <li><strong>Your feedback will shape the product.</strong> I'll reach out before launch to learn more about your experience with nicotine.</li>
+    <li><strong>You're in the first wave.</strong> Unhooked launches in April 2026, and as a founding member, you get early access!</li>
+    <li><strong>I'll reach out before launch</strong> to learn about your experience with nicotine — your input will directly shape how this works.</li>
+    <li><strong>You have a direct line to me.</strong> Reply anytime. I read every message.</li>
   </ul>
 
-  <p>In the meantime, if you have questions or just want to say hi, hit reply. I read every message.</p>
+  <p>A few months from now, you'll look back at this moment as the start of something different. Not because you fought your way through — but because you realized a "fight" wasn't the right approach in the first place!</p>
+
+  <p>I'm excited to build this with you.</p>
 
   <p style="margin-top: 32px;">
-    — Kevin<br>
+    Talk soon,<br>
+    Kevin<br>
     <span style="color: #666; font-size: 14px;">Founder, Unhooked</span>
   </p>
 
   <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
 
   <p style="font-size: 12px; color: #999;">
-    You're receiving this because you purchased founding member access to Unhooked.
-    If you have questions about your purchase, reply to this email.
+    You're receiving this because you became a founding member of Unhooked. Questions about your purchase? Just reply.
   </p>
 
 </body>
