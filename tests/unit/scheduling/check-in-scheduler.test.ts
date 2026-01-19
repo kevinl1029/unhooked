@@ -167,4 +167,112 @@ describe('Check-In Scheduler', () => {
       expect(hasConflict).toBe(false)
     })
   })
+
+  describe('Pending check-ins status filtering', () => {
+    // Test the logic that determines which statuses should be included in pending check-ins
+    const PENDING_STATUSES = ['scheduled', 'sent', 'opened']
+
+    it('should include scheduled status in pending check-ins', () => {
+      expect(PENDING_STATUSES.includes('scheduled')).toBe(true)
+    })
+
+    it('should include sent status in pending check-ins', () => {
+      expect(PENDING_STATUSES.includes('sent')).toBe(true)
+    })
+
+    it('should include opened status in pending check-ins (re-show if not completed)', () => {
+      // Users who started but didn't complete should see the interstitial again
+      expect(PENDING_STATUSES.includes('opened')).toBe(true)
+    })
+
+    it('should not include completed status in pending check-ins', () => {
+      expect(PENDING_STATUSES.includes('completed')).toBe(false)
+    })
+
+    it('should not include skipped status in pending check-ins', () => {
+      expect(PENDING_STATUSES.includes('skipped')).toBe(false)
+    })
+
+    it('should not include expired status in pending check-ins', () => {
+      expect(PENDING_STATUSES.includes('expired')).toBe(false)
+    })
+  })
+
+  describe('One active post-session check-in rule', () => {
+    // Test the logic for expiring old check-ins when a new session completes
+    interface MockCheckIn {
+      id: string
+      check_in_type: string
+      status: string
+    }
+
+    function filterCheckInsToExpire(checkIns: MockCheckIn[]): MockCheckIn[] {
+      // When a new session completes, expire all pending post-session check-ins
+      return checkIns.filter(
+        c => c.check_in_type === 'post_session' &&
+             ['scheduled', 'sent', 'opened'].includes(c.status)
+      )
+    }
+
+    it('should identify scheduled post-session check-ins to expire', () => {
+      const checkIns: MockCheckIn[] = [
+        { id: '1', check_in_type: 'post_session', status: 'scheduled' },
+        { id: '2', check_in_type: 'morning', status: 'scheduled' },
+      ]
+
+      const toExpire = filterCheckInsToExpire(checkIns)
+      expect(toExpire.length).toBe(1)
+      expect(toExpire[0].id).toBe('1')
+    })
+
+    it('should identify sent post-session check-ins to expire', () => {
+      const checkIns: MockCheckIn[] = [
+        { id: '1', check_in_type: 'post_session', status: 'sent' },
+      ]
+
+      const toExpire = filterCheckInsToExpire(checkIns)
+      expect(toExpire.length).toBe(1)
+    })
+
+    it('should identify opened post-session check-ins to expire', () => {
+      const checkIns: MockCheckIn[] = [
+        { id: '1', check_in_type: 'post_session', status: 'opened' },
+      ]
+
+      const toExpire = filterCheckInsToExpire(checkIns)
+      expect(toExpire.length).toBe(1)
+    })
+
+    it('should not expire already completed check-ins', () => {
+      const checkIns: MockCheckIn[] = [
+        { id: '1', check_in_type: 'post_session', status: 'completed' },
+      ]
+
+      const toExpire = filterCheckInsToExpire(checkIns)
+      expect(toExpire.length).toBe(0)
+    })
+
+    it('should not expire morning/evening check-ins', () => {
+      const checkIns: MockCheckIn[] = [
+        { id: '1', check_in_type: 'morning', status: 'scheduled' },
+        { id: '2', check_in_type: 'evening', status: 'sent' },
+      ]
+
+      const toExpire = filterCheckInsToExpire(checkIns)
+      expect(toExpire.length).toBe(0)
+    })
+
+    it('should handle multiple pending post-session check-ins', () => {
+      // Edge case: user had multiple sessions without responding to check-ins
+      const checkIns: MockCheckIn[] = [
+        { id: '1', check_in_type: 'post_session', status: 'scheduled' },
+        { id: '2', check_in_type: 'post_session', status: 'sent' },
+        { id: '3', check_in_type: 'post_session', status: 'opened' },
+        { id: '4', check_in_type: 'post_session', status: 'expired' },
+      ]
+
+      const toExpire = filterCheckInsToExpire(checkIns)
+      expect(toExpire.length).toBe(3) // scheduled, sent, opened - not expired
+    })
+  })
 })

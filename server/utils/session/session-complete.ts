@@ -292,6 +292,28 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
 
     const userTimezone = userProgress?.timezone || 'America/New_York'
 
+    // Expire any pending post-session check-ins from previous sessions
+    // User should only get check-ins about their most recent core session
+    try {
+      const { error: expireError } = await supabase
+        .from('check_in_schedule')
+        .update({
+          status: 'expired',
+          expired_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('check_in_type', 'post_session')
+        .in('status', ['scheduled', 'sent', 'opened'])
+
+      if (expireError) {
+        console.error('[session-complete] Failed to expire old check-ins:', expireError)
+      } else {
+        console.log('[session-complete] Expired any pending post-session check-ins from previous sessions')
+      }
+    } catch (expireErr) {
+      console.error('[session-complete] Error expiring old check-ins:', expireErr)
+    }
+
     try {
       const scheduledCheckIns = await scheduleCheckIns({
         userId,
