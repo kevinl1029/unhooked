@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: error.message })
   }
 
-  // Fetch key insights for each myth if they exist
+  // Fetch key insights for each illusion if they exist
   const insightIds = [
     story.stress_relief_key_insight_id,
     story.pleasure_key_insight_id,

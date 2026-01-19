@@ -12,13 +12,6 @@ export interface UserStatus {
     illusion_order: number[]
     total_sessions: number
     started_at: string | null
-    // Backward-compatible aliases (deprecated)
-    /** @deprecated Use current_illusion instead */
-    current_myth?: number
-    /** @deprecated Use illusions_completed instead */
-    myths_completed?: number[]
-    /** @deprecated Use illusion_order instead */
-    myth_order?: number[]
   } | null
   ceremony: {
     completed_at: string | null
@@ -28,9 +21,6 @@ export interface UserStatus {
     reflective_journey: { id: string; audio_duration_ms?: number } | null
     final_recording: { id: string; audio_path?: string; audio_duration_ms?: number } | null
     illusions_cheat_sheet: { id: string } | null
-    // Backward-compatible alias (deprecated)
-    /** @deprecated Use illusions_cheat_sheet instead */
-    myths_cheat_sheet?: { id: string } | null
   } | null
   pending_follow_ups: Array<{
     id: string
@@ -71,7 +61,7 @@ export const useUserStatus = () => {
 
   const hasJourneyArtifact = computed(() => !!status.value?.artifacts?.reflective_journey)
   const hasFinalRecording = computed(() => !!status.value?.artifacts?.final_recording)
-  const hasCheatSheet = computed(() => !!status.value?.artifacts?.illusions_cheat_sheet || !!status.value?.artifacts?.myths_cheat_sheet)
+  const hasCheatSheet = computed(() => !!status.value?.artifacts?.illusions_cheat_sheet)
 
   const nextFollowUp = computed(() => {
     if (!status.value?.pending_follow_ups?.length) return null
@@ -79,12 +69,8 @@ export const useUserStatus = () => {
   })
 
   const illusionsCompletedCount = computed(() => {
-    return status.value?.progress?.illusions_completed?.length || status.value?.progress?.myths_completed?.length || 0
+    return status.value?.progress?.illusions_completed?.length || 0
   })
-
-  // Backward-compatible alias (deprecated)
-  /** @deprecated Use illusionsCompletedCount instead */
-  const mythsCompletedCount = illusionsCompletedCount
 
   const ceremonyDate = computed(() => {
     if (!status.value?.ceremony?.completed_at) return null
@@ -107,7 +93,5 @@ export const useUserStatus = () => {
     nextFollowUp,
     illusionsCompletedCount,
     ceremonyDate,
-    // Backward-compatible alias (deprecated)
-    mythsCompletedCount,
   }
 }

@@ -12,13 +12,6 @@ export interface Progress {
   last_session_at: string | null
   created_at: string
   updated_at: string
-  // Backward-compatible aliases (deprecated)
-  /** @deprecated Use current_illusion instead */
-  current_myth?: number
-  /** @deprecated Use illusion_order instead */
-  myth_order?: number[]
-  /** @deprecated Use illusions_completed instead */
-  myths_completed?: number[]
 }
 
 export interface CompleteSessionResponse {
@@ -88,12 +81,6 @@ export const useProgress = () => {
     return progress.value.illusions_completed.includes(illusionNumber)
   }
 
-  // Backward-compatible aliases (deprecated)
-  /** @deprecated Use getNextIllusion instead */
-  const getNextMyth = getNextIllusion
-  /** @deprecated Use isIllusionCompleted instead */
-  const isMythCompleted = isIllusionCompleted
-
   return {
     progress,
     isLoading,
@@ -102,8 +89,5 @@ export const useProgress = () => {
     completeSession,
     getNextIllusion,
     isIllusionCompleted,
-    // Backward-compatible aliases (deprecated)
-    getNextMyth,
-    isMythCompleted,
   }
 }

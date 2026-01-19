@@ -11,7 +11,7 @@ definePageMeta({
 interface IllusionEntry {
   illusionKey: string
   name: string
-  myth: string
+  illusion: string
   truth: string
   userInsight?: string
   insightMomentId?: string
@@ -81,10 +81,10 @@ const isFinal = computed(() => data.value?.is_final)
             {{ entry.name }}
           </h2>
 
-          <!-- The Myth -->
+          <!-- The Illusion -->
           <div class="mb-4">
-            <p class="text-xs text-white-65 uppercase tracking-wider mb-1">The Myth</p>
-            <p class="text-white-85 italic">"{{ entry.myth }}"</p>
+            <p class="text-xs text-white-65 uppercase tracking-wider mb-1">The Illusion</p>
+            <p class="text-white-85 italic">"{{ entry.illusion }}"</p>
           </div>
 
           <!-- The Truth -->

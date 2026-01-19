@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => {
       id: checkIn.id,
       type: checkIn.check_in_type,
       scheduled_for: checkIn.scheduled_for,
-      trigger_myth_key: checkIn.trigger_myth_key,
+      trigger_illusion_key: checkIn.trigger_illusion_key,
     },
     prompt: checkIn.prompt_template,
   }

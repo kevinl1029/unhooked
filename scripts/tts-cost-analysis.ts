@@ -69,7 +69,7 @@ interface Conversation {
   id: string
   user_id: string
   session_completed: boolean
-  myth_number: number | null
+  illusion_number: number | null
   created_at: string
 }
 

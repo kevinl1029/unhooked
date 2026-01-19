@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   // 3. Fetch key insights (one per illusion)
   const keyInsightIds: string[] = []
   if (userStory) {
-    const illusionKeys = ['stress_relief', 'pleasure_illusion', 'willpower_myth', 'focus_enhancement', 'identity_belief']
+    const illusionKeys = ['stress_relief', 'pleasure', 'willpower', 'focus', 'identity']
     for (const illusionKey of illusionKeys) {
       const insightId = userStory[`${illusionKey}_key_insight_id`]
       if (insightId) {
@@ -82,10 +82,10 @@ export default defineEventHandler(async (event) => {
     // Conviction levels
     convictions: userStory ? {
       stress_relief: userStory.stress_relief_conviction,
-      pleasure_illusion: userStory.pleasure_illusion_conviction,
-      willpower_myth: userStory.willpower_myth_conviction,
-      focus_enhancement: userStory.focus_enhancement_conviction,
-      identity_belief: userStory.identity_belief_conviction,
+      pleasure: userStory.pleasure_conviction,
+      willpower: userStory.willpower_conviction,
+      focus: userStory.focus_conviction,
+      identity: userStory.identity_conviction,
     } : null,
 
     // Key insights from each illusion

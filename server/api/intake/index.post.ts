@@ -10,8 +10,8 @@ interface IntakeBody {
   triggers?: string[]
 }
 
-function getMythOrder(primaryReason: string): number[] {
-  const reasonToMyth: Record<string, number> = {
+function getIllusionOrder(primaryReason: string): number[] {
+  const reasonToIllusion: Record<string, number> = {
     'stress': 1,
     'pleasure': 2,
     'fear': 3,
@@ -19,11 +19,11 @@ function getMythOrder(primaryReason: string): number[] {
     'identity': 5
   }
 
-  const firstMyth = reasonToMyth[primaryReason] || 1
+  const firstIllusion = reasonToIllusion[primaryReason] || 1
   const defaultOrder = [1, 2, 3, 4, 5]
 
   // Put their primary reason first, then follow default order for the rest
-  return [firstMyth, ...defaultOrder.filter(m => m !== firstMyth)]
+  return [firstIllusion, ...defaultOrder.filter(i => i !== firstIllusion)]
 }
 
 export default defineEventHandler(async (event) => {
@@ -75,8 +75,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: intakeError.message })
   }
 
-  // Calculate myth order based on primary reason
-  const mythOrder = getMythOrder(body.primaryReason)
+  // Calculate illusion order based on primary reason
+  const illusionOrder = getIllusionOrder(body.primaryReason)
 
   // Upsert progress data
   const { data: progressData, error: progressError } = await supabase
@@ -84,8 +84,8 @@ export default defineEventHandler(async (event) => {
     .upsert({
       user_id: userId,
       program_status: 'in_progress',
-      myth_order: mythOrder,
-      current_myth: mythOrder[0],
+      illusion_order: illusionOrder,
+      current_illusion: illusionOrder[0],
       started_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })

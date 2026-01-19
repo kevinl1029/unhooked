@@ -61,10 +61,10 @@ export async function generateIllusionsCheatSheet(
     .from('user_story')
     .select(`
       stress_relief_key_insight_id,
-      pleasure_illusion_key_insight_id,
-      willpower_myth_key_insight_id,
-      focus_enhancement_key_insight_id,
-      identity_belief_key_insight_id
+      pleasure_key_insight_id,
+      willpower_key_insight_id,
+      focus_key_insight_id,
+      identity_key_insight_id
     `)
     .eq('user_id', userId)
     .single()
@@ -136,7 +136,7 @@ export async function saveCheatSheetArtifact(
     .from('ceremony_artifacts')
     .upsert({
       user_id: userId,
-      artifact_type: 'myths_cheat_sheet',
+      artifact_type: 'illusions_cheat_sheet',
       content_json: cheatSheet,
       updated_at: new Date().toISOString(),
     }, {
