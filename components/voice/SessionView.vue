@@ -106,7 +106,7 @@
 
       <!-- Voice Controls - fixed min-height to prevent layout jumps between states -->
       <div v-if="!readOnly" class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center">
-        <!-- AI Speaking State -->
+        <!-- AI Speaking State - always show pause/skip while AI is speaking, even during session end -->
         <div v-if="isAISpeaking" class="text-center space-y-3">
           <VoiceAudioWaveform
             :is-active="true"
@@ -130,7 +130,7 @@
           </div>
         </div>
 
-        <!-- Paused State -->
+        <!-- Paused State - allow resume/skip even during session end -->
         <div v-else-if="isPaused" class="text-center space-y-3">
           <p class="text-white-65 text-sm">Paused</p>
           <div class="flex justify-center gap-4">
@@ -149,7 +149,12 @@
           </div>
         </div>
 
-        <!-- Recording State -->
+        <!-- Session Ending State - show message while waiting for completion card -->
+        <div v-else-if="isSessionEnding" class="text-center">
+          <p class="text-white-65">Session complete</p>
+        </div>
+
+        <!-- Recording State - only show if session is NOT ending -->
         <div v-else-if="isRecording" class="text-center space-y-3">
           <VoiceAudioWaveform
             :is-active="true"
@@ -166,7 +171,7 @@
           />
         </div>
 
-        <!-- Ready State -->
+        <!-- Ready State - only show if session is NOT ending -->
         <div v-else-if="!isProcessing" class="text-center space-y-3">
           <VoiceMicButton
             :is-recording="false"
@@ -183,8 +188,8 @@
           <p class="text-white-65">Processing...</p>
         </div>
 
-        <!-- Text Input Mode -->
-        <div v-if="textMode && !isRecording && !isAISpeaking" class="mt-4">
+        <!-- Text Input Mode - only show if session is NOT ending -->
+        <div v-if="textMode && !isRecording && !isAISpeaking && !isSessionEnding" class="mt-4">
           <div class="flex gap-2">
             <input
               v-model="textInput"
@@ -290,6 +295,10 @@ let audioLevelFrame: number | null = null
 
 // Responsive check
 const isMobile = ref(false)
+
+// Computed: session is ending - locks input controls when [SESSION_COMPLETE] detected
+// This prevents users from recording new messages after the AI's final message
+const isSessionEnding = computed(() => sessionCompleteDetected.value)
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 768

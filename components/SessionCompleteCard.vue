@@ -13,10 +13,19 @@
     </p>
 
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <!-- Primary CTA: Return to Dashboard -->
+      <button
+        type="button"
+        class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card"
+        @click="$emit('dashboard')"
+      >
+        Return to Dashboard
+      </button>
+      <!-- Secondary CTA: Continue or Complete -->
       <button
         v-if="nextIllusion"
         type="button"
-        class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card"
+        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
         @click="$emit('continue', nextIllusion)"
       >
         Continue to Next Session
@@ -24,17 +33,10 @@
       <button
         v-else
         type="button"
-        class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card"
+        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
         @click="$emit('finish')"
       >
         Complete the Program
-      </button>
-      <button
-        type="button"
-        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
-        @click="$emit('dashboard')"
-      >
-        Return to Dashboard
       </button>
     </div>
   </div>
