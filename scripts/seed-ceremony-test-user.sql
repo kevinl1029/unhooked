@@ -10,7 +10,47 @@
 -- - user_intake (onboarding data)
 -- - user_progress (all 5 illusions completed, ceremony_ready state)
 -- - user_story (conviction scores, key insights)
--- - captured_moments (at least 5 moments for journey generation)
+-- - captured_moments (at least 7 moments for journey generation)
+--
+-- ============================================
+-- DEPENDENCIES - Update this script if any of these change:
+-- ============================================
+--
+-- DATABASE SCHEMA (tables & columns):
+--   - user_intake: user_id, product_types, usage_frequency, years_using,
+--                  previous_attempts, longest_quit_duration, primary_reason, triggers
+--   - user_progress: user_id, program_status, current_illusion, illusion_order,
+--                    illusions_completed, total_sessions, started_at, last_session_at,
+--                    current_layer, timezone
+--   - user_story: user_id, origin_summary, origin_moment_ids, primary_triggers,
+--                 personal_stakes, [illusion]_conviction, [illusion]_key_insight_id,
+--                 overall_readiness
+--   - captured_moments: user_id, moment_type, transcript, illusion_key, session_type,
+--                       illusion_layer, confidence_score, emotional_valence
+--
+-- ENUM VALUES (check constraints):
+--   - program_status: 'ceremony_ready' (user_progress)
+--   - moment_type: 'origin_story', 'insight', 'commitment' (captured_moments)
+--   - illusion_key: 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity'
+--   - session_type: 'core' (captured_moments)
+--   - illusion_layer: 'intellectual', 'emotional', 'identity' (captured_moments)
+--   - emotional_valence: 'positive', 'negative', 'mixed' (captured_moments)
+--
+-- BUSINESS LOGIC:
+--   - Ceremony requires: all 5 illusions completed (illusions_completed = [1,2,3,4,5])
+--   - Ceremony requires: at least 3 captured_moments (we create 7)
+--   - Conviction scores: 0-10 range
+--   - Key insight IDs: must reference valid captured_moments
+--
+-- VALIDATION:
+--   - A test exists at tests/unit/scripts/seed-script-validation.test.ts
+--   - Run `npm run test:unit` to verify this script's assumptions
+--
+-- RELATED FILES:
+--   - supabase/migrations/20260100_baseline_schema.sql (table definitions)
+--   - server/api/ceremony/prepare.get.ts (ceremony readiness check)
+--   - server/api/ceremony/generate-journey.post.ts (moment count requirement)
+--   - composables/useUserStatus.ts (phase detection logic)
 
 -- ============================================
 -- CONFIGURATION: Set your test user ID here
