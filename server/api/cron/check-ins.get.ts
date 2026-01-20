@@ -1,7 +1,7 @@
 /**
- * POST /api/cron/check-ins
+ * GET /api/cron/check-ins
  * Vercel Cron endpoint to process scheduled check-ins
- * Runs daily
+ * Runs hourly
  */
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { processScheduledCheckIns } from '~/server/utils/email/check-in-sender'
