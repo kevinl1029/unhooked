@@ -14,6 +14,9 @@ on:
 jobs:
   trigger-check-ins:
     runs-on: ubuntu-latest
+    # Only run on staging branch for now (skip on main/production)
+    # Remove this condition when ready to enable for production
+    if: github.ref == 'refs/heads/staging' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Trigger check-in processing
         run: |
