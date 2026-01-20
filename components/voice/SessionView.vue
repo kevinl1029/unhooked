@@ -105,7 +105,8 @@
       </div>
 
       <!-- Voice Controls - fixed min-height to prevent layout jumps between states -->
-      <div v-if="!readOnly" class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center">
+      <!-- Hide entirely once session completion is triggered to avoid "Session complete" text flash -->
+      <div v-if="!readOnly && !hideVoiceControls" class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center">
         <!-- AI Speaking State - always show pause/skip while AI is speaking, even during session end -->
         <div v-if="isAISpeaking" class="text-center space-y-3">
           <VoiceAudioWaveform
@@ -291,6 +292,7 @@ const audioLevel = ref(0)
 const showPermissionOverlay = ref(false)
 const sessionCompleteDetected = ref(false)
 const audioHasStartedForCompletion = ref(false)
+const sessionCompletionTriggered = ref(false) // True once handleSessionComplete starts
 let audioLevelFrame: number | null = null
 
 // Responsive check
@@ -299,6 +301,10 @@ const isMobile = ref(false)
 // Computed: session is ending - locks input controls when [SESSION_COMPLETE] detected
 // This prevents users from recording new messages after the AI's final message
 const isSessionEnding = computed(() => sessionCompleteDetected.value)
+
+// Computed: hide voice controls entirely once completion is triggered
+// This avoids the brief "Session complete" text flash before the card appears
+const hideVoiceControls = computed(() => sessionCompletionTriggered.value)
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 768
@@ -549,6 +555,9 @@ const handleSendText = async () => {
 }
 
 const handleSessionComplete = async () => {
+  // Hide voice controls immediately to avoid "Session complete" text flash
+  sessionCompletionTriggered.value = true
+
   console.log('[SessionView] handleSessionComplete called', {
     conversationId: conversationId.value,
     illusionNumber: props.illusionNumber
