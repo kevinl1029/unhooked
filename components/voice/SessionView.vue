@@ -415,17 +415,11 @@ watch(
   (msgs) => {
     const lastMsg = msgs[msgs.length - 1]
     if (lastMsg?.role === 'assistant' && lastMsg.content.includes('[SESSION_COMPLETE]')) {
-      console.log('[SessionView] SESSION_COMPLETE token detected in message', {
-        messageIndex: msgs.length - 1,
-        alreadyDetected: sessionCompleteDetected.value,
-        isAISpeaking: isAISpeaking.value
-      })
       sessionCompleteDetected.value = true
       // If audio is already playing when we detect SESSION_COMPLETE,
       // mark that audio has started (the watch won't catch it since isAISpeaking
       // was already true before sessionCompleteDetected became true)
       if (isAISpeaking.value) {
-        console.log('[SessionView] Audio already playing when SESSION_COMPLETE detected - setting audioHasStartedForCompletion=true')
         audioHasStartedForCompletion.value = true
       }
     }
@@ -437,13 +431,7 @@ watch(
 watch(
   () => isAISpeaking.value,
   (speaking) => {
-    console.log('[SessionView] isAISpeaking changed (audio start tracker)', {
-      speaking,
-      sessionCompleteDetected: sessionCompleteDetected.value,
-      audioHasStartedForCompletion: audioHasStartedForCompletion.value
-    })
     if (speaking && sessionCompleteDetected.value) {
-      console.log('[SessionView] Audio started for completion message - setting audioHasStartedForCompletion=true')
       audioHasStartedForCompletion.value = true
     }
   }
@@ -457,14 +445,7 @@ watch(
     // 1. Session complete was detected
     // 2. Audio has started playing (so we know TTS was initiated)
     // 3. Audio is now finished (speaking = false)
-    console.log('[SessionView] isAISpeaking changed (completion trigger)', {
-      speaking,
-      sessionCompleteDetected: sessionCompleteDetected.value,
-      audioHasStartedForCompletion: audioHasStartedForCompletion.value,
-      willTriggerCompletion: !speaking && sessionCompleteDetected.value && audioHasStartedForCompletion.value
-    })
     if (!speaking && sessionCompleteDetected.value && audioHasStartedForCompletion.value) {
-      console.log('[SessionView] Triggering handleSessionComplete from audio finish watch')
       handleSessionComplete()
     }
   }
@@ -513,35 +494,15 @@ const handleStopRecording = async () => {
 }
 
 const handlePauseAudio = () => {
-  console.log('[SessionView] handlePauseAudio called', {
-    isAISpeaking: isAISpeaking.value,
-    isPaused: isPaused.value,
-    sessionCompleteDetected: sessionCompleteDetected.value
-  })
   pauseAudio()
 }
 
 const handleResumeAudio = () => {
-  console.log('[SessionView] handleResumeAudio called', {
-    isAISpeaking: isAISpeaking.value,
-    isPaused: isPaused.value,
-    sessionCompleteDetected: sessionCompleteDetected.value
-  })
   resumeAudio()
 }
 
 const handleSkipAudio = () => {
-  console.log('[SessionView] handleSkipAudio called', {
-    isAISpeaking: isAISpeaking.value,
-    isPaused: isPaused.value,
-    sessionCompleteDetected: sessionCompleteDetected.value,
-    audioHasStartedForCompletion: audioHasStartedForCompletion.value
-  })
   stopAudio()
-  console.log('[SessionView] After stopAudio', {
-    isAISpeaking: isAISpeaking.value,
-    isPaused: isPaused.value
-  })
 }
 
 const handleSendText = async () => {
@@ -558,25 +519,17 @@ const handleSessionComplete = async () => {
   // Hide voice controls immediately to avoid "Session complete" text flash
   sessionCompletionTriggered.value = true
 
-  console.log('[SessionView] handleSessionComplete called', {
-    conversationId: conversationId.value,
-    illusionNumber: props.illusionNumber
-  })
-
   if (!conversationId.value) {
-    console.error('[SessionView] No conversationId available for session completion')
+    console.error('No conversationId available for session completion')
     emit('sessionComplete', null)
     return
   }
 
   try {
-    console.log('[SessionView] Calling completeSession API...')
     const result = await completeSession(conversationId.value, props.illusionNumber)
-    console.log('[SessionView] completeSession result:', result)
-    console.log('[SessionView] Emitting sessionComplete event with nextIllusion:', result.nextIllusion)
     emit('sessionComplete', result.nextIllusion)
   } catch (err) {
-    console.error('[SessionView] Error completing session:', err)
+    console.error('Error completing session:', err)
     emit('sessionComplete', null)
   }
 }

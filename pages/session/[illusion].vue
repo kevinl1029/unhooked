@@ -358,15 +358,9 @@ async function handleSessionComplete() {
 
 // Voice session handlers
 async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
-  console.log('[Session Page] handleVoiceSessionComplete received', {
-    nextIllusionNum,
-    currentSessionComplete: sessionComplete.value
-  })
   nextIllusion.value = nextIllusionNum
   sessionComplete.value = true
-  console.log('[Session Page] sessionComplete set to true, fetching progress...')
   await fetchProgress()
-  console.log('[Session Page] Progress fetched, SessionCompleteCard should now render')
 }
 
 function handleError(message: string) {

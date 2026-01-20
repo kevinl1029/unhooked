@@ -319,17 +319,8 @@ export const useVoiceSession = () => {
 
   // Stop audio completely
   const stopAudio = () => {
-    console.log('[useVoiceSession] stopAudio called', {
-      hasAudioElement: !!audioElement,
-      streamingTTSIsPlaying: streamingTTS.isPlaying.value,
-      isAISpeaking: isAISpeaking.value,
-      isPaused: isPaused.value,
-      streamingModeFlag: streamingModeFlag.value
-    })
-
     // Stop batch mode audio
     if (audioElement) {
-      console.log('[useVoiceSession] Stopping batch mode audio')
       audioElement.pause()
       audioElement.currentTime = 0
       stopWordTracking()
@@ -337,22 +328,15 @@ export const useVoiceSession = () => {
 
     // Stop streaming TTS audio (this triggers onAudioComplete via the callback)
     if (streamingTTS.isPlaying.value) {
-      console.log('[useVoiceSession] Stopping streaming TTS (will trigger onAudioComplete)')
       streamingTTS.stop(true) // Pass true to trigger onAudioComplete
     } else {
       // If not playing, just reset state
-      console.log('[useVoiceSession] Streaming TTS not playing, resetting state directly')
       isAISpeaking.value = false
       streamingModeFlag.value = false
     }
 
     // Always reset paused state when stopping
     isPaused.value = false
-    console.log('[useVoiceSession] stopAudio finished', {
-      isAISpeaking: isAISpeaking.value,
-      isPaused: isPaused.value,
-      streamingModeFlag: streamingModeFlag.value
-    })
   }
 
   // Start recording user's voice

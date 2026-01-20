@@ -146,17 +146,9 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       const isLastQueuedChunk = chunksFinishedPlaying >= queuedChunks.length
 
       if (chunk.isLast || (pendingCompletion && isLastQueuedChunk)) {
-        console.log('[useStreamingAudioQueue] Audio playback naturally completed', {
-          isLast: chunk.isLast,
-          pendingCompletion,
-          isLastQueuedChunk,
-          chunksFinishedPlaying,
-          totalChunks: queuedChunks.length
-        })
         isPlaying.value = false
         stopWordTracking()
         pendingCompletion = false
-        console.log('[useStreamingAudioQueue] Calling onComplete from natural completion')
         options.onComplete?.()
       }
     }
@@ -247,19 +239,11 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       const allAudioFinished = queuedChunks.length > 0 &&
         chunksFinishedPlaying >= queuedChunks.length
 
-      console.log('[useStreamingAudioQueue] Received final marker chunk', {
-        allAudioFinished,
-        queuedChunksLength: queuedChunks.length,
-        chunksFinishedPlaying
-      })
-
       if (allAudioFinished || queuedChunks.length === 0) {
-        console.log('[useStreamingAudioQueue] All audio finished, calling onComplete from final marker')
         isPlaying.value = false
         stopWordTracking()
         options.onComplete?.()
       } else {
-        console.log('[useStreamingAudioQueue] Setting pendingCompletion=true, waiting for chunks to finish')
         pendingCompletion = true
       }
       return
@@ -334,11 +318,6 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
    */
   const stop = (triggerComplete = false) => {
     const wasPlaying = isPlaying.value
-    console.log('[useStreamingAudioQueue] stop called', {
-      triggerComplete,
-      wasPlaying,
-      willCallOnComplete: triggerComplete && wasPlaying
-    })
 
     for (const source of activeSourceNodes) {
       try {
@@ -374,10 +353,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     chunksFinishedPlaying = 0
 
     if (triggerComplete && wasPlaying) {
-      console.log('[useStreamingAudioQueue] Calling onComplete callback')
       options.onComplete?.()
-    } else {
-      console.log('[useStreamingAudioQueue] NOT calling onComplete', { triggerComplete, wasPlaying })
     }
   }
 
