@@ -235,6 +235,36 @@ npm run postinstall
 ```
 Automatically runs after `npm install` to generate Nuxt types
 
+### Documentation Maintenance
+
+The `docs/` folder contains product and technical documentation. Keep docs in sync with code changes.
+
+**When to update documentation:**
+- **Architecture decisions** → Update `docs/decisions/architecture-decisions.md`
+- **Product decisions** → Create or update `docs/decisions/{feature}-decisions.md`
+- **New features** → Update or create relevant spec in `docs/specs/`
+- **Spec changes during implementation** → Update the spec to reflect what was actually built
+
+**Documentation structure:**
+```
+docs/
+├── specs/        # Technical specifications (PRD + technical design)
+├── decisions/    # Architecture Decision Records (ADRs) and product decisions
+├── guides/       # Reference guides and how-tos
+├── testing/      # Test plans and QA documentation
+└── README.md     # Index of all documentation
+```
+
+**Naming conventions:**
+| Type | Pattern | Example |
+|------|---------|---------|
+| Specs | `{feature}-spec.md` | `authentication-spec.md` |
+| Decisions | `{scope}-decisions.md` | `architecture-decisions.md` |
+| Guides | `{topic}-guide.md` | `llm-configuration-guide.md` |
+| Testing | `{feature}-test-plan.md` | `core-program-test-plan.md` |
+
+**Important:** Version numbers are NOT included in file names. Git handles versioning.
+
 ---
 
 ## Testing
@@ -470,4 +500,4 @@ Add these in the Vercel dashboard (Settings → Environment Variables):
 
 ---
 
-**Last Updated:** Phase 1.1 - Initial setup complete
+**Last Updated:** 2026-01-19 - Added documentation maintenance guidelines
