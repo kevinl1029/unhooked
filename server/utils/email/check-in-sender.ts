@@ -31,9 +31,12 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
   errors: string[]
 }> {
   const now = new Date()
+  // Look back 24 hours to catch any check-ins that were missed (e.g., scheduled_for already passed)
+  // and forward 24 hours for upcoming ones
+  const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago
   const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours from now
 
-  // Find check-ins due to be sent
+  // Find check-ins due to be sent (includes past-due ones that weren't sent yet)
   const { data: checkIns, error } = await supabase
     .from('check_in_schedule')
     .select(`
@@ -45,7 +48,7 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
     `)
     .eq('status', 'scheduled')
     .lte('scheduled_for', windowEnd.toISOString())
-    .gte('scheduled_for', now.toISOString())
+    .gte('scheduled_for', windowStart.toISOString())
 
   if (error) {
     console.error('[check-in-sender] Failed to query check-ins:', error)

@@ -1,7 +1,12 @@
 /**
- * POST /api/cron/check-ins
- * Vercel Cron endpoint to process scheduled check-ins
- * Runs daily
+ * GET /api/cron/check-ins
+ * Cron endpoint to process scheduled check-ins
+ *
+ * Triggered by:
+ * - GitHub Actions: Every 5 minutes (primary)
+ * - Vercel Cron: Daily at 8am UTC (fallback)
+ *
+ * See ADR-003 for architecture details.
  */
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { processScheduledCheckIns } from '~/server/utils/email/check-in-sender'

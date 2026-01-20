@@ -315,11 +315,12 @@ export async function getPendingCheckIns(
   supabase: SupabaseClient,
   userId: string
 ): Promise<{ checkIns: any[]; nextCheckIn: any | null }> {
+  // Include 'opened' status so users who started but didn't complete see the check-in again
   const { data: checkIns, error } = await supabase
     .from('check_in_schedule')
     .select('*')
     .eq('user_id', userId)
-    .in('status', ['scheduled', 'sent'])
+    .in('status', ['scheduled', 'sent', 'opened'])
     .order('scheduled_for', { ascending: true })
 
   if (error) {
