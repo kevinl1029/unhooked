@@ -46,7 +46,12 @@ export class SequentialTTSProcessor {
     const sanitizedText = sanitizeForTTS(text)
 
     // Skip empty sentences (e.g., "[SESSION_COMPLETE]" becomes empty after sanitization)
+    // But if this was marked as the last sentence, we still need to send a completion marker
     if (!sanitizedText) {
+      if (isLast) {
+        // Send completion marker so client knows audio stream is done
+        this.sendCompletionMarker()
+      }
       return
     }
 

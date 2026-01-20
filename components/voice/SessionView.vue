@@ -411,11 +411,17 @@ watch(
     if (lastMsg?.role === 'assistant' && lastMsg.content.includes('[SESSION_COMPLETE]')) {
       console.log('[SessionView] SESSION_COMPLETE token detected in message', {
         messageIndex: msgs.length - 1,
-        alreadyDetected: sessionCompleteDetected.value
+        alreadyDetected: sessionCompleteDetected.value,
+        isAISpeaking: isAISpeaking.value
       })
       sessionCompleteDetected.value = true
-      // Don't trigger immediately - wait for audio to start and finish
-      // The isAISpeaking watch will handle completion
+      // If audio is already playing when we detect SESSION_COMPLETE,
+      // mark that audio has started (the watch won't catch it since isAISpeaking
+      // was already true before sessionCompleteDetected became true)
+      if (isAISpeaking.value) {
+        console.log('[SessionView] Audio already playing when SESSION_COMPLETE detected - setting audioHasStartedForCompletion=true')
+        audioHasStartedForCompletion.value = true
+      }
     }
   },
   { deep: true }
