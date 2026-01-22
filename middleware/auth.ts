@@ -1,8 +1,8 @@
 export default defineNuxtRouteMiddleware((to) => {
-  const config = useRuntimeConfig()
+  const { appAccessEnabled } = useAppMode()
 
-  // If app is disabled, redirect all protected routes to landing page
-  if (!config.public.appEnabled) {
+  // If app access is disabled (validation or disabled mode), redirect all protected routes to landing page
+  if (!appAccessEnabled) {
     return navigateTo('/')
   }
 

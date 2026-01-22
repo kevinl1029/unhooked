@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import CheckoutButton from './CheckoutButton.vue'
 
-const config = useRuntimeConfig()
-const appEnabled = computed(() => config.public.appEnabled)
+const { checkoutEnabled } = useAppMode()
 
 function scrollToSection(sectionId: string) {
   const element = document.getElementById(sectionId)
@@ -34,7 +33,7 @@ function scrollToSection(sectionId: string) {
               </svg>
             </template>
           </CheckoutButton>
-          <p v-if="appEnabled" class="price-note"><strong>$199</strong> founding member price · 30-day guarantee</p>
+          <p v-if="checkoutEnabled" class="price-note"><strong>$199</strong> founding member price · 30-day guarantee</p>
           <p v-else class="price-note">Launching soon · Join the waitlist for early access</p>
           <a href="#moment" class="secondary-cta" @click.prevent="scrollToSection('moment')">
             Show me how it works

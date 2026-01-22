@@ -9,7 +9,7 @@
         <span class="loading-spinner"></span>
         Loading...
       </template>
-      <template v-else-if="!appEnabled">
+      <template v-else-if="!checkoutEnabled">
         <slot name="waitlist">Join the Waitlist</slot>
       </template>
       <template v-else>
@@ -21,8 +21,7 @@
 </template>
 
 <script setup lang="ts">
-const config = useRuntimeConfig()
-const appEnabled = computed(() => config.public.appEnabled)
+const { checkoutEnabled } = useAppMode()
 
 const { trackEvent, ANALYTICS_EVENTS } = useAnalytics()
 
@@ -58,7 +57,7 @@ function handleClick() {
     trackEvent(eventMap[props.trackingLocation])
   }
 
-  if (!appEnabled.value) {
+  if (!checkoutEnabled) {
     scrollToWaitlist()
   } else {
     handleCheckout()

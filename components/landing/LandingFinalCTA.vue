@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import CheckoutButton from './CheckoutButton.vue'
 
-const config = useRuntimeConfig()
-const appEnabled = computed(() => config.public.appEnabled)
+const { checkoutEnabled } = useAppMode()
 
 const { trackEvent, ANALYTICS_EVENTS } = useAnalytics()
 const { utmParams } = useUtmTracking()
@@ -26,7 +25,7 @@ async function handleEmailSubmit(e: Event) {
       method: 'POST',
       body: {
         email: email.value.trim(),
-        source: appEnabled.value ? 'landing_page_nurture' : 'landing_page_waitlist',
+        source: checkoutEnabled.value ? 'landing_page_nurture' : 'landing_page_waitlist',
         ...utmParams.value
       }
     })
@@ -36,7 +35,7 @@ async function handleEmailSubmit(e: Event) {
 
     // Track successful email capture
     trackEvent(ANALYTICS_EVENTS.EMAIL_SUBMITTED, {
-      source: appEnabled.value ? 'nurture' : 'waitlist',
+      source: checkoutEnabled.value ? 'nurture' : 'waitlist',
     })
 
   } catch (err: unknown) {
@@ -54,7 +53,7 @@ async function handleEmailSubmit(e: Event) {
   <section id="final-cta" class="section final-cta-section fade-in">
     <div class="container content-container">
       <!-- Path A: Ready Now (or waitlist if app disabled) -->
-      <div v-if="appEnabled" class="final-cta-primary">
+      <div v-if="checkoutEnabled" class="final-cta-primary">
         <h2 class="final-cta-headline">Ready to become someone who doesn't want it anymore?</h2>
         <CheckoutButton tracking-location="final" :large="true">
           Become a founding member — $199
@@ -67,10 +66,10 @@ async function handleEmailSubmit(e: Event) {
 
       <!-- Waitlist Section (shown as primary when app disabled, secondary when enabled) -->
       <div class="final-cta-secondary">
-        <h3 v-if="appEnabled" class="email-headline">Not ready yet?</h3>
+        <h3 v-if="checkoutEnabled" class="email-headline">Not ready yet?</h3>
         <h2 v-else class="final-cta-headline">Become someone who doesn't want nicotine.</h2>
         <p class="email-body">
-          {{ appEnabled
+          {{ checkoutEnabled
             ? "Get one email that might change how you see nicotine. No spam. Just a taste of what we do."
             : "Join the waitlist for early access and founding member pricing—$199 instead of $299."
           }}
@@ -102,7 +101,7 @@ async function handleEmailSubmit(e: Event) {
             :disabled="isSubmitting"
           >
             <span v-if="isSubmitting">Sending...</span>
-            <span v-else>{{ appEnabled ? 'Send it to me' : 'Join the Waitlist' }}</span>
+            <span v-else>{{ checkoutEnabled ? 'Send it to me' : 'Join the Waitlist' }}</span>
           </button>
         </form>
 
