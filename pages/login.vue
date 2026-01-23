@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-const config = useRuntimeConfig()
+const { appAccessEnabled } = useAppMode()
 const { signInWithEmail, user } = useAuth()
 
 const email = ref('')
@@ -75,8 +75,8 @@ const loading = ref(false)
 const submitted = ref(false)
 const error = ref('')
 
-// Redirect to landing if app is disabled
-if (!config.public.appEnabled) {
+// Redirect to landing if app access is disabled (validation or disabled mode)
+if (!appAccessEnabled) {
   navigateTo('/')
 }
 

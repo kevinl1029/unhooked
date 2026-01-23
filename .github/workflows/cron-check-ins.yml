@@ -28,6 +28,7 @@ jobs:
             -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
+            -H "x-vercel-protection-bypass: ${{ secrets.VERCEL_BYPASS_TOKEN }}" \
             "${TARGET_URL}/api/cron/check-ins")
 
           # Extract HTTP status code (last line)
