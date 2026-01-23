@@ -30,6 +30,7 @@ const props = defineProps<{
   large?: boolean
   full?: boolean
   trackingLocation?: 'hero' | 'pricing' | 'final' | 'sticky' | 'listen'
+  emailSource?: 'welcome' | 'followup' | 'direct'
 }>()
 
 const buttonClasses = computed(() => [
@@ -55,7 +56,9 @@ function handleClick() {
       sticky: ANALYTICS_EVENTS.CTA_CLICK_STICKY,
       listen: ANALYTICS_EVENTS.CTA_CLICK_LISTEN,
     }
-    trackEvent(eventMap[props.trackingLocation])
+    // Include email_source for listen page tracking
+    const eventProps = props.emailSource ? { email_source: props.emailSource } : undefined
+    trackEvent(eventMap[props.trackingLocation], eventProps)
   }
 
   if (!checkoutEnabled) {

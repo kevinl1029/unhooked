@@ -137,6 +137,7 @@ definePageMeta({
           <p class="text-white-85 text-lg mb-4">Ready to see the rest?</p>
           <LandingCheckoutButton
             tracking-location="listen"
+            :email-source="emailSource"
             large
           >
             Become a founding member — $199 →
