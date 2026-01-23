@@ -122,11 +122,12 @@ definePageMeta({
           style="animation-delay: 0.1s"
         >
           <p class="text-white-85 text-lg mb-4">Ready to see the rest?</p>
-          <button
-            class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card text-lg"
+          <LandingCheckoutButton
+            tracking-location="listen"
+            large
           >
             Become a founding member — $199 →
-          </button>
+          </LandingCheckoutButton>
           <p class="text-white-65 text-sm mt-3">
             30-day guarantee · Start when the program launches
           </p>

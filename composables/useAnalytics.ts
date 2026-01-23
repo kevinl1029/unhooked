@@ -21,6 +21,7 @@ export const ANALYTICS_EVENTS = {
   CTA_CLICK_PRICING: 'CTA Click: Pricing',
   CTA_CLICK_FINAL: 'CTA Click: Final CTA',
   CTA_CLICK_STICKY: 'CTA Click: Sticky',
+  CTA_CLICK_LISTEN: 'CTA Click: Listen',
 
   // Conversion events
   CHECKOUT_STARTED: 'Checkout Started',
