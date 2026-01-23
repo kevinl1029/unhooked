@@ -133,8 +133,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added EmailSource type and emailSource computed property that validates src query param"
     },
     {
       "id": "US-009",
@@ -150,8 +150,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated headline and body copy in LandingFinalCTA.vue for audio lead magnet"
     },
     {
       "id": "US-010",
@@ -168,8 +168,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented audio funnel email for validation/enabled modes with plain text format. Waitlist HTML email preserved for disabled mode."
     },
     {
       "id": "US-011",
@@ -182,8 +182,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added emailSource prop to CheckoutButton and passed to trackEvent with email_source property"
     },
     {
       "id": "US-012",
@@ -197,8 +197,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added AUDIO_STARTED and AUDIO_COMPLETED events to useAnalytics. Track first play and audio end with email_source property."
     },
     {
       "id": "US-013",
@@ -211,8 +211,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added SECONDARY_CTA_CLICK event and @click handler on NuxtLink with email_source property"
     }
   ]
 }

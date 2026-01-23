@@ -127,3 +127,93 @@ Started: Thu Jan 22 22:19:24 EST 2026
   - US-003 implemented more than its own scope - scaffolded all CTA sections ahead of time
   - Always check existing implementation before making changes
 ---
+
+## 2026-01-23 00:05 EST - US-008
+- What was implemented:
+  - Added email source tracking via 'src' query parameter on listen page
+  - Created `EmailSource` type for valid source values: 'welcome' | 'followup' | 'direct'
+  - Created `emailSource` computed property that reads and validates the query param
+  - Defaults to 'direct' if 'src' param is missing or contains an invalid value
+- Files changed:
+  - pages/listen.vue (modified - added email source tracking)
+- **Learnings for future iterations:**
+  - Use TypeScript type for valid query param values to ensure type safety
+  - Computed property is ideal for derived state from route query params
+  - The emailSource computed is now available for future analytics integration
+---
+
+## 2026-01-23 00:15 EST - US-009
+- What was implemented:
+  - Updated Path B (secondary CTA) copy on landing page for audio lead magnet
+  - Changed headline from "Not ready yet?" to "Still thinking about it?"
+  - Changed body copy to audio-focused message: "Get a free 5-minute audio that explains the real reason quitting feels so hard. You'll hear it differently after this."
+  - Copy only displays when checkoutEnabled is true (waitlist copy unchanged for disabled mode)
+  - Button text remains "Send it to me"
+- Files changed:
+  - components/landing/LandingFinalCTA.vue (modified - updated headline and body copy)
+- **Learnings for future iterations:**
+  - Path B/secondary CTA is the email capture section for undecided visitors
+  - Copy changes are controlled by the `checkoutEnabled` computed from `useAppMode()`
+  - Both enabled/validation modes show the new audio magnet copy
+---
+
+## 2026-01-23 00:30 EST - US-010
+- What was implemented:
+  - Updated welcome email to send different content based on appMode
+  - Added plain text audio funnel email for validation/enabled modes
+  - Subject line: "Here's the audio I promised"
+  - Body includes link to https://getunhooked.app/listen?src=welcome
+  - Uses `text` property in Resend API for plain text email
+  - Preserved existing HTML waitlist email for disabled mode
+  - From address unchanged: 'Kevin from Unhooked <kevin@getunhooked.app>'
+- Files changed:
+  - server/api/subscribe.post.ts (modified - added audio funnel email, refactored email sending)
+- **Learnings for future iterations:**
+  - Access appMode on server via `config.public.appMode`
+  - Resend API uses `text` property for plain text emails, `html` for HTML
+  - Renamed getWelcomeEmailHtml() to getWaitlistWelcomeEmailHtml() for clarity
+---
+
+## 2026-01-23 00:45 EST - US-011
+- What was implemented:
+  - Added `emailSource` prop to CheckoutButton component (type: 'welcome' | 'followup' | 'direct')
+  - Updated handleClick to pass email_source property to trackEvent when provided
+  - Updated listen page to pass emailSource to LandingCheckoutButton
+  - CTA_CLICK_LISTEN event now includes email_source property
+- Files changed:
+  - components/landing/CheckoutButton.vue (added emailSource prop and event tracking)
+  - pages/listen.vue (pass emailSource to CheckoutButton)
+- **Learnings for future iterations:**
+  - trackEvent accepts optional second argument for event properties
+  - Props can be conditionally passed to trackEvent (undefined if not provided)
+  - listen tracking location was already implemented in US-006
+---
+
+## 2026-01-23 00:55 EST - US-012
+- What was implemented:
+  - Added AUDIO_STARTED and AUDIO_COMPLETED events to useAnalytics.ts
+  - AUDIO_STARTED fires on first play only (tracked via hasTrackedAudioStart ref)
+  - AUDIO_COMPLETED fires when audio reaches end
+  - Both events include email_source property (welcome/followup/direct)
+  - Events sent via trackEvent() to Plausible
+- Files changed:
+  - composables/useAnalytics.ts (added AUDIO_STARTED, AUDIO_COMPLETED events)
+  - pages/listen.vue (added tracking calls with email_source)
+- **Learnings for future iterations:**
+  - Track "first play" separately from timer start using different refs
+  - Audio events provide email source attribution for funnel analysis
+---
+
+## 2026-01-23 01:05 EST - US-013
+- What was implemented:
+  - Added SECONDARY_CTA_CLICK event to useAnalytics.ts
+  - Added @click handler on "Read the full story" NuxtLink
+  - Event includes email_source property (welcome/followup/direct)
+  - Event sent via trackEvent() to Plausible
+- Files changed:
+  - composables/useAnalytics.ts (added SECONDARY_CTA_CLICK event)
+  - pages/listen.vue (added click handler and tracking function)
+- **Learnings for future iterations:**
+  - NuxtLink supports @click handlers that fire before navigation
+  - Can track link clicks without preventing default navigation
+---
