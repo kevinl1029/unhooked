@@ -7,6 +7,21 @@ const isDebugMode = computed(() => route.query.debug === 'true')
 // Content reveal state - starts visible in debug mode
 const showBridgeContent = ref(isDebugMode.value)
 
+// Template refs for DOM elements
+const audioPlayer = ref<HTMLAudioElement | null>(null)
+const bridgeSection = ref<HTMLElement | null>(null)
+
+// Handle audio ended event - reveal bridge content and scroll to it
+function onAudioEnded() {
+  if (!showBridgeContent.value) {
+    showBridgeContent.value = true
+    // Wait for next tick so the bridge section is rendered before scrolling
+    nextTick(() => {
+      bridgeSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+}
+
 useHead({
   title: 'Session Zero — Unhooked',
   meta: [
@@ -46,9 +61,11 @@ definePageMeta({
         <!-- Audio Player -->
         <div class="animate-fade-in-up" style="animation-delay: 0.2s">
           <audio
+            ref="audioPlayer"
             controls
             class="w-full max-w-md mx-auto"
             preload="metadata"
+            @ended="onAudioEnded"
           >
             <source src="/audio/session-zero.mp3" type="audio/mpeg">
             Your browser does not support the audio element.
@@ -58,6 +75,7 @@ definePageMeta({
         <!-- Bridge Section (revealed after audio ends or in debug mode) -->
         <div
           v-if="showBridgeContent"
+          ref="bridgeSection"
           class="mt-12 animate-fade-in-up"
         >
           <h2 class="text-xl md:text-2xl font-semibold text-white mb-4">
