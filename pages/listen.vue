@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const route = useRoute()
+const { trackEvent, ANALYTICS_EVENTS } = useAnalytics()
 
 // Email source tracking - read 'src' query parameter
 // Valid values: welcome, followup, or defaults to 'direct' if missing/invalid
@@ -41,11 +42,21 @@ function revealBridgeContent() {
 
 // Handle audio ended event - reveal bridge content and scroll to it
 function onAudioEnded() {
+  trackEvent(ANALYTICS_EVENTS.AUDIO_COMPLETED, { email_source: emailSource.value })
   revealBridgeContent()
 }
 
-// Handle audio play event - start 30-second fallback timer
+// Track whether we've already tracked the first play event
+const hasTrackedAudioStart = ref(false)
+
+// Handle audio play event - start 30-second fallback timer and track first play
 function onAudioPlay() {
+  // Track AUDIO_STARTED only on first play
+  if (!hasTrackedAudioStart.value) {
+    hasTrackedAudioStart.value = true
+    trackEvent(ANALYTICS_EVENTS.AUDIO_STARTED, { email_source: emailSource.value })
+  }
+
   // Only start timer once, and not in debug mode
   if (!fallbackTimerStarted.value && !isDebugMode.value) {
     fallbackTimerStarted.value = true

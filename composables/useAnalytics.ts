@@ -23,6 +23,10 @@ export const ANALYTICS_EVENTS = {
   CTA_CLICK_STICKY: 'CTA Click: Sticky',
   CTA_CLICK_LISTEN: 'CTA Click: Listen',
 
+  // Audio events (listen page)
+  AUDIO_STARTED: 'Audio Started',
+  AUDIO_COMPLETED: 'Audio Completed',
+
   // Conversion events
   CHECKOUT_STARTED: 'Checkout Started',
   EMAIL_SUBMITTED: 'Email Submitted',
