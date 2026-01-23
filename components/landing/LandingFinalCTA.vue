@@ -66,11 +66,11 @@ async function handleEmailSubmit(e: Event) {
 
       <!-- Waitlist Section (shown as primary when app disabled, secondary when enabled) -->
       <div class="final-cta-secondary">
-        <h3 v-if="checkoutEnabled" class="email-headline">Not ready yet?</h3>
+        <h3 v-if="checkoutEnabled" class="email-headline">Still thinking about it?</h3>
         <h2 v-else class="final-cta-headline">Become someone who doesn't want nicotine.</h2>
         <p class="email-body">
           {{ checkoutEnabled
-            ? "Get one email that might change how you see nicotine. No spam. Just a taste of what we do."
+            ? "Get a free 5-minute audio that explains the real reason quitting feels so hard. You'll hear it differently after this."
             : "Join the waitlist for early access and founding member pricing—$199 instead of $299."
           }}
         </p>
