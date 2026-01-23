@@ -1,6 +1,19 @@
 <script setup lang="ts">
 const route = useRoute()
 
+// Email source tracking - read 'src' query parameter
+// Valid values: welcome, followup, or defaults to 'direct' if missing/invalid
+type EmailSource = 'welcome' | 'followup' | 'direct'
+const validSources: EmailSource[] = ['welcome', 'followup']
+
+const emailSource = computed<EmailSource>(() => {
+  const src = route.query.src as string | undefined
+  if (src && validSources.includes(src as EmailSource)) {
+    return src as EmailSource
+  }
+  return 'direct'
+})
+
 // Debug mode shows all stages immediately (for development/testing)
 const isDebugMode = computed(() => route.query.debug === 'true')
 
