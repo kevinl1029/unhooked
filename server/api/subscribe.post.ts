@@ -74,18 +74,20 @@ function getWaitlistWelcomeEmailHtml(): string {
 // Audio funnel welcome email (for 'validation' or 'enabled' modes)
 // Plain text format as specified in requirements
 function getAudioFunnelWelcomeEmailText(): string {
-  return `Here's that audio I mentioned:
+  return `Thanks for signing up.
 
 https://getunhooked.app/listen?src=welcome
 
-It's 5 minutes. Put your headphones in if you can.
+It's 5 minutes. Headphones help if you have them.
 
-This explains why quitting feels so hard—and why it doesn't have to.
+You'll learn why quitting feels so hard—and why it doesn't have to be.
 
-Feel free to save this email. You can come back and listen whenever you're ready.
+Bookmark this email. You can come back whenever you're ready.
 
 Talk soon,
-Kevin`
+Kevin
+
+P.S. After you listen, reply and tell me what hit home. I read every response.`
 }
 
 // Send welcome email and add to Resend audience
@@ -120,7 +122,7 @@ async function sendWelcomeEmailAndAddToAudience(
           from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
           to: email,
           replyTo: EMAIL_REPLY_TO,
-          subject: "Here's the audio I promised",
+          subject: "Your 5-minute audio is ready",
           text: getAudioFunnelWelcomeEmailText()
         })
       } else {
