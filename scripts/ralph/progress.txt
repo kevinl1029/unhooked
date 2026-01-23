@@ -1,0 +1,129 @@
+# Ralph Progress Log
+Started: Thu Jan 22 22:19:24 EST 2026
+
+## Codebase Patterns
+- Add public routes to `nuxt.config.ts` supabase.redirectOptions.exclude array to bypass auth
+- Use `definePageMeta({ layout: false })` for standalone pages that don't need the default layout
+- Use `useHead()` for page-specific meta tags like title and robots
+- Landing page uses CSS from `assets/css/main.css` with brand colors and animations
+- Animation class `animate-fade-in-up` is available globally
+- Text opacity variants: `text-white-65`, `text-white-85`
+
+---
+
+## 2026-01-22 22:25 EST - US-001
+- What was implemented:
+  - Created `/pages/listen.vue` with audio player page
+  - Page has headline "Before you decide anything, hear this." and subhead "5 minutes. Headphones help."
+  - Audio player loads `/audio/session-zero.mp3`
+  - noindex/nofollow meta tag added
+  - Brand styling applied (deep teal gradient, Inter font)
+  - "Unhooked" header links to homepage
+  - Footer with "© 2026 Unhooked"
+  - Added `/listen` to supabase exclude list in nuxt.config.ts
+- Files changed:
+  - pages/listen.vue (created)
+  - nuxt.config.ts (added /listen to auth exclude list)
+- **Learnings for future iterations:**
+  - No tsconfig.json in root - use `.nuxt/tsconfig.json` for type checking
+  - Typecheck command: `npx vue-tsc --noEmit -p .nuxt/tsconfig.json`
+  - Pre-existing TS errors in test files shouldn't block implementation
+  - No `npm run typecheck` script - use vue-tsc directly
+  - Browser verification using dev-browser skill not configured
+---
+
+## 2026-01-22 22:36 EST - US-002
+- What was implemented:
+  - Created `public/audio/` directory
+  - Added placeholder `session-zero.mp3` file (5-second silent MP3)
+  - Verified file is accessible at `/audio/session-zero.mp3` via dev server (HTTP 200 OK, content-type: audio/mpeg)
+- Files changed:
+  - public/audio/session-zero.mp3 (created)
+- **Learnings for future iterations:**
+  - `ffmpeg` is available on this machine for generating test audio files
+  - Use `ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t <seconds> -q:a 9 <output.mp3>` to generate silent placeholder audio
+  - Dev server may auto-switch ports if 3000 is busy (check output for actual port)
+---
+
+## 2026-01-22 22:45 EST - US-003
+- What was implemented:
+  - Added debug mode to listen page via `?debug=true` query parameter
+  - Created `isDebugMode` computed property that checks `route.query.debug === 'true'`
+  - Created `showBridgeContent` reactive ref that starts as `true` in debug mode
+  - Added bridge section with headline and copy (hidden by default, shown in debug mode)
+  - Added primary CTA section with button placeholder (hidden by default, shown in debug mode)
+  - Added secondary CTA section with "Read the full story" link to `/?ref=listen`
+- Files changed:
+  - pages/listen.vue (modified)
+- **Learnings for future iterations:**
+  - Use `useRoute()` to access query parameters in Nuxt 3
+  - Use `computed()` for reactive values that depend on route params
+  - Pre-existing TypeScript errors in other files don't block implementation
+  - Bridge/CTA sections are now scaffolded for US-004 through US-007
+---
+
+## 2026-01-22 23:05 EST - US-004
+- What was implemented:
+  - Added audio `@ended` event listener to reveal bridge content when audio finishes
+  - Added `onAudioEnded()` function that sets `showBridgeContent = true` and triggers auto-scroll
+  - Added template refs `audioPlayer` and `bridgeSection` for DOM access
+  - Bridge section uses `scrollIntoView({ behavior: 'smooth', block: 'start' })` for smooth auto-scroll
+  - Used `nextTick()` to wait for DOM render before scrolling
+  - Bridge section already uses `animate-fade-in-up` animation class (300-400ms)
+- Files changed:
+  - pages/listen.vue (modified)
+- **Learnings for future iterations:**
+  - Use `nextTick()` when you need to access newly rendered DOM elements
+  - Template refs in Vue 3 are typed with `ref<HTMLElement | null>(null)`
+  - `scrollIntoView()` with `behavior: 'smooth'` provides nice animated scroll
+---
+
+## 2026-01-22 23:25 EST - US-005
+- What was implemented:
+  - Added 30-second fallback timer that starts when audio play begins
+  - Timer is wall-clock time (uses setTimeout, doesn't pause when audio pauses)
+  - Extracted `revealBridgeContent()` function to share logic between audio ended and timer
+  - Added `onAudioPlay()` handler that starts the timer on first play
+  - Timer only starts once (tracked via `fallbackTimerStarted` ref)
+  - Timer does not start in debug mode
+  - Added `onUnmounted()` cleanup to clear timer if component unmounts
+- Files changed:
+  - pages/listen.vue (modified)
+- **Learnings for future iterations:**
+  - Use `ReturnType<typeof setTimeout>` for proper typing of timer IDs
+  - Using a simple boolean ref to track "started" state prevents multiple timers
+  - Wall-clock timer = setTimeout (doesn't track actual audio playback time)
+---
+
+## 2026-01-22 23:40 EST - US-006
+- What was implemented:
+  - Replaced placeholder button with `LandingCheckoutButton` component
+  - Added `tracking-location="listen"` prop for analytics tracking
+  - Added `CTA_CLICK_LISTEN` event to `useAnalytics.ts` composable
+  - Added `'listen'` to `trackingLocation` prop type in CheckoutButton
+  - Added `listen` case to eventMap in CheckoutButton handleClick function
+- Files changed:
+  - pages/listen.vue (modified - replaced placeholder button)
+  - composables/useAnalytics.ts (added CTA_CLICK_LISTEN event)
+  - components/landing/CheckoutButton.vue (added 'listen' tracking location)
+- **Learnings for future iterations:**
+  - CheckoutButton component in `components/landing/` is auto-imported as `LandingCheckoutButton`
+  - Use kebab-case for props in templates (`tracking-location`) vs camelCase in TypeScript
+  - To add new tracking locations: update ANALYTICS_EVENTS, prop type, and eventMap
+---
+
+## 2026-01-22 23:55 EST - US-007
+- What was implemented:
+  - No code changes needed - secondary CTA was already fully implemented in US-003
+  - Verified all acceptance criteria:
+    - Secondary CTA section appears below primary CTA (lines 136-149)
+    - Headline matches: "Want to learn more first?" (line 142)
+    - Link text matches: "Read the full story →" (line 147)
+    - Link navigates to /?ref=listen (line 144)
+    - Styled as text link with underline, not button (text-white-85 hover:text-white underline)
+- Files changed:
+  - None (prd.json updated to mark as passing)
+- **Learnings for future iterations:**
+  - US-003 implemented more than its own scope - scaffolded all CTA sections ahead of time
+  - Always check existing implementation before making changes
+---

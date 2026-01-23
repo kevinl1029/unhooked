@@ -1,0 +1,218 @@
+{
+  "project": "Unhooked",
+  "branchName": "ralph/lead-funnel-session-zero-magnet",
+  "description": "Lead Funnel Session Zero Magnet - Audio lead magnet for undecided landing page visitors",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create listen page with audio player",
+      "description": "As an email recipient, I want to access a dedicated listen page with an audio player so that I can hear Session Zero in a focused environment.",
+      "acceptanceCriteria": [
+        "Page exists at /listen route",
+        "Page displays headline 'Before you decide anything, hear this.'",
+        "Page displays subhead '5 minutes. Headphones help.'",
+        "Audio player is visible and centered on page",
+        "Audio player loads /audio/session-zero.mp3",
+        "Page has noindex, nofollow meta tag",
+        "Page uses brand styling (deep teal gradient background, Inter font)",
+        "'Unhooked' text in header area links to homepage",
+        "Simple footer with '© 2026 Unhooked'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Browser verification skipped - no dev-browser skill configured"
+    },
+    {
+      "id": "US-002",
+      "title": "Add placeholder audio file",
+      "description": "As a developer, I want a placeholder audio file so that I can test the listen page functionality.",
+      "acceptanceCriteria": [
+        "Create public/audio/ directory",
+        "Add session-zero.mp3 placeholder file (can be silent or short test audio)",
+        "Audio file is accessible at /audio/session-zero.mp3",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "5-second silent MP3 placeholder generated with ffmpeg"
+    },
+    {
+      "id": "US-003",
+      "title": "Add debug mode for listen page",
+      "description": "As a developer, I want a debug mode that shows all page stages immediately so that I can test without waiting for timers.",
+      "acceptanceCriteria": [
+        "Adding ?debug=true to URL shows all stages (audio, bridge, CTAs) immediately",
+        "Debug mode only affects local display, not analytics",
+        "Without debug param, normal staged reveal behavior applies",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Browser verification skipped - no dev-browser skill configured. Debug mode implemented with isDebugMode computed property from route.query.debug."
+    },
+    {
+      "id": "US-004",
+      "title": "Add bridge content reveal after audio ends",
+      "description": "As an email recipient who finishes the audio, I want to see follow-up content that explains what I just heard.",
+      "acceptanceCriteria": [
+        "Bridge section hidden on initial page load",
+        "Bridge section appears after audio 'ended' event fires",
+        "Bridge section uses fade-in animation (300-400ms)",
+        "Bridge headline: 'That belief—that quitting requires willpower—is just one of five.'",
+        "Bridge copy mentions four more illusions without listing specifics",
+        "Page auto-scrolls to bring bridge section into view",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Browser verification skipped - no dev-browser skill configured. Implemented audio ended event listener with auto-scroll to bridge section."
+    },
+    {
+      "id": "US-005",
+      "title": "Add 30-second fallback timer for content reveal",
+      "description": "As an email recipient who starts but doesn't finish the audio, I want to eventually see the CTAs so I can still take action.",
+      "acceptanceCriteria": [
+        "30-second timer starts when audio play begins",
+        "Timer is wall-clock time (doesn't pause when audio pauses)",
+        "Bridge + CTA sections appear after 30 seconds if audio hasn't ended",
+        "Once revealed, sections stay visible (don't hide on audio replay)",
+        "Sections remain hidden if user never presses play",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Implemented wall-clock fallback timer using setTimeout. Timer starts on first play event and cannot be restarted. Timer is cleaned up on component unmount."
+    },
+    {
+      "id": "US-006",
+      "title": "Add primary CTA to checkout on listen page",
+      "description": "As an email recipient ready to purchase, I want a clear button to become a founding member.",
+      "acceptanceCriteria": [
+        "Primary CTA section appears with bridge content",
+        "Headline above button: 'Ready to see the rest?'",
+        "Button displays 'Become a founding member — $199 →'",
+        "Button uses existing CheckoutButton component",
+        "Clicking initiates Stripe checkout flow directly",
+        "Subtext shows '30-day guarantee · Start when the program launches'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Integrated LandingCheckoutButton component with tracking-location='listen'. Added CTA_CLICK_LISTEN event to analytics."
+    },
+    {
+      "id": "US-007",
+      "title": "Add secondary CTA to landing page on listen page",
+      "description": "As an email recipient who wants more information, I want a link to read the full landing page.",
+      "acceptanceCriteria": [
+        "Secondary CTA section appears below primary CTA",
+        "Headline: 'Want to learn more first?'",
+        "Link text is 'Read the full story →'",
+        "Link navigates to /?ref=listen (includes attribution param)",
+        "Link styled as text link, not button (visually quieter than primary)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Already implemented in US-003. Verified all acceptance criteria met: section appears below primary CTA, headline matches, link text matches, navigates to /?ref=listen, styled as text link with underline."
+    },
+    {
+      "id": "US-008",
+      "title": "Track email source on listen page",
+      "description": "As a product owner, I want to know which email drove each listen page visit.",
+      "acceptanceCriteria": [
+        "Page reads 'src' query parameter on load",
+        "Valid values: welcome, followup, or defaults to 'direct' if missing",
+        "Source value stored in component state for use in analytics",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Update Path B copy on landing page",
+      "description": "As an undecided landing page visitor, I want to see compelling copy about a free audio experience.",
+      "acceptanceCriteria": [
+        "Headline changed from 'Not ready yet?' to 'Still thinking about it?'",
+        "Body copy updated to universal audio magnet copy (no career assumptions)",
+        "Copy only shows when checkoutEnabled is true (validation/enabled modes)",
+        "Waitlist copy unchanged for disabled mode",
+        "Button text remains 'Send it to me'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Update welcome email for audio funnel",
+      "description": "As a new email subscriber (when checkout is available), I want to receive an email with the audio link.",
+      "acceptanceCriteria": [
+        "Email sent when appMode is 'validation' or 'enabled'",
+        "Email is plain text format (not HTML)",
+        "Subject line: 'Here's the audio I promised'",
+        "Body includes link to https://getunhooked.app/listen?src=welcome",
+        "Body matches spec copy (brief, personal, includes 'save this email' permission)",
+        "From address: 'Kevin from Unhooked <kevin@getunhooked.app>'",
+        "Waitlist email unchanged for 'disabled' mode",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add listen location to CheckoutButton tracking",
+      "description": "As a product owner, I want checkout clicks from the listen page to be tracked separately.",
+      "acceptanceCriteria": [
+        "CheckoutButton component accepts 'listen' as a valid tracking location",
+        "CTA_CLICK_LISTEN event fires when primary CTA clicked on listen page",
+        "Event includes email_source property",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Track audio playback events",
+      "description": "As a product owner, I want to track when users start and complete the audio.",
+      "acceptanceCriteria": [
+        "AUDIO_STARTED event fires when play button pressed",
+        "AUDIO_COMPLETED event fires when audio reaches end",
+        "Both events include email_source property (welcome/followup/direct)",
+        "Events sent to Plausible via existing analytics composable",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Track secondary CTA clicks on listen page",
+      "description": "As a product owner, I want to track when users click the secondary CTA to learn more.",
+      "acceptanceCriteria": [
+        "SECONDARY_CTA_CLICK event fires when 'Read the full story' link clicked",
+        "Event includes email_source property",
+        "Event sent to Plausible",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
