@@ -26,6 +26,7 @@ export const ANALYTICS_EVENTS = {
   // Audio events (listen page)
   AUDIO_STARTED: 'Audio Started',
   AUDIO_COMPLETED: 'Audio Completed',
+  SECONDARY_CTA_CLICK: 'Secondary CTA Click',
 
   // Conversion events
   CHECKOUT_STARTED: 'Checkout Started',

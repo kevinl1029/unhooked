@@ -74,6 +74,11 @@ onUnmounted(() => {
   }
 })
 
+// Handle secondary CTA click - track with email source
+function onSecondaryCTAClick() {
+  trackEvent(ANALYTICS_EVENTS.SECONDARY_CTA_CLICK, { email_source: emailSource.value })
+}
+
 useHead({
   title: 'Session Zero — Unhooked',
   meta: [
@@ -168,6 +173,7 @@ definePageMeta({
           <NuxtLink
             to="/?ref=listen"
             class="text-white-85 hover:text-white underline transition"
+            @click="onSecondaryCTAClick"
           >
             Read the full story →
           </NuxtLink>
