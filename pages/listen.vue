@@ -1,4 +1,12 @@
 <script setup lang="ts">
+const route = useRoute()
+
+// Debug mode shows all stages immediately (for development/testing)
+const isDebugMode = computed(() => route.query.debug === 'true')
+
+// Content reveal state - starts visible in debug mode
+const showBridgeContent = ref(isDebugMode.value)
+
 useHead({
   title: 'Session Zero — Unhooked',
   meta: [
@@ -45,6 +53,51 @@ definePageMeta({
             <source src="/audio/session-zero.mp3" type="audio/mpeg">
             Your browser does not support the audio element.
           </audio>
+        </div>
+
+        <!-- Bridge Section (revealed after audio ends or in debug mode) -->
+        <div
+          v-if="showBridgeContent"
+          class="mt-12 animate-fade-in-up"
+        >
+          <h2 class="text-xl md:text-2xl font-semibold text-white mb-4">
+            That belief—that quitting requires willpower—is just one of five.
+          </h2>
+          <p class="text-white-85 text-base">
+            There are four more illusions keeping you hooked. Once you see them clearly, the desire to use simply falls away.
+          </p>
+        </div>
+
+        <!-- Primary CTA Section -->
+        <div
+          v-if="showBridgeContent"
+          class="mt-10 animate-fade-in-up"
+          style="animation-delay: 0.1s"
+        >
+          <p class="text-white-85 text-lg mb-4">Ready to see the rest?</p>
+          <button
+            class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card text-lg"
+          >
+            Become a founding member — $199 →
+          </button>
+          <p class="text-white-65 text-sm mt-3">
+            30-day guarantee · Start when the program launches
+          </p>
+        </div>
+
+        <!-- Secondary CTA Section -->
+        <div
+          v-if="showBridgeContent"
+          class="mt-8 animate-fade-in-up"
+          style="animation-delay: 0.2s"
+        >
+          <p class="text-white-65 text-sm mb-2">Want to learn more first?</p>
+          <NuxtLink
+            to="/?ref=listen"
+            class="text-white-85 hover:text-white underline transition"
+          >
+            Read the full story →
+          </NuxtLink>
         </div>
       </div>
     </main>
