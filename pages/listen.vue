@@ -7,12 +7,16 @@ const isDebugMode = computed(() => route.query.debug === 'true')
 // Content reveal state - starts visible in debug mode
 const showBridgeContent = ref(isDebugMode.value)
 
+// Track whether fallback timer has started (prevents multiple timers)
+const fallbackTimerStarted = ref(false)
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
 // Template refs for DOM elements
 const audioPlayer = ref<HTMLAudioElement | null>(null)
 const bridgeSection = ref<HTMLElement | null>(null)
 
-// Handle audio ended event - reveal bridge content and scroll to it
-function onAudioEnded() {
+// Reveal bridge content and scroll to it (shared logic)
+function revealBridgeContent() {
   if (!showBridgeContent.value) {
     showBridgeContent.value = true
     // Wait for next tick so the bridge section is rendered before scrolling
@@ -21,6 +25,30 @@ function onAudioEnded() {
     })
   }
 }
+
+// Handle audio ended event - reveal bridge content and scroll to it
+function onAudioEnded() {
+  revealBridgeContent()
+}
+
+// Handle audio play event - start 30-second fallback timer
+function onAudioPlay() {
+  // Only start timer once, and not in debug mode
+  if (!fallbackTimerStarted.value && !isDebugMode.value) {
+    fallbackTimerStarted.value = true
+    // Start 30-second wall-clock timer (doesn't pause when audio pauses)
+    fallbackTimer = setTimeout(() => {
+      revealBridgeContent()
+    }, 30000)
+  }
+}
+
+// Clean up timer on component unmount
+onUnmounted(() => {
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer)
+  }
+})
 
 useHead({
   title: 'Session Zero — Unhooked',
@@ -65,6 +93,7 @@ definePageMeta({
             controls
             class="w-full max-w-md mx-auto"
             preload="metadata"
+            @play="onAudioPlay"
             @ended="onAudioEnded"
           >
             <source src="/audio/session-zero.mp3" type="audio/mpeg">
