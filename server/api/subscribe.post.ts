@@ -35,7 +35,8 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email)
 }
 
-function getWelcomeEmailHtml(): string {
+// Waitlist welcome email (for 'disabled' mode)
+function getWaitlistWelcomeEmailHtml(): string {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #333; font-size: 16px; line-height: 1.6;">
       <p style="margin: 0 0 24px 0;">Hey,</p>
@@ -70,6 +71,23 @@ function getWelcomeEmailHtml(): string {
   `
 }
 
+// Audio funnel welcome email (for 'validation' or 'enabled' modes)
+// Plain text format as specified in requirements
+function getAudioFunnelWelcomeEmailText(): string {
+  return `Here's that audio I mentioned:
+
+https://getunhooked.app/listen?src=welcome
+
+It's 5 minutes. Put your headphones in if you can.
+
+This explains why quitting feels so hard—and why it doesn't have to.
+
+Feel free to save this email. You can come back and listen whenever you're ready.
+
+Talk soon,
+Kevin`
+}
+
 // Send welcome email and add to Resend audience
 async function sendWelcomeEmailAndAddToAudience(
   resend: Resend,
@@ -77,6 +95,8 @@ async function sendWelcomeEmailAndAddToAudience(
   email: string
 ): Promise<void> {
   const shouldSendEmails = config.sendEmails !== 'false'
+  const appMode = config.public.appMode as 'disabled' | 'validation' | 'enabled'
+  const checkoutEnabled = appMode === 'validation' || appMode === 'enabled'
 
   // Add to Resend audience (same audience as founding members)
   if (config.resendAudienceId) {
@@ -94,13 +114,25 @@ async function sendWelcomeEmailAndAddToAudience(
   // Send welcome email
   if (shouldSendEmails) {
     try {
-      await resend.emails.send({
-        from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
-        to: email,
-        replyTo: EMAIL_REPLY_TO,
-        subject: "You're on the list",
-        html: getWelcomeEmailHtml()
-      })
+      if (checkoutEnabled) {
+        // Audio funnel email for validation/enabled modes (plain text)
+        await resend.emails.send({
+          from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
+          to: email,
+          replyTo: EMAIL_REPLY_TO,
+          subject: "Here's the audio I promised",
+          text: getAudioFunnelWelcomeEmailText()
+        })
+      } else {
+        // Waitlist email for disabled mode (HTML)
+        await resend.emails.send({
+          from: `${EMAIL_SENDER_NAME} <${EMAIL_SENDER_ADDRESS}>`,
+          to: email,
+          replyTo: EMAIL_REPLY_TO,
+          subject: "You're on the list",
+          html: getWaitlistWelcomeEmailHtml()
+        })
+      }
     } catch (emailError) {
       // Log but don't fail - subscription is still saved
       console.error('Failed to send welcome email:', emailError)
