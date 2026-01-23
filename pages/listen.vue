@@ -27,16 +27,11 @@ let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 
 // Template refs for DOM elements
 const audioPlayer = ref<HTMLAudioElement | null>(null)
-const bridgeSection = ref<HTMLElement | null>(null)
 
-// Reveal bridge content and scroll to it (shared logic)
+// Reveal bridge content
 function revealBridgeContent() {
   if (!showBridgeContent.value) {
     showBridgeContent.value = true
-    // Wait for next tick so the bridge section is rendered before scrolling
-    nextTick(() => {
-      bridgeSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
   }
 }
 
@@ -132,9 +127,8 @@ definePageMeta({
 
         <!-- Bridge Section (revealed after audio ends or in debug mode) -->
         <div
-          v-if="showBridgeContent"
-          ref="bridgeSection"
-          class="mt-12 animate-fade-in-up"
+          class="mt-12 bridge-content"
+          :class="{ 'bridge-content--visible': showBridgeContent }"
         >
           <h2 class="text-xl md:text-2xl font-semibold text-white mb-4">
             That belief—that quitting requires willpower—is just one of five.
@@ -146,9 +140,9 @@ definePageMeta({
 
         <!-- Primary CTA Section -->
         <div
-          v-if="showBridgeContent"
-          class="mt-10 animate-fade-in-up"
-          style="animation-delay: 0.1s"
+          class="mt-10 bridge-content"
+          :class="{ 'bridge-content--visible': showBridgeContent }"
+          :style="{ transitionDelay: showBridgeContent ? '0.15s' : '0s' }"
         >
           <p class="text-white-85 text-lg mb-4">Ready to see the rest?</p>
           <LandingCheckoutButton
@@ -165,9 +159,9 @@ definePageMeta({
 
         <!-- Secondary CTA Section -->
         <div
-          v-if="showBridgeContent"
-          class="mt-8 animate-fade-in-up"
-          style="animation-delay: 0.2s"
+          class="mt-8 bridge-content"
+          :class="{ 'bridge-content--visible': showBridgeContent }"
+          :style="{ transitionDelay: showBridgeContent ? '0.3s' : '0s' }"
         >
           <p class="text-white-65 text-sm mb-2">Want to learn more first?</p>
           <NuxtLink
@@ -202,5 +196,19 @@ audio {
 
 audio::-webkit-media-controls-panel {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Bridge content - starts invisible but takes up space */
+.bridge-content {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 1s ease-out, visibility 0s linear 1s;
+}
+
+/* When visible - fade in */
+.bridge-content--visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 1s ease-out, visibility 0s linear 0s;
 }
 </style>
