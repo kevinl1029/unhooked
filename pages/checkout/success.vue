@@ -84,6 +84,20 @@ definePageMeta({
 
 useHead({
   title: "You're In — Unhooked",
+  meta: [
+    { name: 'description', content: 'Welcome to Unhooked! You\'re now a founding member. Get ready to quit nicotine for good.' },
+    { name: 'robots', content: 'noindex, nofollow' },
+    // Open Graph
+    { property: 'og:title', content: "You're In — Unhooked" },
+    { property: 'og:description', content: 'Welcome to Unhooked! You\'re now a founding member. Get ready to quit nicotine for good.' },
+    { property: 'og:type', content: 'website' },
+    { property: 'og:image', content: 'https://getunhooked.app/og-image.png' },
+    // Twitter Card
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: "You're In — Unhooked" },
+    { name: 'twitter:description', content: 'Welcome to Unhooked! You\'re now a founding member. Get ready to quit nicotine for good.' },
+    { name: 'twitter:image', content: 'https://getunhooked.app/og-image.png' },
+  ],
 })
 
 const { trackRevenue, ANALYTICS_EVENTS } = useAnalytics()

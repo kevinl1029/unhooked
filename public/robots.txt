@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://getunhooked.app/sitemap.xml
+
+# Block authenticated/internal pages
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /onboarding
+Disallow: /session/
+Disallow: /ceremony
+Disallow: /journey
+Disallow: /toolkit
+Disallow: /support
+Disallow: /check-in/
+Disallow: /follow-up/
+Disallow: /checkout/success
+Disallow: /checkout/cancel
+Disallow: /auth/callback
+Disallow: /test-login
