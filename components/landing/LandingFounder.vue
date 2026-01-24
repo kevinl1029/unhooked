@@ -14,7 +14,6 @@
       <p class="pull-quote">Not through discipline. Through clarity.</p>
       <p class="section-text">But it took years. On and off, whenever I could make myself sit down and write. It wasn't a habit I could stick to—just something I returned to when I was frustrated enough.</p>
       <p class="section-text">I built Unhooked so you don't have to do it that way. The conversations do what journaling did for me—help you see <em>your</em> illusions, in <em>your</em> life—but in weeks instead of years.</p>
-      <p class="section-text closing-statement">This was built for you.</p>
       <p class="founder-signature">— Kevin</p>
     </div>
   </section>
