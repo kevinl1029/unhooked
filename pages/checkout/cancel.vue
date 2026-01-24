@@ -26,5 +26,19 @@ definePageMeta({
 
 useHead({
   title: 'Checkout Cancelled — Unhooked',
+  meta: [
+    { name: 'description', content: 'Your checkout was cancelled. When you\'re ready to quit nicotine for good, Unhooked will be here.' },
+    { name: 'robots', content: 'noindex, nofollow' },
+    // Open Graph
+    { property: 'og:title', content: 'Checkout Cancelled — Unhooked' },
+    { property: 'og:description', content: 'When you\'re ready to quit nicotine for good, Unhooked will be here.' },
+    { property: 'og:type', content: 'website' },
+    { property: 'og:image', content: 'https://getunhooked.app/og-image.png' },
+    // Twitter Card
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: 'Checkout Cancelled — Unhooked' },
+    { name: 'twitter:description', content: 'When you\'re ready to quit nicotine for good, Unhooked will be here.' },
+    { name: 'twitter:image', content: 'https://getunhooked.app/og-image.png' },
+  ],
 })
 </script>
