@@ -525,7 +525,7 @@ async function startCeremony() {
     currentStep.value = 'journey'
   } catch (err: any) {
     console.error('Failed to generate journey:', err)
-    error.value = err.data?.message || 'Failed to generate your journey. Please try again.'
+    error.value = err.data?.message || 'Unable to create your journey. Please try again.'
     currentStep.value = 'intro'
   }
 }
@@ -664,7 +664,7 @@ async function completeCeremony() {
     currentStep.value = 'complete'
   } catch (err: any) {
     console.error('Failed to complete ceremony:', err)
-    error.value = err.data?.message || 'Failed to complete ceremony. Please try again.'
+    error.value = err.data?.message || 'Unable to complete ceremony. Your progress has been saved.'
   } finally {
     isLoading.value = false
   }

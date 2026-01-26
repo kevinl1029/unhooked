@@ -67,7 +67,7 @@ export const useAudioRecorder = () => {
     } catch (err: any) {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         permissionState.value = 'denied'
-        error.value = 'Microphone permission denied'
+        error.value = 'Could not access microphone. Please check your browser permissions.'
       } else if (err.name === 'NotFoundError') {
         error.value = 'No microphone found'
       } else {
@@ -151,7 +151,7 @@ export const useAudioRecorder = () => {
       console.error('[useAudioRecorder] Error starting recording:', err)
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         permissionState.value = 'denied'
-        error.value = 'Microphone permission denied'
+        error.value = 'Could not access microphone. Please check your browser permissions.'
       } else if (err.name === 'NotFoundError') {
         error.value = 'No microphone found'
       } else {
