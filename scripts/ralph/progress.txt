@@ -150,3 +150,23 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - Use `page.route()` with custom delays to test loading states
   - The `alreadyQuit` state is tracked as a ref that starts as `null` and must be set to enable the Begin Ceremony button
 ---
+
+## 2026-01-26 10:45 - US-009
+- What was implemented:
+  - Added 6 new E2E tests to `ceremony.spec.ts` covering recording and completion steps:
+    - Test: User can skip journey and proceed to recording step
+    - Test: Recording step shows microphone button
+    - Test: Cheat sheet step displays illusion entries
+    - Test: Complete Ceremony button triggers completion API
+    - Test: After completion, user sees success message with link to dashboard
+    - Test: Error states show retry button
+  - Fixed strict mode violations by using `getByRole('heading')` instead of `getByText()` for headings
+  - All 15 tests now pass (9 from US-008 + 6 from US-009)
+- Files changed:
+  - `tests/e2e/ceremony.spec.ts`
+- **Learnings for future iterations:**
+  - When testing headings, use `getByRole('heading', { name: /pattern/i })` to avoid strict mode violations
+  - Real audio recording can't be tested in E2E, so tests verify the UI structure and flow instead
+  - The ceremony has these sequential steps: intro -> generating -> journey -> recording -> cheatsheet -> complete
+  - Each step has specific UI elements that can be tested for presence and interaction
+---
