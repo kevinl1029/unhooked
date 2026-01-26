@@ -106,3 +106,24 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - Always provide users with progress indicators when blocking them from proceeding
   - Use template literals carefully for user-facing messages
 ---
+
+## 2026-01-26 09:45 - US-007
+- What was implemented:
+  - Created `tests/e2e/utils/mock-ceremony.ts` with four mock functions:
+    - `mockCeremonyPrepare(page, options)` - Mocks /api/ceremony/prepare with configurable readiness/completion status
+    - `mockCeremonyGenerateJourney(page, segments)` - Mocks /api/ceremony/generate-journey with custom playlist segments
+    - `mockCeremonyCheatSheet(page, entries)` - Mocks /api/ceremony/cheat-sheet with illusion entries
+    - `mockCeremonyComplete(page)` - Mocks /api/ceremony/complete with artifacts and follow-ups
+  - Added helper function `createMockMoment()` to generate CapturedMoment test data
+  - Updated `tests/e2e/utils/index.ts` to export ceremony mocks
+  - All functions follow existing patterns from `mock-progress.ts` and `mock-auth.ts`
+- Files changed:
+  - `tests/e2e/utils/mock-ceremony.ts` (new file)
+  - `tests/e2e/utils/index.ts`
+- **Learnings for future iterations:**
+  - The ceremony flow has 4 main API endpoints: prepare, generate-journey, cheat-sheet, complete
+  - Mock functions should provide sensible defaults but allow customization via options
+  - Playwright's `page.route()` is used to intercept API calls during E2E tests
+  - Types from `server/utils/llm/task-types.ts` should be imported for type safety
+  - The prepare endpoint returns `ready`, `ceremony_completed`, `illusions_completed[]`, `total_moments`, and `suggested_journey_moments`
+---
