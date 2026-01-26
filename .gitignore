@@ -32,5 +32,3 @@ Thumbs.db
 /playwright/.auth/
 coverage/
 
-# Internal specs and planning docs
-/docs/
