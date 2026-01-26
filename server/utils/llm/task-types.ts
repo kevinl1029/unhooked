@@ -190,29 +190,23 @@ export interface StorySummarizationOutput {
 // Ceremony Types
 // ============================================
 
-export interface CeremonyMomentSelection {
-  origin: CapturedMoment[]
-  rationalizations: CapturedMoment[]
-  insights: CapturedMoment[]
-  breakthroughs: CapturedMoment[]
-  observations: CapturedMoment[]
-  commitments: CapturedMoment[]
+export interface JourneySegment {
+  id: string
+  type: 'narration' | 'user_moment'
+  text: string // For TTS generation or display
+  momentId?: string // If type is user_moment
 }
 
 export interface CeremonyNarrativeInput {
-  selectedMoments: CeremonyMomentSelection
+  selectedMoments: CapturedMoment[]
   userFirstName?: string
-  alreadyQuit?: boolean
-}
-
-export interface AudioSegment {
-  text: string
-  momentIdToInsert?: string
+  alreadyQuit?: boolean // Adjusts narrative if they quit before ceremony
+  originSummary?: string // User's origin story summary
 }
 
 export interface CeremonyNarrativeOutput {
-  narrative: string
-  audioSegments: AudioSegment[]
+  narrative: string // Full narrative text (600-800 words)
+  segments: JourneySegment[] // Broken into segments for playback
 }
 
 export interface CeremonyMomentSelectInput {

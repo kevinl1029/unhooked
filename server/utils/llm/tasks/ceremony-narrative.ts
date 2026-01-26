@@ -4,26 +4,12 @@
  */
 
 import { getTaskExecutor, parseJsonResponse } from '../task-executor'
-import type { CapturedMoment } from '../task-types'
-
-export interface CeremonyNarrativeInput {
-  selectedMoments: CapturedMoment[]
-  userFirstName?: string
-  alreadyQuit?: boolean // Adjusts narrative if they quit before ceremony
-  originSummary?: string // User's origin story summary
-}
-
-export interface JourneySegment {
-  id: string
-  type: 'narration' | 'user_moment'
-  text: string // For TTS generation or display
-  momentId?: string // If type is user_moment
-}
-
-export interface CeremonyNarrativeOutput {
-  narrative: string // Full narrative text (600-800 words)
-  segments: JourneySegment[] // Broken into segments for playback
-}
+import type {
+  CapturedMoment,
+  CeremonyNarrativeInput,
+  CeremonyNarrativeOutput,
+  JourneySegment,
+} from '../task-types'
 
 /**
  * Build the narrative generation prompt
