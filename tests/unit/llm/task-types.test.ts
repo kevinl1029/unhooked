@@ -6,7 +6,7 @@ import {
   illusionKeyToNumber,
   validateCheatSheet,
   type IllusionKey,
-  type IllusionsCheatSheet,
+  type CheatSheetData,
 } from '~/server/utils/llm/task-types'
 
 describe('task-types', () => {
@@ -93,39 +93,35 @@ describe('task-types', () => {
   })
 
   describe('validateCheatSheet', () => {
-    const validCheatSheet: IllusionsCheatSheet = {
-      illusions: [
+    const validCheatSheet: CheatSheetData = {
+      entries: [
         {
-          illusion_key: 'stress_relief',
-          illusion_number: 1,
-          display_name: 'The Stress Relief Illusion',
-          the_illusion: 'Nicotine helps me manage stress',
-          the_truth: 'Nicotine creates the stress it appears to relieve',
-          your_insight: 'I realized the anxiety was withdrawal',
-          your_insight_audio_path: null,
+          illusionKey: 'stress_relief',
+          name: 'Stress Relief',
+          illusion: 'Nicotine helps me manage stress',
+          truth: 'Nicotine creates the stress it appears to relieve',
+          userInsight: 'I realized the anxiety was withdrawal',
+          insightMomentId: 'moment-123',
         },
       ],
-      generated_at: '2024-01-01T00:00:00Z',
+      generatedAt: '2024-01-01T00:00:00Z',
     }
 
     it('validates a correct cheat sheet', () => {
       expect(validateCheatSheet(validCheatSheet)).toBe(true)
     })
 
-    it('validates cheat sheet with null insight', () => {
-      const sheet: IllusionsCheatSheet = {
-        illusions: [
+    it('validates cheat sheet without optional insight fields', () => {
+      const sheet: CheatSheetData = {
+        entries: [
           {
-            illusion_key: 'stress_relief',
-            illusion_number: 1,
-            display_name: 'The Stress Relief Illusion',
-            the_illusion: 'Nicotine helps me manage stress',
-            the_truth: 'Nicotine creates the stress',
-            your_insight: null,
-            your_insight_audio_path: null,
+            illusionKey: 'stress_relief',
+            name: 'Stress Relief',
+            illusion: 'Nicotine helps me manage stress',
+            truth: 'Nicotine creates the stress',
           },
         ],
-        generated_at: '2024-01-01T00:00:00Z',
+        generatedAt: '2024-01-01T00:00:00Z',
       }
       expect(validateCheatSheet(sheet)).toBe(true)
     })
@@ -140,36 +136,33 @@ describe('task-types', () => {
       expect(validateCheatSheet([])).toBe(false)
     })
 
-    it('rejects cheat sheet without illusions array', () => {
-      expect(validateCheatSheet({ generated_at: '2024-01-01' })).toBe(false)
+    it('rejects cheat sheet without entries array', () => {
+      expect(validateCheatSheet({ generatedAt: '2024-01-01' })).toBe(false)
     })
 
-    it('rejects cheat sheet without generated_at', () => {
-      expect(validateCheatSheet({ illusions: [] })).toBe(false)
+    it('rejects cheat sheet without generatedAt', () => {
+      expect(validateCheatSheet({ entries: [] })).toBe(false)
     })
 
-    it('rejects cheat sheet with invalid illusion entry', () => {
+    it('rejects cheat sheet with invalid entry', () => {
       const invalid = {
-        illusions: [{ illusion_key: 'stress_relief' }], // Missing required fields
-        generated_at: '2024-01-01',
+        entries: [{ illusionKey: 'stress_relief' }], // Missing required fields
+        generatedAt: '2024-01-01',
       }
       expect(validateCheatSheet(invalid)).toBe(false)
     })
 
-    it('rejects illusion with non-string illusion_key', () => {
+    it('rejects entry with non-string illusionKey', () => {
       const invalid = {
-        illusions: [
+        entries: [
           {
-            illusion_key: 123,
-            illusion_number: 1,
-            display_name: 'Test',
-            the_illusion: 'Test',
-            the_truth: 'Test',
-            your_insight: null,
-            your_insight_audio_path: null,
+            illusionKey: 123,
+            name: 'Test',
+            illusion: 'Test',
+            truth: 'Test',
           },
         ],
-        generated_at: '2024-01-01',
+        generatedAt: '2024-01-01',
       }
       expect(validateCheatSheet(invalid)).toBe(false)
     })

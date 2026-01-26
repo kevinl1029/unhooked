@@ -1,219 +1,49 @@
 # Ralph Progress Log
-Started: Thu Jan 22 22:19:24 EST 2026
+Started: Mon Jan 26 00:04:38 EST 2026
+---
 
 ## Codebase Patterns
-- Add public routes to `nuxt.config.ts` supabase.redirectOptions.exclude array to bypass auth
-- Use `definePageMeta({ layout: false })` for standalone pages that don't need the default layout
-- Use `useHead()` for page-specific meta tags like title and robots
-- Landing page uses CSS from `assets/css/main.css` with brand colors and animations
-- Animation class `animate-fade-in-up` is available globally
-- Text opacity variants: `text-white-65`, `text-white-85`
+- Nuxt auto-imports cause duplicate warnings when types/functions are exported from multiple files
+- Source of truth for LLM task types should be `server/utils/llm/task-types.ts`
+- Use `npm run build` to verify type errors since `npx nuxi typecheck` requires tsconfig.json at root
+- `npm run postinstall` (nuxt prepare) generates `.nuxt/tsconfig.json` and shows duplicate import warnings
 
 ---
 
-## 2026-01-22 22:25 EST - US-001
+## 2026-01-26 00:10 - US-001
 - What was implemented:
-  - Created `/pages/listen.vue` with audio player page
-  - Page has headline "Before you decide anything, hear this." and subhead "5 minutes. Headphones help."
-  - Audio player loads `/audio/session-zero.mp3`
-  - noindex/nofollow meta tag added
-  - Brand styling applied (deep teal gradient, Inter font)
-  - "Unhooked" header links to homepage
-  - Footer with "© 2026 Unhooked"
-  - Added `/listen` to supabase exclude list in nuxt.config.ts
+  - Removed duplicate `CeremonyNarrativeInput`, `CeremonyNarrativeOutput`, and `JourneySegment` interfaces from `ceremony-narrative.ts`
+  - Updated `task-types.ts` with correct ceremony type definitions:
+    - `CeremonyNarrativeInput.selectedMoments` now uses `CapturedMoment[]` (was `CeremonyMomentSelection`)
+    - Added `originSummary` field to `CeremonyNarrativeInput`
+    - `CeremonyNarrativeOutput.segments` uses `JourneySegment[]` (was `audioSegments: AudioSegment[]`)
+    - Added `JourneySegment` interface with correct fields
+  - Removed obsolete `CeremonyMomentSelection` and `AudioSegment` types
+  - `ceremony-narrative.ts` now imports types from `task-types.ts`
 - Files changed:
-  - pages/listen.vue (created)
-  - nuxt.config.ts (added /listen to auth exclude list)
+  - `server/utils/llm/task-types.ts`
+  - `server/utils/llm/tasks/ceremony-narrative.ts`
 - **Learnings for future iterations:**
-  - No tsconfig.json in root - use `.nuxt/tsconfig.json` for type checking
-  - Typecheck command: `npx vue-tsc --noEmit -p .nuxt/tsconfig.json`
-  - Pre-existing TS errors in test files shouldn't block implementation
-  - No `npm run typecheck` script - use vue-tsc directly
-  - Browser verification using dev-browser skill not configured
+  - The previous `CeremonyMomentSelection` type was never used correctly - the actual implementation uses flat `CapturedMoment[]`
+  - Re-exporting types from task files causes Nuxt auto-import duplicate warnings - don't re-export, just import
+  - US-003 criteria about ceremony types are now mostly complete from this work
 ---
 
-## 2026-01-22 22:36 EST - US-002
+## 2026-01-26 00:20 - US-002
 - What was implemented:
-  - Created `public/audio/` directory
-  - Added placeholder `session-zero.mp3` file (5-second silent MP3)
-  - Verified file is accessible at `/audio/session-zero.mp3` via dev server (HTTP 200 OK, content-type: audio/mpeg)
+  - Updated `IllusionCheatSheetEntry` in `task-types.ts` to use camelCase fields matching actual usage:
+    - `illusionKey`, `name`, `illusion`, `truth`, `userInsight`, `insightMomentId`
+  - Renamed `IllusionsCheatSheet` to `CheatSheetData` with `entries` array and `generatedAt` field
+  - Updated `validateCheatSheet()` to validate the new camelCase structure
+  - Updated `cheat-sheet-generator.ts` to import `IllusionCheatSheetEntry` and `CheatSheetData` from `task-types.ts`
+  - Removed duplicate type definitions from `cheat-sheet-generator.ts`
+  - Updated tests in `task-types.test.ts` to use new camelCase field names
 - Files changed:
-  - public/audio/session-zero.mp3 (created)
+  - `server/utils/llm/task-types.ts`
+  - `server/utils/ceremony/cheat-sheet-generator.ts`
+  - `tests/unit/llm/task-types.test.ts`
 - **Learnings for future iterations:**
-  - `ffmpeg` is available on this machine for generating test audio files
-  - Use `ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t <seconds> -q:a 9 <output.mp3>` to generate silent placeholder audio
-  - Dev server may auto-switch ports if 3000 is busy (check output for actual port)
----
-
-## 2026-01-22 22:45 EST - US-003
-- What was implemented:
-  - Added debug mode to listen page via `?debug=true` query parameter
-  - Created `isDebugMode` computed property that checks `route.query.debug === 'true'`
-  - Created `showBridgeContent` reactive ref that starts as `true` in debug mode
-  - Added bridge section with headline and copy (hidden by default, shown in debug mode)
-  - Added primary CTA section with button placeholder (hidden by default, shown in debug mode)
-  - Added secondary CTA section with "Read the full story" link to `/?ref=listen`
-- Files changed:
-  - pages/listen.vue (modified)
-- **Learnings for future iterations:**
-  - Use `useRoute()` to access query parameters in Nuxt 3
-  - Use `computed()` for reactive values that depend on route params
-  - Pre-existing TypeScript errors in other files don't block implementation
-  - Bridge/CTA sections are now scaffolded for US-004 through US-007
----
-
-## 2026-01-22 23:05 EST - US-004
-- What was implemented:
-  - Added audio `@ended` event listener to reveal bridge content when audio finishes
-  - Added `onAudioEnded()` function that sets `showBridgeContent = true` and triggers auto-scroll
-  - Added template refs `audioPlayer` and `bridgeSection` for DOM access
-  - Bridge section uses `scrollIntoView({ behavior: 'smooth', block: 'start' })` for smooth auto-scroll
-  - Used `nextTick()` to wait for DOM render before scrolling
-  - Bridge section already uses `animate-fade-in-up` animation class (300-400ms)
-- Files changed:
-  - pages/listen.vue (modified)
-- **Learnings for future iterations:**
-  - Use `nextTick()` when you need to access newly rendered DOM elements
-  - Template refs in Vue 3 are typed with `ref<HTMLElement | null>(null)`
-  - `scrollIntoView()` with `behavior: 'smooth'` provides nice animated scroll
----
-
-## 2026-01-22 23:25 EST - US-005
-- What was implemented:
-  - Added 30-second fallback timer that starts when audio play begins
-  - Timer is wall-clock time (uses setTimeout, doesn't pause when audio pauses)
-  - Extracted `revealBridgeContent()` function to share logic between audio ended and timer
-  - Added `onAudioPlay()` handler that starts the timer on first play
-  - Timer only starts once (tracked via `fallbackTimerStarted` ref)
-  - Timer does not start in debug mode
-  - Added `onUnmounted()` cleanup to clear timer if component unmounts
-- Files changed:
-  - pages/listen.vue (modified)
-- **Learnings for future iterations:**
-  - Use `ReturnType<typeof setTimeout>` for proper typing of timer IDs
-  - Using a simple boolean ref to track "started" state prevents multiple timers
-  - Wall-clock timer = setTimeout (doesn't track actual audio playback time)
----
-
-## 2026-01-22 23:40 EST - US-006
-- What was implemented:
-  - Replaced placeholder button with `LandingCheckoutButton` component
-  - Added `tracking-location="listen"` prop for analytics tracking
-  - Added `CTA_CLICK_LISTEN` event to `useAnalytics.ts` composable
-  - Added `'listen'` to `trackingLocation` prop type in CheckoutButton
-  - Added `listen` case to eventMap in CheckoutButton handleClick function
-- Files changed:
-  - pages/listen.vue (modified - replaced placeholder button)
-  - composables/useAnalytics.ts (added CTA_CLICK_LISTEN event)
-  - components/landing/CheckoutButton.vue (added 'listen' tracking location)
-- **Learnings for future iterations:**
-  - CheckoutButton component in `components/landing/` is auto-imported as `LandingCheckoutButton`
-  - Use kebab-case for props in templates (`tracking-location`) vs camelCase in TypeScript
-  - To add new tracking locations: update ANALYTICS_EVENTS, prop type, and eventMap
----
-
-## 2026-01-22 23:55 EST - US-007
-- What was implemented:
-  - No code changes needed - secondary CTA was already fully implemented in US-003
-  - Verified all acceptance criteria:
-    - Secondary CTA section appears below primary CTA (lines 136-149)
-    - Headline matches: "Want to learn more first?" (line 142)
-    - Link text matches: "Read the full story →" (line 147)
-    - Link navigates to /?ref=listen (line 144)
-    - Styled as text link with underline, not button (text-white-85 hover:text-white underline)
-- Files changed:
-  - None (prd.json updated to mark as passing)
-- **Learnings for future iterations:**
-  - US-003 implemented more than its own scope - scaffolded all CTA sections ahead of time
-  - Always check existing implementation before making changes
----
-
-## 2026-01-23 00:05 EST - US-008
-- What was implemented:
-  - Added email source tracking via 'src' query parameter on listen page
-  - Created `EmailSource` type for valid source values: 'welcome' | 'followup' | 'direct'
-  - Created `emailSource` computed property that reads and validates the query param
-  - Defaults to 'direct' if 'src' param is missing or contains an invalid value
-- Files changed:
-  - pages/listen.vue (modified - added email source tracking)
-- **Learnings for future iterations:**
-  - Use TypeScript type for valid query param values to ensure type safety
-  - Computed property is ideal for derived state from route query params
-  - The emailSource computed is now available for future analytics integration
----
-
-## 2026-01-23 00:15 EST - US-009
-- What was implemented:
-  - Updated Path B (secondary CTA) copy on landing page for audio lead magnet
-  - Changed headline from "Not ready yet?" to "Still thinking about it?"
-  - Changed body copy to audio-focused message: "Get a free 5-minute audio that explains the real reason quitting feels so hard. You'll hear it differently after this."
-  - Copy only displays when checkoutEnabled is true (waitlist copy unchanged for disabled mode)
-  - Button text remains "Send it to me"
-- Files changed:
-  - components/landing/LandingFinalCTA.vue (modified - updated headline and body copy)
-- **Learnings for future iterations:**
-  - Path B/secondary CTA is the email capture section for undecided visitors
-  - Copy changes are controlled by the `checkoutEnabled` computed from `useAppMode()`
-  - Both enabled/validation modes show the new audio magnet copy
----
-
-## 2026-01-23 00:30 EST - US-010
-- What was implemented:
-  - Updated welcome email to send different content based on appMode
-  - Added plain text audio funnel email for validation/enabled modes
-  - Subject line: "Here's the audio I promised"
-  - Body includes link to https://getunhooked.app/listen?src=welcome
-  - Uses `text` property in Resend API for plain text email
-  - Preserved existing HTML waitlist email for disabled mode
-  - From address unchanged: 'Kevin from Unhooked <kevin@getunhooked.app>'
-- Files changed:
-  - server/api/subscribe.post.ts (modified - added audio funnel email, refactored email sending)
-- **Learnings for future iterations:**
-  - Access appMode on server via `config.public.appMode`
-  - Resend API uses `text` property for plain text emails, `html` for HTML
-  - Renamed getWelcomeEmailHtml() to getWaitlistWelcomeEmailHtml() for clarity
----
-
-## 2026-01-23 00:45 EST - US-011
-- What was implemented:
-  - Added `emailSource` prop to CheckoutButton component (type: 'welcome' | 'followup' | 'direct')
-  - Updated handleClick to pass email_source property to trackEvent when provided
-  - Updated listen page to pass emailSource to LandingCheckoutButton
-  - CTA_CLICK_LISTEN event now includes email_source property
-- Files changed:
-  - components/landing/CheckoutButton.vue (added emailSource prop and event tracking)
-  - pages/listen.vue (pass emailSource to CheckoutButton)
-- **Learnings for future iterations:**
-  - trackEvent accepts optional second argument for event properties
-  - Props can be conditionally passed to trackEvent (undefined if not provided)
-  - listen tracking location was already implemented in US-006
----
-
-## 2026-01-23 00:55 EST - US-012
-- What was implemented:
-  - Added AUDIO_STARTED and AUDIO_COMPLETED events to useAnalytics.ts
-  - AUDIO_STARTED fires on first play only (tracked via hasTrackedAudioStart ref)
-  - AUDIO_COMPLETED fires when audio reaches end
-  - Both events include email_source property (welcome/followup/direct)
-  - Events sent via trackEvent() to Plausible
-- Files changed:
-  - composables/useAnalytics.ts (added AUDIO_STARTED, AUDIO_COMPLETED events)
-  - pages/listen.vue (added tracking calls with email_source)
-- **Learnings for future iterations:**
-  - Track "first play" separately from timer start using different refs
-  - Audio events provide email source attribution for funnel analysis
----
-
-## 2026-01-23 01:05 EST - US-013
-- What was implemented:
-  - Added SECONDARY_CTA_CLICK event to useAnalytics.ts
-  - Added @click handler on "Read the full story" NuxtLink
-  - Event includes email_source property (welcome/followup/direct)
-  - Event sent via trackEvent() to Plausible
-- Files changed:
-  - composables/useAnalytics.ts (added SECONDARY_CTA_CLICK event)
-  - pages/listen.vue (added click handler and tracking function)
-- **Learnings for future iterations:**
-  - NuxtLink supports @click handlers that fire before navigation
-  - Can track link clicks without preventing default navigation
+  - The original `task-types.ts` had snake_case fields that didn't match actual usage in `cheat-sheet-generator.ts` and `toolkit.vue`
+  - When consolidating types, always check the UI components to see what field names are actually expected
+  - Removing `export type { ... }` re-exports fixes Nuxt auto-import duplicate warnings
 ---

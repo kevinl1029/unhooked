@@ -224,42 +224,40 @@ export interface CeremonyMomentSelectOutput {
 // ============================================
 
 export interface IllusionCheatSheetEntry {
-  illusion_key: string
-  illusion_number: number
-  display_name: string
-  the_illusion: string
-  the_truth: string
-  your_insight: string | null
-  your_insight_audio_path: string | null
+  illusionKey: string
+  name: string
+  illusion: string
+  truth: string
+  userInsight?: string
+  insightMomentId?: string
 }
 
-export interface IllusionsCheatSheet {
-  illusions: IllusionCheatSheetEntry[]
-  generated_at: string
+export interface CheatSheetData {
+  entries: IllusionCheatSheetEntry[]
+  generatedAt: string
 }
 
 /**
- * Validates that data matches the IllusionsCheatSheet interface
+ * Validates that data matches the CheatSheetData interface
  */
-export function validateCheatSheet(data: unknown): data is IllusionsCheatSheet {
+export function validateCheatSheet(data: unknown): data is CheatSheetData {
   if (!data || typeof data !== 'object') return false
 
   const sheet = data as Record<string, unknown>
 
-  if (!Array.isArray(sheet.illusions)) return false
-  if (typeof sheet.generated_at !== 'string') return false
+  if (!Array.isArray(sheet.entries)) return false
+  if (typeof sheet.generatedAt !== 'string') return false
 
-  for (const illusion of sheet.illusions) {
-    if (typeof illusion !== 'object' || illusion === null) return false
-    const i = illusion as Record<string, unknown>
+  for (const entry of sheet.entries) {
+    if (typeof entry !== 'object' || entry === null) return false
+    const e = entry as Record<string, unknown>
 
-    if (typeof i.illusion_key !== 'string') return false
-    if (typeof i.illusion_number !== 'number') return false
-    if (typeof i.display_name !== 'string') return false
-    if (typeof i.the_illusion !== 'string') return false
-    if (typeof i.the_truth !== 'string') return false
-    if (i.your_insight !== null && typeof i.your_insight !== 'string') return false
-    if (i.your_insight_audio_path !== null && typeof i.your_insight_audio_path !== 'string') return false
+    if (typeof e.illusionKey !== 'string') return false
+    if (typeof e.name !== 'string') return false
+    if (typeof e.illusion !== 'string') return false
+    if (typeof e.truth !== 'string') return false
+    if (e.userInsight !== undefined && typeof e.userInsight !== 'string') return false
+    if (e.insightMomentId !== undefined && typeof e.insightMomentId !== 'string') return false
   }
 
   return true

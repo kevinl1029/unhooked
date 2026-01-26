@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { IllusionCheatSheetEntry, CheatSheetData } from '../llm/task-types'
 
 // Static illusion content - the truth behind each illusion
 // Keys must match ILLUSION_KEYS: stress_relief, pleasure, willpower, focus, identity
@@ -33,20 +34,6 @@ export const ILLUSION_CONTENT: Record<string, { name: string; illusion: string; 
     illusion: 'I have an addictive personality',
     truth: 'Addiction is a trap anyone can fall into and escape from. Your identity is not defined by a chemical dependency.',
   },
-}
-
-export interface IllusionCheatSheetEntry {
-  illusionKey: string
-  name: string
-  illusion: string
-  truth: string
-  userInsight?: string
-  insightMomentId?: string
-}
-
-export interface CheatSheetData {
-  entries: IllusionCheatSheetEntry[]
-  generatedAt: string
 }
 
 /**

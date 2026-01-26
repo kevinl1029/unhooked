@@ -1,218 +1,174 @@
 {
   "project": "Unhooked",
-  "branchName": "ralph/lead-funnel-session-zero-magnet",
-  "description": "Lead Funnel Session Zero Magnet - Audio lead magnet for undecided landing page visitors",
+  "branchName": "ralph/final-ceremony-bugfix",
+  "description": "Fix Final Ceremony feature - resolve duplicate type definitions, import conflicts, and missing functionality that prevents the ceremony from working",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Create listen page with audio player",
-      "description": "As an email recipient, I want to access a dedicated listen page with an audio player so that I can hear Session Zero in a focused environment.",
+      "title": "Remove duplicate CeremonyNarrativeInput/Output types from ceremony-narrative.ts",
+      "description": "As a developer, I need a single source of truth for ceremony types to prevent Nuxt auto-import conflicts.",
       "acceptanceCriteria": [
-        "Page exists at /listen route",
-        "Page displays headline 'Before you decide anything, hear this.'",
-        "Page displays subhead '5 minutes. Headphones help.'",
-        "Audio player is visible and centered on page",
-        "Audio player loads /audio/session-zero.mp3",
-        "Page has noindex, nofollow meta tag",
-        "Page uses brand styling (deep teal gradient background, Inter font)",
-        "'Unhooked' text in header area links to homepage",
-        "Simple footer with '© 2026 Unhooked'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Remove CeremonyNarrativeInput interface from server/utils/llm/tasks/ceremony-narrative.ts (lines 9-14)",
+        "Remove CeremonyNarrativeOutput interface from server/utils/llm/tasks/ceremony-narrative.ts (lines 22-25)",
+        "Remove JourneySegment interface from ceremony-narrative.ts if it exists",
+        "Import CeremonyNarrativeInput and CeremonyNarrativeOutput from '../task-types' instead",
+        "Update generateCeremonyNarrative function to use the imported types",
+        "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Browser verification skipped - no dev-browser skill configured"
+      "notes": "Completed - types moved to task-types.ts, ceremony-narrative.ts now imports from there"
     },
     {
       "id": "US-002",
-      "title": "Add placeholder audio file",
-      "description": "As a developer, I want a placeholder audio file so that I can test the listen page functionality.",
+      "title": "Consolidate IllusionCheatSheetEntry to single definition",
+      "description": "As a developer, I need IllusionCheatSheetEntry defined in one place with consistent field names.",
       "acceptanceCriteria": [
-        "Create public/audio/ directory",
-        "Add session-zero.mp3 placeholder file (can be silent or short test audio)",
-        "Audio file is accessible at /audio/session-zero.mp3",
+        "Remove IllusionCheatSheetEntry interface from server/utils/ceremony/cheat-sheet-generator.ts (lines 38-46)",
+        "Import IllusionCheatSheetEntry from server/utils/llm/task-types.ts instead",
+        "Update cheat-sheet-generator.ts to use camelCase field names matching task-types.ts definition",
+        "Update ILLUSION_CONTENT constant if field names changed",
+        "Update generateIllusionsCheatSheet function to return correct field names",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "5-second silent MP3 placeholder generated with ffmpeg"
+      "notes": "Completed - Updated task-types.ts with camelCase IllusionCheatSheetEntry and CheatSheetData types, cheat-sheet-generator.ts now imports from task-types.ts, updated validateCheatSheet and tests to match"
     },
     {
       "id": "US-003",
-      "title": "Add debug mode for listen page",
-      "description": "As a developer, I want a debug mode that shows all page stages immediately so that I can test without waiting for timers.",
+      "title": "Update task-types.ts with correct ceremony type definitions",
+      "description": "As a developer, I need task-types.ts to have the correct type definitions that match actual usage.",
       "acceptanceCriteria": [
-        "Adding ?debug=true to URL shows all stages (audio, bridge, CTAs) immediately",
-        "Debug mode only affects local display, not analytics",
-        "Without debug param, normal staged reveal behavior applies",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "CeremonyNarrativeInput has selectedMoments as CapturedMoment[] (not CeremonyMomentSelection)",
+        "CeremonyNarrativeInput has optional userFirstName, alreadyQuit, and originSummary fields",
+        "CeremonyNarrativeOutput has segments as JourneySegment[] (not audioSegments as AudioSegment[])",
+        "Add JourneySegment interface with id, type, text, and optional momentId fields",
+        "IllusionCheatSheetEntry uses camelCase fields: illusionKey, name, illusion, truth, userInsight, insightMomentId",
+        "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Browser verification skipped - no dev-browser skill configured. Debug mode implemented with isDebugMode computed property from route.query.debug."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Add bridge content reveal after audio ends",
-      "description": "As an email recipient who finishes the audio, I want to see follow-up content that explains what I just heard.",
+      "title": "Remove ceremony function re-exports from LLM index.ts",
+      "description": "As a developer, I need to prevent duplicate exports that conflict with Nuxt auto-imports.",
       "acceptanceCriteria": [
-        "Bridge section hidden on initial page load",
-        "Bridge section appears after audio 'ended' event fires",
-        "Bridge section uses fade-in animation (300-400ms)",
-        "Bridge headline: 'That belief—that quitting requires willpower—is just one of five.'",
-        "Bridge copy mentions four more illusions without listing specifics",
-        "Page auto-scrolls to bring bridge section into view",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Remove line 37 from server/utils/llm/index.ts: export { selectCeremonyMoments }",
+        "Remove line 38 from server/utils/llm/index.ts: export { generateCeremonyNarrative }",
+        "Update server/api/ceremony/prepare.get.ts to import selectCeremonyMoments directly from tasks/ceremony-select",
+        "Update server/api/ceremony/generate-journey.post.ts to import functions directly from their source files",
+        "npm run build completes without 'Duplicated imports' warnings for ceremony functions",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Browser verification skipped - no dev-browser skill configured. Implemented audio ended event listener with auto-scroll to bridge section."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Add 30-second fallback timer for content reveal",
-      "description": "As an email recipient who starts but doesn't finish the audio, I want to eventually see the CTAs so I can still take action.",
+      "title": "Fix useUserStatus usage in ceremony page",
+      "description": "As a user, I want the ceremony page to properly check my existing progress on load.",
       "acceptanceCriteria": [
-        "30-second timer starts when audio play begins",
-        "Timer is wall-clock time (doesn't pause when audio pauses)",
-        "Bridge + CTA sections appear after 30 seconds if audio hasn't ended",
-        "Once revealed, sections stay visible (don't hide on audio replay)",
-        "Sections remain hidden if user never presses play",
+        "checkExistingProgress() in pages/ceremony.vue calls fetchStatus() before accessing status.value",
+        "Add isCheckingStatus ref to track loading state during status check",
+        "Show loading indicator while checking status on mount",
+        "If status.value?.ceremony?.completed_at exists, redirect to /dashboard",
+        "If status.value?.artifacts?.reflective_journey exists, load existing journey",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Implemented wall-clock fallback timer using setTimeout. Timer starts on first play event and cannot be restarted. Timer is cleaned up on component unmount."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Add primary CTA to checkout on listen page",
-      "description": "As an email recipient ready to purchase, I want a clear button to become a founding member.",
+      "title": "Add ceremony readiness check on page mount",
+      "description": "As a user, I want to see a clear message if I'm not ready for the ceremony.",
       "acceptanceCriteria": [
-        "Primary CTA section appears with bridge content",
-        "Headline above button: 'Ready to see the rest?'",
-        "Button displays 'Become a founding member — $199 →'",
-        "Button uses existing CheckoutButton component",
-        "Clicking initiates Stripe checkout flow directly",
-        "Subtext shows '30-day guarantee · Start when the program launches'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "On mount, call /api/ceremony/prepare endpoint",
+        "If response.ready is false, show 'not ready' state instead of intro",
+        "Display which requirements are missing (e.g., 'Complete all 5 illusions first')",
+        "If response.ceremony_completed is true, redirect to /dashboard",
+        "If response.total_moments < 3, show message about needing more moments",
+        "Add readinessError ref to store readiness check errors",
+        "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Integrated LandingCheckoutButton component with tracking-location='listen'. Added CTA_CLICK_LISTEN event to analytics."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Add secondary CTA to landing page on listen page",
-      "description": "As an email recipient who wants more information, I want a link to read the full landing page.",
+      "title": "Create mock utilities for ceremony E2E tests",
+      "description": "As a developer, I need mock utilities to test ceremony flow without real API calls.",
       "acceptanceCriteria": [
-        "Secondary CTA section appears below primary CTA",
-        "Headline: 'Want to learn more first?'",
-        "Link text is 'Read the full story →'",
-        "Link navigates to /?ref=listen (includes attribution param)",
-        "Link styled as text link, not button (visually quieter than primary)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Create tests/e2e/utils/mock-ceremony.ts file",
+        "Add mockCeremonyPrepare(page, options) function to mock /api/ceremony/prepare response",
+        "Add mockCeremonyGenerateJourney(page, segments) function to mock journey generation",
+        "Add mockCeremonyCheatSheet(page, entries) function to mock cheat sheet response",
+        "Add mockCeremonyComplete(page) function to mock ceremony completion",
+        "Export all mock functions from the file",
+        "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Already implemented in US-003. Verified all acceptance criteria met: section appears below primary CTA, headline matches, link text matches, navigates to /?ref=listen, styled as text link with underline."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Track email source on listen page",
-      "description": "As a product owner, I want to know which email drove each listen page visit.",
+      "title": "Create E2E test for ceremony intro and journey generation",
+      "description": "As a developer, I need E2E tests to verify ceremony flow works correctly.",
       "acceptanceCriteria": [
-        "Page reads 'src' query parameter on load",
-        "Valid values: welcome, followup, or defaults to 'direct' if missing",
-        "Source value stored in component state for use in analytics",
+        "Create tests/e2e/ceremony.spec.ts file",
+        "Test: User sees intro step with 'still using' and 'already stopped' buttons",
+        "Test: Clicking 'Begin Ceremony' without selecting option shows disabled state",
+        "Test: Selecting option and clicking 'Begin Ceremony' triggers journey generation",
+        "Test: Journey generation shows loading state with 'Creating Your Journey' message",
+        "Test: After generation, journey player is displayed with segments",
+        "Tests pass: npm run test:e2e -- tests/e2e/ceremony.spec.ts",
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Added EmailSource type and emailSource computed property that validates src query param"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Update Path B copy on landing page",
-      "description": "As an undecided landing page visitor, I want to see compelling copy about a free audio experience.",
+      "title": "Create E2E test for ceremony recording and completion",
+      "description": "As a developer, I need E2E tests for the recording and completion steps.",
       "acceptanceCriteria": [
-        "Headline changed from 'Not ready yet?' to 'Still thinking about it?'",
-        "Body copy updated to universal audio magnet copy (no career assumptions)",
-        "Copy only shows when checkoutEnabled is true (validation/enabled modes)",
-        "Waitlist copy unchanged for disabled mode",
-        "Button text remains 'Send it to me'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Test: User can skip journey and proceed to recording step",
+        "Test: Recording step shows microphone button",
+        "Test: Cheat sheet step displays illusion entries",
+        "Test: Complete Ceremony button triggers completion API",
+        "Test: After completion, user sees success message with link to dashboard",
+        "Test: Error states show retry button",
+        "Tests pass: npm run test:e2e -- tests/e2e/ceremony.spec.ts",
+        "Typecheck passes"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Updated headline and body copy in LandingFinalCTA.vue for audio lead magnet"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Update welcome email for audio funnel",
-      "description": "As a new email subscriber (when checkout is available), I want to receive an email with the audio link.",
+      "title": "Improve ceremony error messages",
+      "description": "As a user, I want clear error messages when something goes wrong in the ceremony.",
       "acceptanceCriteria": [
-        "Email sent when appMode is 'validation' or 'enabled'",
-        "Email is plain text format (not HTML)",
-        "Subject line: 'Here's the audio I promised'",
-        "Body includes link to https://getunhooked.app/listen?src=welcome",
-        "Body matches spec copy (brief, personal, includes 'save this email' permission)",
-        "From address: 'Kevin from Unhooked <kevin@getunhooked.app>'",
-        "Waitlist email unchanged for 'disabled' mode",
+        "When journey generation fails, show 'Unable to create your journey. Please try again.'",
+        "When not enough moments, show 'You need at least 3 captured moments to begin the ceremony.'",
+        "When illusions incomplete, show 'Complete all 5 illusion sessions before the ceremony.'",
+        "When recording fails, show 'Could not access microphone. Please check your browser permissions.'",
+        "When completion fails, show 'Unable to complete ceremony. Your progress has been saved.'",
+        "All error states have a 'Try Again' or appropriate action button",
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Implemented audio funnel email for validation/enabled modes with plain text format. Waitlist HTML email preserved for disabled mode."
-    },
-    {
-      "id": "US-011",
-      "title": "Add listen location to CheckoutButton tracking",
-      "description": "As a product owner, I want checkout clicks from the listen page to be tracked separately.",
-      "acceptanceCriteria": [
-        "CheckoutButton component accepts 'listen' as a valid tracking location",
-        "CTA_CLICK_LISTEN event fires when primary CTA clicked on listen page",
-        "Event includes email_source property",
-        "Typecheck passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Added emailSource prop to CheckoutButton and passed to trackEvent with email_source property"
-    },
-    {
-      "id": "US-012",
-      "title": "Track audio playback events",
-      "description": "As a product owner, I want to track when users start and complete the audio.",
-      "acceptanceCriteria": [
-        "AUDIO_STARTED event fires when play button pressed",
-        "AUDIO_COMPLETED event fires when audio reaches end",
-        "Both events include email_source property (welcome/followup/direct)",
-        "Events sent to Plausible via existing analytics composable",
-        "Typecheck passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Added AUDIO_STARTED and AUDIO_COMPLETED events to useAnalytics. Track first play and audio end with email_source property."
-    },
-    {
-      "id": "US-013",
-      "title": "Track secondary CTA clicks on listen page",
-      "description": "As a product owner, I want to track when users click the secondary CTA to learn more.",
-      "acceptanceCriteria": [
-        "SECONDARY_CTA_CLICK event fires when 'Read the full story' link clicked",
-        "Event includes email_source property",
-        "Event sent to Plausible",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Added SECONDARY_CTA_CLICK event and @click handler on NuxtLink with email_source property"
+      "passes": false,
+      "notes": ""
     }
   ]
 }
