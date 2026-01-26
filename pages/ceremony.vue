@@ -32,6 +32,50 @@
         </button>
       </div>
 
+      <!-- Not Ready State -->
+      <div v-else-if="currentStep === 'not_ready'" class="animate-fade-in-up">
+        <div class="glass rounded-card p-8 md:p-12 shadow-card border border-brand-border text-center">
+          <!-- Warning icon -->
+          <div class="w-24 h-24 rounded-full bg-yellow-500/20 border-2 border-yellow-500 flex items-center justify-center mx-auto mb-6">
+            <svg class="w-12 h-12 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+
+          <h1 class="text-3xl font-bold text-white mb-4">Not Quite Ready Yet</h1>
+
+          <p class="text-white-85 text-lg mb-6">
+            {{ notReadyReason }}
+          </p>
+
+          <!-- Progress indicators -->
+          <div class="bg-brand-glass rounded-card p-6 mb-8 border border-brand-border text-left">
+            <h3 class="text-white font-semibold mb-4">Your Progress</h3>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-white-85">Illusions Completed</span>
+                <span :class="illusionsCompleted >= 5 ? 'text-green-400' : 'text-yellow-400'">
+                  {{ illusionsCompleted }} / 5
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-white-85">Captured Moments</span>
+                <span :class="totalMoments >= 3 ? 'text-green-400' : 'text-yellow-400'">
+                  {{ totalMoments }} / 3 minimum
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <NuxtLink
+            to="/dashboard"
+            class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card inline-block text-lg"
+          >
+            Return to Dashboard
+          </NuxtLink>
+        </div>
+      </div>
+
       <!-- Step 1: Intro - Already Quit Question -->
       <div v-else-if="currentStep === 'intro'" class="animate-fade-in-up">
         <div class="glass rounded-card p-8 md:p-12 shadow-card border border-brand-border text-center">
@@ -335,7 +379,7 @@ interface CheatSheetEntry {
   userInsight?: string
 }
 
-type CeremonyStep = 'intro' | 'generating' | 'journey' | 'recording' | 'cheatsheet' | 'complete'
+type CeremonyStep = 'intro' | 'not_ready' | 'generating' | 'journey' | 'recording' | 'cheatsheet' | 'complete'
 type RecordingState = 'idle' | 'recording' | 'preview' | 'saving' | 'saved'
 
 // State
@@ -345,6 +389,12 @@ const isLoading = ref(false)
 const loadingMessage = ref('')
 const error = ref<string | null>(null)
 const isCheckingStatus = ref(true) // Track initial status check loading
+const readinessError = ref<string | null>(null) // Store readiness check errors
+
+// Readiness state
+const notReadyReason = ref<string | null>(null)
+const illusionsCompleted = ref<number>(0)
+const totalMoments = ref<number>(0)
 
 // Journey state
 const journeySegments = ref<JourneySegment[]>([])
@@ -383,29 +433,55 @@ watch(recorderError, (err: string | null) => {
   }
 })
 
-// Check if user has existing ceremony progress
+// Check if user has existing ceremony progress and readiness
 async function checkExistingProgress() {
   isCheckingStatus.value = true
+  readinessError.value = null
 
   try {
-    const { status, fetchStatus } = useUserStatus()
-
-    // Fetch the current status first
-    await fetchStatus()
+    // First check ceremony preparation/readiness
+    const prepareResponse = await $fetch<{
+      ready: boolean
+      ceremony_completed: boolean
+      illusions_completed: string[]
+      total_moments: number
+    }>('/api/ceremony/prepare')
 
     // If ceremony is already completed, redirect to dashboard
-    if (status.value?.ceremony?.completed_at) {
+    if (prepareResponse.ceremony_completed) {
       await navigateTo('/dashboard')
       return
     }
+
+    // Store readiness data
+    illusionsCompleted.value = prepareResponse.illusions_completed.length
+    totalMoments.value = prepareResponse.total_moments
+
+    // If not ready, show not ready state
+    if (!prepareResponse.ready) {
+      if (prepareResponse.total_moments < 3) {
+        notReadyReason.value = 'You need at least 3 captured moments to begin the ceremony.'
+      } else if (prepareResponse.illusions_completed.length < 5) {
+        notReadyReason.value = 'Complete all 5 illusion sessions before the ceremony.'
+      } else {
+        notReadyReason.value = 'You are not yet ready for the ceremony.'
+      }
+      currentStep.value = 'not_ready'
+      return
+    }
+
+    // Check for existing journey artifact
+    const { status, fetchStatus } = useUserStatus()
+    await fetchStatus()
 
     // If already has journey artifact, load it and skip to journey playback
     if (status.value?.artifacts?.reflective_journey) {
       await loadExistingJourney()
     }
-  } catch (err) {
-    // No existing progress, start from intro
+  } catch (err: any) {
     console.error('Error checking ceremony progress:', err)
+    readinessError.value = err.data?.message || 'Failed to check ceremony readiness'
+    // Allow continuing to intro even if readiness check fails
   } finally {
     isCheckingStatus.value = false
   }

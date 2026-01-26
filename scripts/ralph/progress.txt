@@ -90,3 +90,19 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - Always add a loading state when doing async operations on mount to prevent flash of incorrect content
   - Use `navigateTo()` for programmatic navigation in Nuxt 3
 ---
+
+## 2026-01-26 01:15 - US-006
+- What was implemented:
+  - Added ceremony readiness check by calling `/api/ceremony/prepare` on mount
+  - Added new `not_ready` step type to show when user is not ready for ceremony
+  - Added `readinessError`, `notReadyReason`, `illusionsCompleted`, `totalMoments` refs
+  - Shows detailed progress (X/5 illusions, X/3 moments) when not ready
+  - Redirects to dashboard if ceremony is already completed
+  - Shows specific messages for different not-ready conditions
+- Files changed:
+  - `pages/ceremony.vue`
+- **Learnings for future iterations:**
+  - The `/api/ceremony/prepare` endpoint returns `ready`, `ceremony_completed`, `illusions_completed[]`, `total_moments`
+  - Always provide users with progress indicators when blocking them from proceeding
+  - Use template literals carefully for user-facing messages
+---
