@@ -75,3 +75,18 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - The pattern of re-exporting from index.ts for convenience conflicts with Nuxt's auto-import system
   - Other task functions still have this issue (moment-detection, story-summarization, etc.) - could be cleaned up similarly
 ---
+
+## 2026-01-26 01:00 - US-005
+- What was implemented:
+  - Fixed `checkExistingProgress()` to properly call `fetchStatus()` before accessing `status.value`
+  - Added `isCheckingStatus` ref to track the initial status check loading state
+  - Added loading indicator in template that shows while checking ceremony progress
+  - Added redirect to `/dashboard` if ceremony is already completed
+  - Maintains existing behavior of loading journey if reflective_journey artifact exists
+- Files changed:
+  - `pages/ceremony.vue`
+- **Learnings for future iterations:**
+  - `useUserStatus()` composable requires calling `fetchStatus()` before accessing `status.value`
+  - Always add a loading state when doing async operations on mount to prevent flash of incorrect content
+  - Use `navigateTo()` for programmatic navigation in Nuxt 3
+---

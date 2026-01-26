@@ -1,8 +1,14 @@
 <template>
   <div class="min-h-screen p-4">
     <div class="max-w-2xl mx-auto">
+      <!-- Initial status check loading -->
+      <div v-if="isCheckingStatus" class="glass rounded-card p-8 shadow-card border border-brand-border text-center animate-fade-in-up">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-brand-accent border-t-transparent mb-4" />
+        <p class="text-white-65">Loading your ceremony progress...</p>
+      </div>
+
       <!-- Loading overlay -->
-      <div v-if="isLoading" class="fixed inset-0 bg-brand-bg-dark/80 flex items-center justify-center z-50">
+      <div v-else-if="isLoading" class="fixed inset-0 bg-brand-bg-dark/80 flex items-center justify-center z-50">
         <div class="text-center">
           <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-brand-accent border-t-transparent" />
           <p class="mt-4 text-white-65">{{ loadingMessage }}</p>
@@ -10,7 +16,7 @@
       </div>
 
       <!-- Error state -->
-      <div v-if="error" class="glass rounded-card p-8 shadow-card border border-brand-border text-center animate-fade-in-up">
+      <div v-else-if="error" class="glass rounded-card p-8 shadow-card border border-brand-border text-center animate-fade-in-up">
         <div class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
           <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -338,6 +344,7 @@ const alreadyQuit = ref<boolean | null>(null)
 const isLoading = ref(false)
 const loadingMessage = ref('')
 const error = ref<string | null>(null)
+const isCheckingStatus = ref(true) // Track initial status check loading
 
 // Journey state
 const journeySegments = ref<JourneySegment[]>([])
@@ -378,15 +385,29 @@ watch(recorderError, (err: string | null) => {
 
 // Check if user has existing ceremony progress
 async function checkExistingProgress() {
-  try {
-    const { status } = useUserStatus()
+  isCheckingStatus.value = true
 
-    // If already has journey artifact, skip to journey playback
+  try {
+    const { status, fetchStatus } = useUserStatus()
+
+    // Fetch the current status first
+    await fetchStatus()
+
+    // If ceremony is already completed, redirect to dashboard
+    if (status.value?.ceremony?.completed_at) {
+      await navigateTo('/dashboard')
+      return
+    }
+
+    // If already has journey artifact, load it and skip to journey playback
     if (status.value?.artifacts?.reflective_journey) {
       await loadExistingJourney()
     }
   } catch (err) {
     // No existing progress, start from intro
+    console.error('Error checking ceremony progress:', err)
+  } finally {
+    isCheckingStatus.value = false
   }
 }
 
