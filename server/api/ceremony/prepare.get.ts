@@ -4,7 +4,7 @@
  */
 
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { selectCeremonyMoments } from '../../utils/llm'
+import { selectCeremonyMoments } from '../../utils/llm/tasks/ceremony-select'
 import type { CapturedMoment } from '../../utils/llm/task-types'
 
 interface MomentsByType {

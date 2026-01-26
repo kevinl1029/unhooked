@@ -34,5 +34,7 @@ export { assessConviction } from './tasks/conviction-assessment'
 export { selectKeyInsight } from './tasks/key-insight-selection'
 export { personalizeCheckIn } from './tasks/checkin-personalization'
 export { summarizeOriginStory, shouldGenerateSummary } from './tasks/story-summarization'
-export { selectCeremonyMoments } from './tasks/ceremony-select'
-export { generateCeremonyNarrative } from './tasks/ceremony-narrative'
+// Note: selectCeremonyMoments and generateCeremonyNarrative are NOT re-exported here
+// to avoid Nuxt auto-import duplicate warnings. Import directly from their source files:
+// - selectCeremonyMoments: from './tasks/ceremony-select'
+// - generateCeremonyNarrative: from './tasks/ceremony-narrative'

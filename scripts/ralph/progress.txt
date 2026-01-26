@@ -59,3 +59,19 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - US-001 and US-002 addressed all the type definition issues that US-003 was created to track
   - When planning user stories, check for overlap - sometimes earlier stories fully satisfy later ones
 ---
+
+## 2026-01-26 00:45 - US-004
+- What was implemented:
+  - Removed `selectCeremonyMoments` and `generateCeremonyNarrative` re-exports from `server/utils/llm/index.ts`
+  - Added comment explaining why these are not re-exported (to avoid Nuxt auto-import duplicates)
+  - Updated `server/api/ceremony/prepare.get.ts` to import `selectCeremonyMoments` from `tasks/ceremony-select`
+  - Updated `server/api/ceremony/generate-journey.post.ts` to import both functions from their source files
+- Files changed:
+  - `server/utils/llm/index.ts`
+  - `server/api/ceremony/prepare.get.ts`
+  - `server/api/ceremony/generate-journey.post.ts`
+- **Learnings for future iterations:**
+  - To avoid Nuxt auto-import duplicate warnings, don't re-export functions from index.ts - import directly from source
+  - The pattern of re-exporting from index.ts for convenience conflicts with Nuxt's auto-import system
+  - Other task functions still have this issue (moment-detection, story-summarization, etc.) - could be cleaned up similarly
+---

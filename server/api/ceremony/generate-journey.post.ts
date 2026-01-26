@@ -5,7 +5,8 @@
  */
 
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { generateCeremonyNarrative, selectCeremonyMoments } from '../../utils/llm'
+import { generateCeremonyNarrative } from '../../utils/llm/tasks/ceremony-narrative'
+import { selectCeremonyMoments } from '../../utils/llm/tasks/ceremony-select'
 import type { CapturedMoment } from '../../utils/llm/task-types'
 
 interface PlaylistSegment {
