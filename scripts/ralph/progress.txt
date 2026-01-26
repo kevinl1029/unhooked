@@ -127,3 +127,26 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - Types from `server/utils/llm/task-types.ts` should be imported for type safety
   - The prepare endpoint returns `ready`, `ceremony_completed`, `illusions_completed[]`, `total_moments`, and `suggested_journey_moments`
 ---
+
+## 2026-01-26 10:15 - US-008
+- What was implemented:
+  - Created `tests/e2e/ceremony.spec.ts` with 9 E2E tests covering ceremony intro and journey generation:
+    - Test: Shows intro step with "still using" and "already stopped" buttons
+    - Test: "Begin Ceremony" button is disabled without selecting an option
+    - Test: Selecting option and clicking "Begin Ceremony" triggers journey generation
+    - Test: Journey generation shows loading state with "Creating Your Journey" message
+    - Test: After generation, journey player is displayed with segments
+    - Test: Shows not ready state when illusions incomplete
+    - Test: Shows not ready state when not enough moments captured
+    - Test: Redirects to dashboard if ceremony already completed
+    - Test: Journey generation with delayed response to verify loading state
+  - All 9 tests pass successfully
+  - Uses mock utilities from US-007 for API mocking
+- Files changed:
+  - `tests/e2e/ceremony.spec.ts` (new file)
+- **Learnings for future iterations:**
+  - When testing for text that appears in multiple places, use more specific selectors or check for unique patterns
+  - The ceremony page has multiple steps: not_ready, intro, generating, journey, recording, cheat_sheet, complete
+  - Use `page.route()` with custom delays to test loading states
+  - The `alreadyQuit` state is tracked as a ref that starts as `null` and must be set to enable the Begin Ceremony button
+---
