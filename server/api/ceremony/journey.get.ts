@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   // Get journey artifact
   const { data: artifact, error: fetchError } = await supabase
     .from('ceremony_artifacts')
-    .select('id, playlist, content_text, audio_duration_ms, created_at')
+    .select('id, content_json, content_text, audio_duration_ms, created_at')
     .eq('user_id', user.sub)
     .eq('artifact_type', 'reflective_journey')
     .single()
@@ -28,15 +28,19 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Parse playlist - stored directly in playlist column
-  const playlistData = artifact.playlist as Array<{
-    id: string
-    type: 'narration' | 'user_moment'
-    text: string
-    transcript: string
-    duration_ms?: number
-    moment_id?: string
-  }> | null
+  // Parse playlist from content_json (per spec: content_json for structured data)
+  const contentJson = artifact.content_json as {
+    segments: Array<{
+      id: string
+      type: 'narration' | 'user_moment'
+      text: string
+      transcript: string
+      duration_ms?: number
+      moment_id?: string
+    }>
+  } | null
+
+  const playlistData = contentJson?.segments
 
   if (!playlistData || playlistData.length === 0) {
     throw createError({

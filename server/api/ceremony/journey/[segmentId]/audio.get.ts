@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   // 1. Get the journey artifact
   const { data: artifact } = await supabase
     .from('ceremony_artifacts')
-    .select('id, playlist, user_id')
+    .select('id, content_json, user_id')
     .eq('user_id', user.sub)
     .eq('artifact_type', 'reflective_journey')
     .single()
@@ -35,23 +35,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Journey not found' })
   }
 
-  // 2. Find the segment in the playlist
-  const playlist = artifact.playlist as Array<{
-    id: string
-    type: string
-    text: string
-    moment_id?: string
-    audio_path?: string
-    duration_ms?: number
-    word_timings?: Array<{ word: string; start: number; end: number }>
-  }>
+  // 2. Find the segment in the playlist (stored in content_json per spec)
+  const contentJson = artifact.content_json as {
+    segments: Array<{
+      id: string
+      type: string
+      text: string
+      moment_id?: string
+      audio_path?: string
+      duration_ms?: number
+      word_timings?: Array<{ word: string; start: number; end: number }>
+    }>
+  }
+  const segments = contentJson?.segments || []
 
-  const segmentIndex = playlist.findIndex(s => s.id === segmentId)
+  const segmentIndex = segments.findIndex(s => s.id === segmentId)
   if (segmentIndex === -1) {
     throw createError({ statusCode: 404, message: 'Segment not found' })
   }
 
-  const segment = playlist[segmentIndex]
+  const segment = segments[segmentIndex]
 
   // 3. If it's a user_moment, get the user's recorded audio
   if (segment.type === 'user_moment' && segment.moment_id) {
@@ -126,19 +129,19 @@ export default defineEventHandler(async (event) => {
         throw new Error('Failed to upload audio')
       }
 
-      // Update the playlist segment with audio info
-      playlist[segmentIndex] = {
+      // Update the segment with audio info
+      segments[segmentIndex] = {
         ...segment,
         audio_path: audioPath,
         duration_ms: result.estimatedDurationMs,
         word_timings: result.wordTimings,
       }
 
-      // Save updated playlist to artifact
+      // Save updated content_json to artifact
       await supabase
         .from('ceremony_artifacts')
         .update({
-          playlist,
+          content_json: { segments },
           updated_at: new Date().toISOString(),
         })
         .eq('id', artifact.id)

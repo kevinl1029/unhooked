@@ -40,14 +40,14 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // Check if ceremony already completed
-  const { data: userStory } = await supabase
-    .from('user_story')
+  // Check if ceremony already completed (via user_progress table)
+  const { data: userProgress } = await supabase
+    .from('user_progress')
     .select('ceremony_completed_at')
     .eq('user_id', user.sub)
     .single()
 
-  if (userStory?.ceremony_completed_at) {
+  if (userProgress?.ceremony_completed_at) {
     throw createError({ statusCode: 400, message: 'Ceremony already completed' })
   }
 
@@ -91,24 +91,50 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Save mode - create/update the artifact
-  const { data: artifact, error: artifactError } = await supabase
+  // Save mode - check for existing artifact first
+  const { data: existingArtifact } = await supabase
     .from('ceremony_artifacts')
-    .upsert({
-      user_id: user.sub,
-      artifact_type: 'final_recording',
-      audio_path: audioPath,
-      content_text: transcript,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'user_id,artifact_type',
-    })
     .select('id')
+    .eq('user_id', user.sub)
+    .eq('artifact_type', 'final_recording')
     .single()
 
-  if (artifactError) {
-    console.error('[save-final-recording] Artifact save failed:', artifactError)
-    throw createError({ statusCode: 500, message: 'Failed to save recording' })
+  let artifactId: string
+
+  if (existingArtifact) {
+    // Update existing artifact (allows re-recording)
+    const { error: updateError } = await supabase
+      .from('ceremony_artifacts')
+      .update({
+        audio_path: audioPath,
+        content_text: transcript,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existingArtifact.id)
+
+    if (updateError) {
+      console.error('[save-final-recording] Artifact update failed:', updateError)
+      throw createError({ statusCode: 500, message: 'Failed to save recording' })
+    }
+    artifactId = existingArtifact.id
+  } else {
+    // Create new artifact
+    const { data: artifact, error: artifactError } = await supabase
+      .from('ceremony_artifacts')
+      .insert({
+        user_id: user.sub,
+        artifact_type: 'final_recording',
+        audio_path: audioPath,
+        content_text: transcript,
+      })
+      .select('id')
+      .single()
+
+    if (artifactError) {
+      console.error('[save-final-recording] Artifact save failed:', artifactError)
+      throw createError({ statusCode: 500, message: 'Failed to save recording' })
+    }
+    artifactId = artifact.id
   }
 
   // Clean up any preview files
@@ -126,7 +152,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    artifact_id: artifact.id,
+    artifact_id: artifactId,
     audio_path: audioPath,
     audio_url: signedUrl?.signedUrl || '',
     transcript,

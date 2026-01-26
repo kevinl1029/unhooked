@@ -32,18 +32,46 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // 1. Fetch user story
+  // 1. Fetch user story for origin context
   const { data: userStory } = await supabase
     .from('user_story')
-    .select('origin_summary, ceremony_completed_at, already_quit')
+    .select('origin_summary')
     .eq('user_id', user.sub)
     .single()
 
-  if (userStory?.ceremony_completed_at) {
+  // Check ceremony completion via user_progress table instead
+  const { data: userProgress } = await supabase
+    .from('user_progress')
+    .select('ceremony_completed_at')
+    .eq('user_id', user.sub)
+    .single()
+
+  if (userProgress?.ceremony_completed_at) {
     throw createError({ statusCode: 400, message: 'Ceremony already completed' })
   }
 
-  // 2. Fetch all moments
+  // 2. Check for existing artifact first (artifacts are immutable per spec)
+  const { data: existingArtifact } = await supabase
+    .from('ceremony_artifacts')
+    .select('id, content_text, content_json')
+    .eq('user_id', user.sub)
+    .eq('artifact_type', 'reflective_journey')
+    .single()
+
+  if (existingArtifact) {
+    // Return existing artifact - don't regenerate
+    const existingSegments = (existingArtifact.content_json as { segments: PlaylistSegment[] })?.segments || []
+    return {
+      journey_text: existingArtifact.content_text,
+      playlist: {
+        segments: existingSegments,
+      },
+      artifact_id: existingArtifact.id,
+      selected_moment_count: existingSegments.filter(s => s.type === 'user_moment').length,
+    }
+  }
+
+  // 3. Fetch all moments (only if no existing artifact)
   const { data: allMomentsRaw } = await supabase
     .from('captured_moments')
     .select('*')
@@ -75,7 +103,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Not enough moments for ceremony' })
   }
 
-  // 3. Select moments (use provided IDs or AI selection)
+  // 4. Select moments (use provided IDs or AI selection)
   let selectedMoments: CapturedMoment[]
 
   if (selected_moment_ids && selected_moment_ids.length > 0) {
@@ -92,10 +120,9 @@ export default defineEventHandler(async (event) => {
     selectedMoments = allMoments.filter(m => selectedIdSet.has(m.id))
   }
 
-  // 4. Generate narrative
+  // 5. Generate narrative
   const narrative = await generateCeremonyNarrative({
     selectedMoments,
-    alreadyQuit: userStory?.already_quit || false,
     originSummary: userStory?.origin_summary || undefined,
   })
 
@@ -103,7 +130,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Failed to generate narrative' })
   }
 
-  // 5. Convert to playlist format
+  // 6. Convert to playlist format
   const playlistSegments: PlaylistSegment[] = narrative.segments.map(seg => ({
     id: seg.id,
     type: seg.type,
@@ -113,18 +140,15 @@ export default defineEventHandler(async (event) => {
     audio_generated: false,
   }))
 
-  // 6. Create or update artifact
+  // 7. Create new artifact (immutable once created)
   const { data: artifact, error: artifactError } = await supabase
     .from('ceremony_artifacts')
-    .upsert({
+    .insert({
       user_id: user.sub,
       artifact_type: 'reflective_journey',
       content_text: narrative.narrative,
-      playlist: playlistSegments,
+      content_json: { segments: playlistSegments },
       included_moment_ids: selectedMoments.map(m => m.id),
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'user_id,artifact_type',
     })
     .select('id')
     .single()
