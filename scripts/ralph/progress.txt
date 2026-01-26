@@ -170,3 +170,24 @@ Started: Mon Jan 26 00:04:38 EST 2026
   - The ceremony has these sequential steps: intro -> generating -> journey -> recording -> cheatsheet -> complete
   - Each step has specific UI elements that can be tested for presence and interaction
 ---
+
+## 2026-01-26 11:00 - US-010
+- What was implemented:
+  - Updated error messages in `pages/ceremony.vue`:
+    - Journey generation failure: "Unable to create your journey. Please try again."
+    - Ceremony completion failure: "Unable to complete ceremony. Your progress has been saved."
+  - Updated error messages in `composables/useAudioRecorder.ts`:
+    - Microphone permission denied: "Could not access microphone. Please check your browser permissions."
+  - Verified not ready messages were already correct:
+    - Not enough moments: "You need at least 3 captured moments to begin the ceremony."
+    - Illusions incomplete: "Complete all 5 illusion sessions before the ceremony."
+  - Confirmed all error states already have "Try Again" button in the error template
+- Files changed:
+  - `pages/ceremony.vue`
+  - `composables/useAudioRecorder.ts`
+- **Learnings for future iterations:**
+  - Error messages in the ceremony are displayed through a single `error` ref that shows a global error state
+  - The `retryCurrentStep()` function handles retry logic by resetting state and calling the appropriate step function
+  - Microphone errors come from `useAudioRecorder` composable and are watched to set `microphoneError` ref
+  - The error template is shown with `v-else-if="error"` and includes a "Try Again" button by default
+---
