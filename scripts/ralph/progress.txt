@@ -52,3 +52,19 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - All US-003 acceptance criteria verified: handles { reason: 'generic_boost' }, returns 403 if ceremony not complete, creates 'boost' session type, includes all conviction scores and top 3 moments per illusion
   - Build passes with `npm run build` (verified typecheck passes)
 ---
+
+## Tue Jan 27 15:15:00 EST 2026 - US-004
+- Implemented POST /api/reinforcement/assess endpoint
+- Files changed:
+  - server/api/reinforcement/assess.post.ts (new)
+  - scripts/ralph/prd.json (updated passes: true for US-004)
+- **Learnings for future iterations:**
+  - Reused existing conviction assessment logic from server/utils/llm/tasks/conviction-assessment.ts
+  - Assessment process mirrors core sessions: fetch conversation transcript, run LLM assessment, store results
+  - Added shift_quality classification: 'new_insight' (new moments captured), 'deepened' (conviction increased), 'restored' (maintained high level), 'still_struggling' (conviction dropped/low)
+  - Key insight update logic: only update if new insights emerged in this session (check captured_moments for session)
+  - User_story fields updated: {illusionKey}_conviction, {illusionKey}_resistance_notes, {illusionKey}_key_insight_id (if better insight)
+  - Conviction assessments stored in conviction_assessments table with illusion_layer=null for reinforcement sessions
+  - Delta calculation: assessment.newConviction - previousConviction (from user_story)
+  - Build passes with `npm run build`
+---
