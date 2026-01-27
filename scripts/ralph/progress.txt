@@ -126,3 +126,18 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - Progress dots use width animation (w-2 to w-6) to indicate focus
   - Build passes with `npm run build`
 ---
+
+## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-007, US-008, US-009
+- Added touch/swipe support to ProgressCarousel.vue
+- US-008 (Revisit Badge) and US-009 (Action Section) were already implemented in US-006
+- Files changed:
+  - components/dashboard/ProgressCarousel.vue (updated)
+  - scripts/ralph/prd.json (updated passes for US-007, US-008, US-009)
+- **Learnings for future iterations:**
+  - Touch handlers: touchstart stores clientX, touchmove prevents scroll if horizontal swipe detected (>10px), touchend checks if delta exceeds 50px threshold
+  - Swipe left (negative delta) navigates next, swipe right (positive delta) navigates previous
+  - Touch prevention strategy: only preventDefault in touchmove if horizontal swipe is detected to preserve vertical scrolling
+  - Arrow buttons already used `hidden md:flex` responsive classes to hide on mobile
+  - Realized US-008 and US-009 were completed as part of US-006 - component already had revisit badge and action section
+  - Build passes with `npm run build`
+---
