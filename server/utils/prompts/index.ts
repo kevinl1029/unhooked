@@ -1,6 +1,9 @@
 // Prompt builder utilities for illusion-focused sessions
 import { BASE_SYSTEM_PROMPT, buildPersonalizationContext as buildPersonalization } from './base-system'
 import type { UserContext } from './base-system'
+
+// Re-export BASE_SYSTEM_PROMPT for reinforcement/boost sessions
+export { BASE_SYSTEM_PROMPT }
 import { ILLUSION_1_STRESS_PROMPT } from './illusions/illusion-1-stress'
 import { ILLUSION_2_PLEASURE_PROMPT } from './illusions/illusion-2-pleasure'
 import { ILLUSION_3_WILLPOWER_PROMPT } from './illusions/illusion-3-willpower'

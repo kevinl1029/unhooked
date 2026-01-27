@@ -23,6 +23,8 @@
           v-if="conversationId"
           :existing-conversation-id="conversationId"
           :illusion-number="0"
+          :illusion-key="illusionKey"
+          session-type="reinforcement"
           :read-only="false"
           @session-complete="handleSessionComplete"
           @error="handleError"

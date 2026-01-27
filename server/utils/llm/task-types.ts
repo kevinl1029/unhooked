@@ -63,7 +63,7 @@ export type MomentType =
 
 export type EmotionalValence = 'positive' | 'negative' | 'neutral' | 'mixed'
 
-export type SessionType = 'core' | 'check_in' | 'ceremony' | 'reinforcement'
+export type SessionType = 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
 
 export type IllusionLayer = 'intellectual' | 'emotional' | 'identity'
 

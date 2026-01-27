@@ -2,7 +2,8 @@ import type { Message } from '~/server/utils/llm/types'
 
 interface VoiceChatOptions {
   illusionNumber?: number
-  sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement'
+  illusionKey?: string
+  sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
   checkInId?: string
   checkInPrompt?: string
   onSessionComplete?: () => void
@@ -12,6 +13,7 @@ interface VoiceChatOptions {
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
   const {
     illusionNumber,
+    illusionKey,
     sessionType = 'core',
     checkInId,
     checkInPrompt,
@@ -65,6 +67,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: messages.value,
             conversationId: conversationId.value,
             illusionNumber,
+            illusionKey,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -109,6 +112,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: messages.value,
             conversationId: conversationId.value,
             illusionNumber,
+            illusionKey,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -168,6 +172,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: [],
             conversationId: null,
             illusionNumber,
+            illusionKey,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -211,6 +216,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: [],
             conversationId: null,
             illusionNumber,
+            illusionKey,
             sessionType,
             checkInId,
             checkInPrompt,

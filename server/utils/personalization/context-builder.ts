@@ -142,10 +142,38 @@ export async function buildSessionContext(
     const story = await getUserStory(supabase, userId)
 
     if (sessionType === 'boost') {
-      // Generic boost session
+      // Generic boost session - fetch all conviction scores and moments if not provided
+      let allConvictionScores = sessionData?.allConvictionScores
+      let recentMomentsAllIllusions = sessionData?.recentMomentsAllIllusions
+
+      if (!allConvictionScores || Object.keys(allConvictionScores).length === 0) {
+        // Fetch conviction scores from user_story
+        allConvictionScores = {
+          stress_relief: (story?.stress_relief_conviction as number) || 0,
+          pleasure: (story?.pleasure_conviction as number) || 0,
+          willpower: (story?.willpower_conviction as number) || 0,
+          focus: (story?.focus_conviction as number) || 0,
+          identity: (story?.identity_conviction as number) || 0,
+        }
+      }
+
+      if (!recentMomentsAllIllusions || recentMomentsAllIllusions.length === 0) {
+        // Fetch top 3 moments per illusion
+        const illusionKeys = ['stress_relief', 'pleasure', 'willpower', 'focus', 'identity']
+        const allMoments: Array<{ illusion_key: string; transcript: string }> = []
+
+        for (const key of illusionKeys) {
+          const moments = await getMomentsByIllusion(supabase, userId, key, 3)
+          for (const m of moments) {
+            allMoments.push({ illusion_key: key, transcript: m.transcript })
+          }
+        }
+        recentMomentsAllIllusions = allMoments
+      }
+
       return buildBoostPrompt({
-        allConvictionScores: sessionData?.allConvictionScores || {},
-        recentMomentsAllIllusions: sessionData?.recentMomentsAllIllusions || [],
+        allConvictionScores,
+        recentMomentsAllIllusions,
       })
     } else {
       // Illusion-specific reinforcement session

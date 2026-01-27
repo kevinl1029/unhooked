@@ -1,7 +1,7 @@
 import { getModelRouter, getDefaultModel } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { buildSystemPrompt, buildCheckInSystemPrompt, ILLUSION_NAMES } from '../utils/prompts'
+import { buildSystemPrompt, buildCheckInSystemPrompt, ILLUSION_NAMES, BASE_SYSTEM_PROMPT } from '../utils/prompts'
 import {
   detectMoment,
   shouldAttemptDetection,
@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => {
     messages,
     conversationId,
     illusionNumber,
+    illusionKey: providedIllusionKey,
     model = defaultModel,
     stream = false,
     streamTTS = false,
@@ -43,6 +44,7 @@ export default defineEventHandler(async (event) => {
     messages: Message[]
     conversationId?: string
     illusionNumber?: number
+    illusionKey?: string
     model?: ModelType
     stream?: boolean
     streamTTS?: boolean
@@ -68,7 +70,41 @@ export default defineEventHandler(async (event) => {
   let processedMessages = messages
   const isNewConversation = messages.length === 0
 
-  if (illusionNumber) {
+  // Handle reinforcement and boost sessions separately
+  // These use BASE_SYSTEM_PROMPT + mode overlay (not illusion-specific prompts)
+  if ((sessionType === 'reinforcement' || sessionType === 'boost') && providedIllusionKey) {
+    // Build reinforcement/boost context - returns overlay string directly
+    const overlayPrompt = await buildSessionContext(
+      supabase,
+      user.sub,
+      providedIllusionKey,
+      sessionType
+    )
+
+    // For reinforcement/boost, buildSessionContext returns a string (the overlay)
+    // Combine with BASE_SYSTEM_PROMPT
+    const systemPrompt = BASE_SYSTEM_PROMPT + '\n\n' + overlayPrompt
+
+    processedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ]
+  } else if (sessionType === 'boost' && !providedIllusionKey) {
+    // Generic boost session (no specific illusion)
+    const overlayPrompt = await buildSessionContext(
+      supabase,
+      user.sub,
+      '', // No specific illusion for generic boost
+      sessionType
+    )
+
+    const systemPrompt = BASE_SYSTEM_PROMPT + '\n\n' + overlayPrompt
+
+    processedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ]
+  } else if (illusionNumber) {
     const illusionKey = illusionNumberToKey(illusionNumber)
 
     // Fetch basic intake data

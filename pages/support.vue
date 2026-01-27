@@ -23,6 +23,7 @@
           v-if="conversationId"
           :existing-conversation-id="conversationId"
           :illusion-number="0"
+          session-type="boost"
           :read-only="false"
           @session-complete="handleSessionComplete"
           @error="handleError"

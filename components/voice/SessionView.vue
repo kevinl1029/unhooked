@@ -228,12 +228,16 @@ interface Props {
   readOnly?: boolean
   existingConversationId?: string | null
   existingMessages?: Message[]
+  sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
+  illusionKey?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   readOnly: false,
   existingConversationId: null,
-  existingMessages: () => []
+  existingMessages: () => [],
+  sessionType: 'core',
+  illusionKey: undefined
 })
 
 const emit = defineEmits<{
@@ -279,6 +283,8 @@ const {
   reset
 } = useVoiceChat({
   illusionNumber: props.illusionNumber,
+  sessionType: props.sessionType,
+  illusionKey: props.illusionKey,
   onSessionComplete: () => {
     // Will be handled via watch
   }
