@@ -157,3 +157,16 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - US-011 navigation logic will be implemented in parent component when integrating into dashboard
   - Build passes with `npm run build`
 ---
+
+## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-012
+- Implemented NoMomentsCard.vue component
+- Files changed:
+  - components/dashboard/NoMomentsCard.vue (new)
+  - scripts/ralph/prd.json (updated passes for US-012)
+- **Learnings for future iterations:**
+  - Component mirrors MomentCard styling exactly: .glass, .rounded-card, .shadow-card, .btn-primary, hover:scale-[1.02]
+  - Uses "NEEDS ATTENTION" eyebrow text instead of "BREAKTHROUGH MOMENT"
+  - Warning message customized to illusion name dynamically
+  - Clicking navigates to /reinforcement/{illusionKey} without moment_id parameter
+  - Build passes with `npm run build`
+---
