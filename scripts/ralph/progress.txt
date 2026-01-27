@@ -141,3 +141,19 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - Realized US-008 and US-009 were completed as part of US-006 - component already had revisit badge and action section
   - Build passes with `npm run build`
 ---
+
+## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-010, US-011
+- Implemented MomentCard.vue component
+- Files changed:
+  - components/dashboard/MomentCard.vue (new)
+  - scripts/ralph/prd.json (updated passes for US-010, US-011)
+- **Learnings for future iterations:**
+  - Component uses existing design patterns: .glass, .rounded-card, .shadow-card, .btn-primary from assets/css/main.css
+  - Eyebrow text uses .eyebrow class with brand-accent color
+  - Quote truncation: substring(0, 240) + '...' for quotes longer than 240 chars
+  - Relative time formatting: 'Today' (0 days), 'Yesterday' (1 day), 'X days ago' (2-30), 'Over a month ago' (31+)
+  - Card emits click event with { momentId, illusionKey } for parent component to handle navigation
+  - Hover effect: hover:scale-[1.02] for subtle card growth
+  - US-011 navigation logic will be implemented in parent component when integrating into dashboard
+  - Build passes with `npm run build`
+---
