@@ -1,174 +1,421 @@
 {
   "project": "Unhooked",
-  "branchName": "ralph/final-ceremony-bugfix",
-  "description": "Fix Final Ceremony feature - resolve duplicate type definitions, import conflicts, and missing functionality that prevents the ceremony from working",
+  "branchName": "ralph/reinforcement-sessions",
+  "description": "Reinforcement Sessions - Help users maintain and deepen their mindset shift by reconnecting with breakthrough moments from core sessions",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Remove duplicate CeremonyNarrativeInput/Output types from ceremony-narrative.ts",
-      "description": "As a developer, I need a single source of truth for ceremony types to prevent Nuxt auto-import conflicts.",
+      "title": "Moment Selection API Endpoint",
+      "description": "As a developer, I need an API endpoint that returns the optimal moment card for the dashboard so the frontend can display the right reinforcement prompt.",
       "acceptanceCriteria": [
-        "Remove CeremonyNarrativeInput interface from server/utils/llm/tasks/ceremony-narrative.ts (lines 9-14)",
-        "Remove CeremonyNarrativeOutput interface from server/utils/llm/tasks/ceremony-narrative.ts (lines 22-25)",
-        "Remove JourneySegment interface from ceremony-narrative.ts if it exists",
-        "Import CeremonyNarrativeInput and CeremonyNarrativeOutput from '../task-types' instead",
-        "Update generateCeremonyNarrative function to use the imported types",
+        "Create GET /api/dashboard/moments endpoint in server/api/dashboard/moments.get.ts",
+        "Endpoint requires authentication (return 401 if not authenticated)",
+        "Query user's completed illusions and their conviction scores from user_story",
+        "Select the illusion with lowest conviction score; tiebreaker is most recently completed",
+        "From that illusion, query captured_moments and select using weighted random (higher confidence_score = more likely, older last_used_at = more likely)",
+        "Response includes: moment_id, quote (truncate to 240 chars with '...'), illusion_key, illusion_name, relative_time, created_at",
+        "Return empty response (not error) when no moments exist",
+        "When lowest-conviction illusion has zero moments, return { no_moments: true, illusion_key, illusion_name }",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Completed - types moved to task-types.ts, ceremony-narrative.ts now imports from there"
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Consolidate IllusionCheatSheetEntry to single definition",
-      "description": "As a developer, I need IllusionCheatSheetEntry defined in one place with consistent field names.",
+      "title": "Start Reinforcement Session API",
+      "description": "As a developer, I need an API endpoint to start a reinforcement session so the frontend can initiate illusion-specific or moment-anchored sessions.",
       "acceptanceCriteria": [
-        "Remove IllusionCheatSheetEntry interface from server/utils/ceremony/cheat-sheet-generator.ts (lines 38-46)",
-        "Import IllusionCheatSheetEntry from server/utils/llm/task-types.ts instead",
-        "Update cheat-sheet-generator.ts to use camelCase field names matching task-types.ts definition",
-        "Update ILLUSION_CONTENT constant if field names changed",
-        "Update generateIllusionsCheatSheet function to return correct field names",
+        "Create POST /api/reinforcement/start endpoint in server/api/reinforcement/start.post.ts",
+        "Endpoint requires authentication (return 401 if not authenticated)",
+        "Accept optional illusion_key (string: 'stress', 'pleasure', 'willpower', 'focus', 'identity')",
+        "Accept optional moment_id (UUID) for moment-anchored sessions",
+        "Accept optional reason (string) for context",
+        "Return 400 if illusion_key provided but illusion not completed by user",
+        "Create conversation record with session_type: 'reinforcement'",
+        "If moment_id provided, update that moment's last_used_at timestamp",
+        "Return { conversation_id, session_type: 'reinforcement', illusion_key, anchor_moment (if provided), context }",
+        "Context object includes: previous_conviction (from user_story), captured_moments (max 3, weighted selection), days_since_last_session",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Completed - Updated task-types.ts with camelCase IllusionCheatSheetEntry and CheatSheetData types, cheat-sheet-generator.ts now imports from task-types.ts, updated validateCheatSheet and tests to match"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Update task-types.ts with correct ceremony type definitions",
-      "description": "As a developer, I need task-types.ts to have the correct type definitions that match actual usage.",
+      "title": "Start Generic Boost Session API",
+      "description": "As a developer, I need an API endpoint to start a generic boost session so post-ceremony users can get support without selecting a specific illusion.",
       "acceptanceCriteria": [
-        "CeremonyNarrativeInput has selectedMoments as CapturedMoment[] (not CeremonyMomentSelection)",
-        "CeremonyNarrativeInput has optional userFirstName, alreadyQuit, and originSummary fields",
-        "CeremonyNarrativeOutput has segments as JourneySegment[] (not audioSegments as AudioSegment[])",
-        "Add JourneySegment interface with id, type, text, and optional momentId fields",
-        "IllusionCheatSheetEntry uses camelCase fields: illusionKey, name, illusion, truth, userInsight, insightMomentId",
+        "Extend POST /api/reinforcement/start to handle { reason: 'generic_boost' }",
+        "Return 403 if user has not completed all 5 core illusions (ceremony_completed_at is null)",
+        "Create conversation record with session_type: 'boost'",
+        "Context includes all conviction scores from user_story for each illusion",
+        "Context includes top 3 moments per completed illusion (15 moments max total)",
+        "Return { conversation_id, session_type: 'boost', context }",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Completed - All type definitions were already correct from US-001 and US-002. Verified build passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Remove ceremony function re-exports from LLM index.ts",
-      "description": "As a developer, I need to prevent duplicate exports that conflict with Nuxt auto-imports.",
+      "title": "Reinforcement Conviction Assessment API",
+      "description": "As a developer, I need an API endpoint to run conviction assessment after reinforcement sessions so we can track conviction changes over time.",
       "acceptanceCriteria": [
-        "Remove line 37 from server/utils/llm/index.ts: export { selectCeremonyMoments }",
-        "Remove line 38 from server/utils/llm/index.ts: export { generateCeremonyNarrative }",
-        "Update server/api/ceremony/prepare.get.ts to import selectCeremonyMoments directly from tasks/ceremony-select",
-        "Update server/api/ceremony/generate-journey.post.ts to import functions directly from their source files",
-        "npm run build completes without 'Duplicated imports' warnings for ceremony functions",
+        "Create POST /api/reinforcement/assess endpoint in server/api/reinforcement/assess.post.ts",
+        "Endpoint requires authentication",
+        "Accept conversation_id (required, UUID) and illusion_key (required, string)",
+        "Return 404 if conversation not found or doesn't belong to user",
+        "Run same conviction assessment process as core sessions (use existing assessment logic)",
+        "Return { current_conviction (0-10), delta_from_previous, shift_quality }",
+        "shift_quality is one of: 'restored', 'deepened', 'still_struggling', 'new_insight'",
+        "Store assessment in conviction_assessments table",
+        "Update user_story fields: {illusionKey}_conviction, {illusionKey}_resistance_notes (if present), {illusionKey}_key_insight_id (if better insight emerged)",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Completed - Removed re-exports, updated API imports to source files, build passes without ceremony duplicate warnings"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Fix useUserStatus usage in ceremony page",
-      "description": "As a user, I want the ceremony page to properly check my existing progress on load.",
+      "title": "Reinforcement System Prompts",
+      "description": "As a developer, I need reinforcement mode overlays for the AI system prompt so the AI uses the right framing for reconnection vs. teaching.",
       "acceptanceCriteria": [
-        "checkExistingProgress() in pages/ceremony.vue calls fetchStatus() before accessing status.value",
-        "Add isCheckingStatus ref to track loading state during status check",
-        "Show loading indicator while checking status on mount",
-        "If status.value?.ceremony?.completed_at exists, redirect to /dashboard",
-        "If status.value?.artifacts?.reflective_journey exists, load existing journey",
+        "Create REINFORCEMENT_MODE_OVERLAY constant in server/utils/llm/prompts/ (new file or extend existing)",
+        "Overlay includes placeholders: {illusion_name}, {previous_conviction}, {captured_moments} (max 3), {current_situation}",
+        "Overlay instructs AI to: open with anchor moment quote, explore triggers, help reconnect, generate new articulations, end with [SESSION_COMPLETE]",
+        "Create BOOST_MODE_OVERLAY constant for generic support sessions",
+        "Boost overlay includes placeholders: {user_story}, {all_conviction_scores}, {recent_moments_all_illusions}",
+        "Boost overlay instructs AI to: listen with empathy, identify relevant illusion(s), steer naturally, pull relevant moments",
+        "Extend buildSessionContext in context-builder.ts to handle 'reinforcement' and 'boost' session types",
+        "buildSessionContext returns appropriate overlay based on session_type",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Completed - Fixed checkExistingProgress to call fetchStatus(), added isCheckingStatus loading state, handles completed ceremony redirect"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Add ceremony readiness check on page mount",
-      "description": "As a user, I want to see a clear message if I'm not ready for the ceremony.",
+      "title": "Progress Carousel Component",
+      "description": "As a user in the core program, I want to see my progress as a visual carousel so I can understand where I am in my journey and navigate between illusions.",
       "acceptanceCriteria": [
-        "On mount, call /api/ceremony/prepare endpoint",
-        "If response.ready is false, show 'not ready' state instead of intro",
-        "Display which requirements are missing (e.g., 'Complete all 5 illusions first')",
-        "If response.ceremony_completed is true, redirect to /dashboard",
-        "If response.total_moments < 3, show message about needing more moments",
-        "Add readinessError ref to store readiness check errors",
-        "Typecheck passes"
+        "Create components/dashboard/ProgressCarousel.vue component",
+        "IMPORTANT: Before building, study existing components in components/ directory for patterns, especially any glass card patterns, button styles, and transition patterns used elsewhere in the app",
+        "IMPORTANT: Use Tailwind design tokens from tailwind.config.js (brand-glass, brand-accent, brand-border, etc.) - do NOT use raw CSS values",
+        "IMPORTANT: Use existing utility classes from assets/css/main.css (.glass, .btn-primary, .rounded-card, .shadow-card, .animate-fade-in-up)",
+        "Display all 5 illusions with status icons using lucide-vue-next: Check (completed), hollow circle with dot (current), Lock (locked)",
+        "Completed circles use orange gradient (btn-primary style), current has brand-accent border, locked uses glass background",
+        "Center illusion is largest, adjacent scaled down, far illusions smaller (use CSS transform scale)",
+        "Arrow navigation buttons on desktop using existing glass button patterns, hidden on mobile",
+        "Progress dots below carousel for direct navigation",
+        "Smooth transitions using existing app transition patterns (check other components for duration/easing)",
+        "Default focus: current illusion index",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Completed - Added ceremony readiness check, not_ready step with progress display, handles all readiness conditions"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Create mock utilities for ceremony E2E tests",
-      "description": "As a developer, I need mock utilities to test ceremony flow without real API calls.",
+      "title": "Carousel Touch/Swipe Support",
+      "description": "As a mobile user, I want to swipe the progress carousel so I can navigate between illusions without arrow buttons.",
       "acceptanceCriteria": [
-        "Create tests/e2e/utils/mock-ceremony.ts file",
-        "Add mockCeremonyPrepare(page, options) function to mock /api/ceremony/prepare response",
-        "Add mockCeremonyGenerateJourney(page, segments) function to mock journey generation",
-        "Add mockCeremonyCheatSheet(page, entries) function to mock cheat sheet response",
-        "Add mockCeremonyComplete(page) function to mock ceremony completion",
-        "Export all mock functions from the file",
-        "Typecheck passes"
+        "Add touch event handlers to ProgressCarousel.vue (touchstart, touchmove, touchend)",
+        "Track touch start X position and calculate delta on touchend",
+        "Swipe left advances to next illusion, swipe right moves to previous",
+        "Minimum swipe threshold (50px) to prevent accidental navigation",
+        "Arrow buttons hidden on mobile using Tailwind responsive classes (hidden md:flex)",
+        "Smooth animation matching existing app transition patterns",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill with mobile viewport"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Completed - Created mock-ceremony.ts with all required mock functions, exported from index.ts, typecheck passes"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Create E2E test for ceremony intro and journey generation",
-      "description": "As a developer, I need E2E tests to verify ceremony flow works correctly.",
+      "title": "Revisit Badge on Carousel",
+      "description": "As a user, I want to see a 'Revisit' button under completed illusions in the carousel so I can quickly start a reinforcement session.",
       "acceptanceCriteria": [
-        "Create tests/e2e/ceremony.spec.ts file",
-        "Test: User sees intro step with 'still using' and 'already stopped' buttons",
-        "Test: Clicking 'Begin Ceremony' without selecting option shows disabled state",
-        "Test: Selecting option and clicking 'Begin Ceremony' triggers journey generation",
-        "Test: Journey generation shows loading state with 'Creating Your Journey' message",
-        "Test: After generation, journey player is displayed with segments",
-        "Tests pass: npm run test:e2e -- tests/e2e/ceremony.spec.ts",
-        "Typecheck passes"
+        "Add revisit badge button directly under completed illusion circles in ProgressCarousel.vue",
+        "Badge shows 'Revisit' text with RefreshCw icon from lucide-vue-next",
+        "IMPORTANT: Use existing button patterns from the app - check components/ for similar small pill buttons",
+        "Use Tailwind classes: rounded-full, glass-input background (from tailwind.config.js brand tokens), brand-border",
+        "Badge always visible for completed illusions (not hover-only)",
+        "Clicking badge navigates to /reinforcement/{illusion.key} using navigateTo()",
+        "Badge not shown for current or locked illusions",
+        "Use e.stopPropagation() to prevent badge click from triggering circle click",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Completed - Created ceremony.spec.ts with 9 passing tests covering intro, journey generation, not ready states, and redirect scenarios"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Create E2E test for ceremony recording and completion",
-      "description": "As a developer, I need E2E tests for the recording and completion steps.",
+      "title": "Carousel Action Section",
+      "description": "As a user, I want to see relevant actions below the carousel based on which illusion is focused so I know what I can do next.",
       "acceptanceCriteria": [
-        "Test: User can skip journey and proceed to recording step",
-        "Test: Recording step shows microphone button",
-        "Test: Cheat sheet step displays illusion entries",
-        "Test: Complete Ceremony button triggers completion API",
-        "Test: After completion, user sees success message with link to dashboard",
-        "Test: Error states show retry button",
-        "Tests pass: npm run test:e2e -- tests/e2e/ceremony.spec.ts",
-        "Typecheck passes"
+        "Add action section div below progress dots in ProgressCarousel.vue",
+        "Section has subtle top border using brand-border token",
+        "When current illusion focused: show heading, description (text-white-65), and primary CTA button using .btn-primary class",
+        "Continue button navigates to /session/{illusion.number}",
+        "When completed illusion focused: action section is empty (revisit badge on circle is sufficient)",
+        "When locked illusion focused: show dimmed message using text-white-65 opacity",
+        "Use existing transition patterns from the app for content changes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Completed - Added 6 tests for recording and completion: skip to recording, microphone button, cheat sheet entries, completion API, success message, error retry"
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Improve ceremony error messages",
-      "description": "As a user, I want clear error messages when something goes wrong in the ceremony.",
+      "title": "Moment Card Component",
+      "description": "As a user, I want to see my breakthrough moment displayed as a card so I can reconnect with my own insight.",
       "acceptanceCriteria": [
-        "When journey generation fails, show 'Unable to create your journey. Please try again.'",
-        "When not enough moments, show 'You need at least 3 captured moments to begin the ceremony.'",
-        "When illusions incomplete, show 'Complete all 5 illusion sessions before the ceremony.'",
-        "When recording fails, show 'Could not access microphone. Please check your browser permissions.'",
-        "When completion fails, show 'Unable to complete ceremony. Your progress has been saved.'",
-        "All error states have a 'Try Again' or appropriate action button",
-        "Typecheck passes"
+        "Create components/dashboard/MomentCard.vue component",
+        "IMPORTANT: Before building, study existing card components in components/ directory for patterns",
+        "IMPORTANT: Use .glass class and .rounded-card, .shadow-card from assets/css/main.css",
+        "IMPORTANT: Use Tailwind brand tokens (brand-accent for orange, text-white, text-white-85, text-white-65)",
+        "Props: momentId (string), quote (string), illusionKey (string), illusionName (string), relativeTime (string)",
+        "Eyebrow text: use .eyebrow class pattern from assets/css/main.css, color brand-accent",
+        "Quote in blockquote element with appropriate text styling",
+        "Truncate quote with '...' if longer than 240 characters",
+        "Full-width CTA button at bottom using .btn-primary class: 'Reconnect with this →'",
+        "Hover effect on card: subtle scale, cursor-pointer - match existing card hover patterns",
+        "Relative time helper function: 'Today', 'Yesterday', 'X days ago' (1-30), 'Over a month ago' (31+)",
+        "Emit 'click' event with { momentId, illusionKey } when card or button clicked",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Completed - Updated all error messages to match requirements: journey generation, moments/illusions checks, microphone permission, completion failure. All errors already have Try Again buttons."
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Moment Card Click Navigation",
+      "description": "As a user, I want to click a moment card to start a reinforcement session anchored to that moment so I can reconnect with that specific insight.",
+      "acceptanceCriteria": [
+        "In parent component using MomentCard, handle @click event",
+        "Navigate to /reinforcement/{illusionKey}?moment_id={momentId} using navigateTo()",
+        "Both card body click and CTA button click should trigger same navigation",
+        "Moment ID preserved in query params for session initialization",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "No-Moments Warning Card",
+      "description": "As a user who completed an illusion without captured moments, I want to see a special prompt so I know this illusion needs attention.",
+      "acceptanceCriteria": [
+        "Create components/dashboard/NoMomentsCard.vue component (or variant of MomentCard)",
+        "IMPORTANT: Reuse same styling patterns as MomentCard - .glass, .rounded-card, .shadow-card, .btn-primary",
+        "Props: illusionKey (string), illusionName (string)",
+        "Card copy: 'You completed {illusionName}, but we didn't capture any breakthrough moments. This one might benefit from another conversation.'",
+        "CTA button: 'Revisit {illusionName} →' using .btn-primary",
+        "Clicking card navigates to /reinforcement/{illusionKey} (no moment_id param)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "In-Progress Dashboard Layout",
+      "description": "As a user in the core program, I want the dashboard to show my progress carousel and moment cards so I can continue my journey or reinforce past insights.",
+      "acceptanceCriteria": [
+        "Update pages/dashboard.vue to detect in-progress state (or create sub-components)",
+        "IMPORTANT: Study existing dashboard.vue structure and patterns before modifying",
+        "In-progress = user has NOT completed all 5 illusions (check user_story or progress data)",
+        "Section order: ProgressCarousel component, then MomentCard section (if moments exist)",
+        "Moment cards section header using existing heading patterns from the app",
+        "Fetch moment data from GET /api/dashboard/moments on mount",
+        "Show loading state using existing app loading patterns (check other pages for spinner/skeleton usage)",
+        "If moment API returns no_moments: true, show NoMomentsCard instead of MomentCard",
+        "If moment API returns empty (no completed illusions), hide moment cards section entirely",
+        "Gracefully degrade if moment loading fails: show carousel only, no error modal",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Support Section Component",
+      "description": "As a post-ceremony user, I want a prominent 'Get Support Now' button so I can quickly get help when I need it.",
+      "acceptanceCriteria": [
+        "Create components/dashboard/SupportSection.vue component",
+        "IMPORTANT: Use .glass, .rounded-card, .shadow-card classes from existing design system",
+        "IMPORTANT: Use .btn-primary for the CTA button",
+        "Content centered using Tailwind text-center",
+        "Heading: 'Need Support?' using existing heading patterns (text-2xl font-semibold text-white)",
+        "Description: 'Reconnect with what you've already discovered' using text-white-65",
+        "Primary CTA button: 'Get Support Now' with MessageCircle icon from lucide-vue-next",
+        "Clicking button navigates to /support using navigateTo()",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Your Journey Chip Row",
+      "description": "As a post-ceremony user, I want to see all my completed illusions as compact chips so I can quickly revisit any one of them.",
+      "acceptanceCriteria": [
+        "Create components/dashboard/YourJourneySection.vue component",
+        "IMPORTANT: Use .glass, .rounded-card, .shadow-card classes from existing design system",
+        "IMPORTANT: Study existing button/chip patterns in the app before creating chips",
+        "Header: 'Your Journey' using existing heading patterns",
+        "Subtext: 'All 5 illusions dismantled' using text-white-65",
+        "Chip row: flex flex-wrap gap-3",
+        "Each chip is a button using glass-input background (brand token), rounded-full, brand-border",
+        "Chip contents: checkmark circle with orange gradient bg, illusion name, small RefreshCw icon",
+        "Chip hover: subtle scale using existing hover patterns",
+        "Clicking chip navigates to /reinforcement/{illusionKey}",
+        "Props: illusions array with { key, name, daysSince }",
+        "Compact layout - avoid excessive height",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Post-Ceremony Dashboard Layout",
+      "description": "As a post-ceremony user, I want a compact dashboard focused on support so I can get help quickly without excessive scrolling.",
+      "acceptanceCriteria": [
+        "Update pages/dashboard.vue to detect post-ceremony state",
+        "IMPORTANT: Study existing dashboard.vue structure before modifying",
+        "Post-ceremony = user has completed all 5 illusions (ceremony_completed_at is not null)",
+        "Section order: SupportSection (first/primary), MomentCard section, YourJourneySection (chip row)",
+        "Fetch moment data from GET /api/dashboard/moments",
+        "Your Journey chip row loads completion data from user progress (illusion completion dates)",
+        "Progress carousel NOT shown for post-ceremony users (replaced by chip row)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Reinforcement Session Page",
+      "description": "As a user, I want a dedicated page for reinforcement sessions so I can have a focused conversation about a specific illusion.",
+      "acceptanceCriteria": [
+        "Create pages/reinforcement/[illusion].vue page",
+        "IMPORTANT: Study existing session pages (pages/session/) for patterns - reuse chat components and layout",
+        "Route param illusion accepts illusion keys: 'stress', 'pleasure', 'willpower', 'focus', 'identity'",
+        "Read optional query param moment_id (UUID string)",
+        "On mount, call POST /api/reinforcement/start with { illusion_key: route.params.illusion, moment_id: route.query.moment_id }",
+        "Show loading state using existing app patterns",
+        "Handle 400/401/403 errors: redirect to dashboard with error toast (use existing toast pattern)",
+        "REUSE same chat UI components as core sessions - do not create new chat components",
+        "Session header text: if moment_id provided, show abridged moment quote (truncate ~60 chars); otherwise show illusion display name",
+        "Store conversation_id from API response for sending messages",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Support Session Page",
+      "description": "As a post-ceremony user, I want a dedicated support page so I can have a conversation when I need help but don't know which illusion to focus on.",
+      "acceptanceCriteria": [
+        "Create pages/support.vue page",
+        "IMPORTANT: Study existing session pages for patterns - reuse chat components and layout",
+        "On mount, call POST /api/reinforcement/start with { reason: 'generic_boost' }",
+        "If API returns 403 (user hasn't completed all 5 illusions), redirect to /dashboard with error toast",
+        "Show loading state using existing app patterns",
+        "REUSE same chat UI components as core sessions",
+        "Session header shows static label: 'Reinforcement'",
+        "Store conversation_id from API response for sending messages",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Reinforcement Session Completion",
+      "description": "As a user finishing a reinforcement session, I want the session to end gracefully and assess my conviction so my progress is tracked.",
+      "acceptanceCriteria": [
+        "IMPORTANT: Study how existing core sessions handle [SESSION_COMPLETE] - reuse that pattern",
+        "In reinforcement/support session pages, detect [SESSION_COMPLETE] marker in AI response",
+        "For illusion-specific sessions (/reinforcement/[illusion]): call POST /api/reinforcement/assess with { conversation_id, illusion_key }",
+        "For boost sessions (/support): parse AI response for identified illusion(s) and call assess for each",
+        "Show completion state using existing session completion patterns from the app",
+        "Navigate back to /dashboard after completion",
+        "Handle assessment API errors gracefully: still complete session, log error",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Dashboard State Transition",
+      "description": "As a user completing the ceremony, I want the dashboard to immediately switch to post-ceremony layout so I see the right interface.",
+      "acceptanceCriteria": [
+        "IMPORTANT: Study existing useUserStatus composable and how other pages handle status changes",
+        "Dashboard re-fetches user progress/status after any session completion",
+        "When ceremony_completed_at transitions from null to a value, dashboard layout switches immediately",
+        "No page refresh required for layout change (reactive using Vue reactivity)",
+        "Moment card data cache invalidated when any session completes (refetch on return to dashboard)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Error Handling and Graceful Degradation",
+      "description": "As a user, I want the dashboard to work even if some data fails to load so I can still access core functionality.",
+      "acceptanceCriteria": [
+        "IMPORTANT: Study existing error handling patterns in the app (error.vue, toast notifications, etc.)",
+        "If GET /api/dashboard/moments fails, dashboard shows carousel/chip row only (no error modal)",
+        "If POST /api/reinforcement/start fails, show toast error message using existing toast pattern and stay on dashboard",
+        "If POST /api/reinforcement/assess fails, session still completes successfully (log error server-side)",
+        "Network errors show user-friendly messages using existing error message patterns",
+        "Add retry mechanism for moment loading: retry once after 2 second delay on failure",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
