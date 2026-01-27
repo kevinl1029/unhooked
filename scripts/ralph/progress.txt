@@ -6,6 +6,12 @@ Started: Tue Jan 27 14:17:25 EST 2026
 - **API Patterns:** Use `serverSupabaseUser()` for auth check, `serverSupabaseServiceRole()` for queries
 - **Conviction Scores:** Stored in user_story table as {illusionKey}_conviction (e.g., stress_relief_conviction)
 - **Testing:** Run `npm run build` for typecheck (no separate typecheck script), `npm run test:unit` for tests
+- **Reinforcement Sessions:** Two types - 'reinforcement' (illusion-specific) and 'boost' (generic post-ceremony support)
+- **Session Context:** buildSessionContext in context-builder.ts returns string (prompt overlay) for reinforcement/boost, PersonalizationContext for core sessions
+- **Assessment Reuse:** Existing conviction assessment logic in server/utils/llm/tasks/conviction-assessment.ts works for both core and reinforcement sessions
+- **Prompt Overlays:** Reinforcement prompts stored in server/utils/prompts/reinforcement-prompts.ts with buildReinforcementPrompt/buildBoostPrompt helpers
+- **Frontend Components:** Existing components in components/ use .glass, .btn-primary, .rounded-card, .shadow-card from assets/css/main.css
+- **Dashboard Structure:** pages/dashboard.vue has multiple states: post-ceremony, ceremony-ready, in-progress, not-started
 
 ---
 
@@ -85,4 +91,20 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - Used dynamic import for reinforcement-prompts to avoid circular dependencies
   - Prompt structure mirrors existing illusion prompts: clear sections, conversation guidelines, completion signals
   - Build passes with `npm run build`
+---
+
+## Iteration Summary - Backend Complete
+- **Completed:** US-001 through US-005 (all backend API work)
+- **Remaining:** US-006 through US-021 (all frontend UI components)
+- **Status:** Backend foundation is complete and ready for frontend development
+- **Next Steps:**
+  - US-006: Create ProgressCarousel.vue component (complex carousel with navigation, touch support)
+  - Remaining stories are all Vue components and page integrations
+  - All API endpoints tested with typecheck (npm run build passes)
+- **Key Deliverables:**
+  - GET /api/dashboard/moments - moment selection for dashboard cards
+  - POST /api/reinforcement/start - starts reinforcement or boost sessions
+  - POST /api/reinforcement/assess - conviction assessment after reinforcement sessions
+  - Reinforcement prompt overlays in server/utils/prompts/reinforcement-prompts.ts
+  - Extended buildSessionContext to handle all session types
 ---
