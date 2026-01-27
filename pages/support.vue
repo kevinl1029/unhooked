@@ -85,7 +85,22 @@ onMounted(async () => {
   }
 })
 
-function handleSessionComplete() {
+async function handleSessionComplete() {
+  // For boost sessions, we would parse the AI response to identify illusions
+  // However, the current boost prompt doesn't include structured markers
+  // So we gracefully skip assessment for now
+  // TODO: Update BOOST_MODE_OVERLAY to include structured illusion identification
+
+  if (conversationId.value) {
+    try {
+      // Attempt to call assessment if we had illusion identification logic
+      // For now, log that boost session completed without assessment
+      console.log('Boost session completed (assessment requires illusion identification)')
+    } catch (err) {
+      console.error('Boost session completion error:', err)
+    }
+  }
+
   // Navigate back to dashboard
   router.push('/dashboard')
 }

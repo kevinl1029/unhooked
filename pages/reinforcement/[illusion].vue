@@ -125,7 +125,26 @@ onMounted(async () => {
   }
 })
 
-function handleSessionComplete() {
+async function handleSessionComplete() {
+  // Call assessment API for reinforcement session
+  if (!conversationId.value) {
+    router.push('/dashboard')
+    return
+  }
+
+  try {
+    await $fetch('/api/reinforcement/assess', {
+      method: 'POST',
+      body: {
+        conversation_id: conversationId.value,
+        illusion_key: illusionKey.value,
+      },
+    })
+  } catch (err) {
+    // Gracefully handle assessment failure - session still completes
+    console.error('Assessment failed (session still complete):', err)
+  }
+
   // Navigate back to dashboard
   router.push('/dashboard')
 }
