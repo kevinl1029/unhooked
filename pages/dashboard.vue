@@ -380,7 +380,7 @@ interface NoMomentsData {
 const momentData = ref<MomentData | NoMomentsData | null>(null)
 const isMomentLoading = ref(false)
 
-// Fetch data on mount
+// Fetch data on mount and whenever returning to dashboard
 onMounted(async () => {
   await Promise.all([
     fetchIntake(),
