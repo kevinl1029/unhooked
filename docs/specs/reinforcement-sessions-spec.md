@@ -1,6 +1,6 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.5
+**Version:** 2.6
 **Created:** 2026-01-12
 **Updated:** 2026-01-27
 **Status:** Ready for Implementation
@@ -754,11 +754,16 @@ See `reinforcement-ui-design-spec-v1.2.md` and `progress-carousel-final.jsx` for
 
 Stories are organized by implementation area. Each story is sized for one focused Claude Code session.
 
+**Reference Format:** Each story includes a `References` section with document paths and section anchors. When implementing a story in isolation, read the referenced sections for full context on styling, data structures, and behavior requirements.
+
 ### API & Backend
 
 #### US-001: Moment Selection API Endpoint
 
 **Description:** As a developer, I want an API endpoint that returns the optimal moment card for the dashboard so that the frontend can display the right reinforcement prompt.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-1: Moment Cards on Dashboard](#fr-1-moment-cards-on-dashboard), [Technical Design > API Endpoints](#api-endpoints)
 
 **Acceptance Criteria:**
 - [ ] `GET /api/dashboard/moments` endpoint exists and requires authentication
@@ -776,6 +781,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-002: Start Reinforcement Session API
 
 **Description:** As a developer, I want an API endpoint to start a reinforcement session so that the frontend can initiate illusion-specific or moment-anchored sessions.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-4: Reinforcement Session — Illusion-Specific](#fr-4-reinforcement-session--illusion-specific), [Technical Design > API Endpoints](#api-endpoints), [Technical Design > Context Injection Strategy](#context-injection-strategy)
 
 **Acceptance Criteria:**
 - [ ] `POST /api/reinforcement/start` endpoint exists and requires authentication
@@ -796,6 +804,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a developer, I want an API endpoint to start a generic boost session so that post-ceremony users can get support without selecting a specific illusion.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-5: Reinforcement Session — Generic Boost](#fr-5-reinforcement-session--generic-boost), [Technical Design > API Endpoints](#api-endpoints), [Technical Design > Context Injection Strategy](#context-injection-strategy)
+
 **Acceptance Criteria:**
 - [ ] `POST /api/reinforcement/start` with `{ reason: 'generic_boost' }` starts a boost session
 - [ ] Creates conversation record with `session_type: 'boost'`
@@ -809,6 +820,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-004: Reinforcement Conviction Assessment API
 
 **Description:** As a developer, I want an API endpoint to run conviction assessment after reinforcement sessions so that we can track conviction changes over time.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-6: Conviction Assessment — Reinforcement](#fr-6-conviction-assessment--reinforcement), [Technical Design > API Endpoints](#api-endpoints), [Appendix C: Shift Quality Definitions](#c-shift-quality-definitions)
 
 **Acceptance Criteria:**
 - [ ] `POST /api/reinforcement/assess` endpoint exists and requires authentication
@@ -827,6 +841,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a developer, I want reinforcement mode overlays for the AI system prompt so that the AI uses the right framing for reconnection vs. teaching.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [Technical Design > System Prompts](#system-prompts), [Technical Design > Context Injection Strategy](#context-injection-strategy), [Appendix A: Therapeutic Framing Guidelines](#a-therapeutic-framing-guidelines)
+
 **Acceptance Criteria:**
 - [ ] `REINFORCEMENT_MODE_OVERLAY` constant added to prompt utilities
 - [ ] Overlay includes placeholders for: illusion name, previous conviction, captured moments (max 3), current situation
@@ -844,6 +861,10 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-006: Progress Carousel Component
 
 **Description:** As a user in the core program, I want to see my progress as a visual carousel so that I can understand where I am in my journey and navigate between illusions.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Dashboard States & Layouts > In-Progress Dashboard](#in-progress-dashboard-during-core-program), [UI/UX Design > Implementation Notes](#implementation-notes-for-coding-agent)
+- `docs/specs/progress-carousel-final.jsx`: Reference prototype implementation
 
 **Acceptance Criteria:**
 - [ ] `ProgressCarousel.vue` component created
@@ -864,6 +885,10 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a mobile user, I want to swipe the progress carousel so that I can navigate between illusions without arrow buttons.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Dashboard States & Layouts > In-Progress Dashboard](#in-progress-dashboard-during-core-program) (Carousel Behavior section), [UI/UX Design > Responsive Behavior](#responsive-behavior)
+- `docs/specs/progress-carousel-final.jsx`: Reference prototype implementation
+
 **Acceptance Criteria:**
 - [ ] Carousel responds to horizontal swipe gestures on touch devices
 - [ ] Swipe left advances to next illusion (if not at end)
@@ -879,6 +904,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-008: Revisit Badge on Carousel
 
 **Description:** As a user, I want to see a "Revisit" button under completed illusions in the carousel so that I can quickly start a reinforcement session.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Component Specifications > Revisit Buttons](#revisit-buttons), [FR-2: Revisit Buttons](#fr-2-revisit-buttons)
 
 **Acceptance Criteria:**
 - [ ] Small pill button appears directly under completed illusion circles
@@ -897,6 +925,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a user, I want to see relevant actions below the carousel based on which illusion is focused so that I know what I can do next.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Dashboard States & Layouts > In-Progress Dashboard](#in-progress-dashboard-during-core-program) (Action Section Below Carousel), [UI/UX Design > Implementation Notes > State Management](#state-management)
+
 **Acceptance Criteria:**
 - [ ] Action section appears below carousel and progress dots
 - [ ] When current illusion focused: shows large CTA "Continue: The [Name] Illusion" + description + button
@@ -912,6 +943,10 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-010: Moment Card Component
 
 **Description:** As a user, I want to see my breakthrough moment displayed as a card so that I can reconnect with my own insight.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Component Specifications > Moment Cards](#moment-cards), [UI/UX Design > Implementation Notes > Data Requirements](#data-requirements)
+- `CLAUDE.md`: Brand Design System (color tokens, typography, glass styling)
 
 **Acceptance Criteria:**
 - [ ] `MomentCard.vue` component created
@@ -932,6 +967,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a user, I want to click a moment card to start a reinforcement session anchored to that moment so that I can reconnect with that specific insight.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-1.4](#fr-1-moment-cards-on-dashboard), [Technical Design > Routes](#routes)
+
 **Acceptance Criteria:**
 - [ ] Clicking moment card navigates to `/reinforcement/[illusion]?moment_id=[uuid]`
 - [ ] Both card body and CTA button trigger navigation
@@ -945,6 +983,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-012: No-Moments Warning Card
 
 **Description:** As a user who completed an illusion without captured moments, I want to see a special prompt so that I know this illusion needs attention.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-1.6, FR-1.7, FR-1.8](#fr-1-moment-cards-on-dashboard) (Edge Case — No Moments), [User Journeys > Journey 4](#journey-4-edge-case--no-moments-captured)
 
 **Acceptance Criteria:**
 - [ ] When API returns `no_moments: true`, display warning card variant
@@ -960,6 +1001,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-013: In-Progress Dashboard Layout
 
 **Description:** As a user in the core program, I want the dashboard to show my progress carousel and moment cards so that I can continue my journey or reinforce past insights.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Dashboard States & Layouts > In-Progress Dashboard](#in-progress-dashboard-during-core-program), [UI/UX Design > Implementation Notes > Component Structure](#component-structure)
 
 **Acceptance Criteria:**
 - [ ] Dashboard detects user is in-progress (not all 5 illusions completed)
@@ -979,6 +1023,10 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a post-ceremony user, I want a prominent "Get Support Now" button so that I can quickly get help when I need it.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Component Specifications > Support Section](#support-section-generic-reinforcement), [FR-3: "I Need Support" Button](#fr-3-i-need-support-button)
+- `CLAUDE.md`: Brand Design System (button styles, glass card styling)
+
 **Acceptance Criteria:**
 - [ ] `SupportSection.vue` component created
 - [ ] Heading: "Need Support?"
@@ -996,6 +1044,10 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-015: Your Journey Chip Row
 
 **Description:** As a post-ceremony user, I want to see all my completed illusions as compact chips so that I can quickly revisit any one of them.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Dashboard States & Layouts > Post-Ceremony Dashboard](#post-ceremony-dashboard) (Your Journey section, Chip Row Specs)
+- `CLAUDE.md`: Brand Design System (color tokens, hover effects)
 
 **Acceptance Criteria:**
 - [ ] `YourJourneySection.vue` component created
@@ -1017,6 +1069,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a post-ceremony user, I want a compact dashboard focused on support so that I can get help quickly without excessive scrolling.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [UI/UX Design > Dashboard States & Layouts > Post-Ceremony Dashboard](#post-ceremony-dashboard), [UI/UX Design > Implementation Notes > Component Structure](#component-structure)
+
 **Acceptance Criteria:**
 - [ ] Dashboard detects user is post-ceremony (all 5 illusions completed)
 - [ ] Section order: Support section → Moment cards → Your Journey chip row
@@ -1034,6 +1089,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-017: Reinforcement Session Page
 
 **Description:** As a user, I want a dedicated page for reinforcement sessions so that I can have a focused conversation about a specific illusion.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [Technical Design > Routes](#routes), [UI/UX Design > Session Header Specification](#session-header-specification), [FR-4: Reinforcement Session — Illusion-Specific](#fr-4-reinforcement-session--illusion-specific)
 
 **Acceptance Criteria:**
 - [ ] `/reinforcement/[illusion].vue` page created
@@ -1053,6 +1111,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a post-ceremony user, I want a dedicated support page so that I can have a conversation when I need help but don't know which illusion to focus on.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [Technical Design > Routes](#routes), [FR-3: "I Need Support" Button](#fr-3-i-need-support-button), [FR-5: Reinforcement Session — Generic Boost](#fr-5-reinforcement-session--generic-boost), [User Journeys > Journey 3](#journey-3-user-needs-general-support-post-program)
+
 **Acceptance Criteria:**
 - [ ] `/support.vue` page created
 - [ ] On mount, calls `POST /api/reinforcement/start` with `{ reason: 'generic_boost' }`
@@ -1068,6 +1129,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-019: Reinforcement Session Completion
 
 **Description:** As a user finishing a reinforcement session, I want the session to end gracefully and assess my conviction so that my progress is tracked.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [Technical Design > Session Ending](#session-ending), [FR-6: Conviction Assessment — Reinforcement](#fr-6-conviction-assessment--reinforcement), [Technical Design > Moment Capture in Reinforcement](#moment-capture-in-reinforcement)
 
 **Acceptance Criteria:**
 - [ ] Session detects `[SESSION_COMPLETE]` marker in AI response (same as core sessions)
@@ -1087,6 +1151,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 **Description:** As a user completing the ceremony, I want the dashboard to immediately switch to post-ceremony layout so that I see the right interface.
 
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [Implementation Notes > Rollout](#rollout), [UI/UX Design > Implementation Notes > Visibility Logic](#visibility-logic)
+
 **Acceptance Criteria:**
 - [ ] Dashboard re-fetches user progress after any session completion
 - [ ] When `ceremonyComplete` transitions from false to true, layout switches immediately
@@ -1100,6 +1167,9 @@ Stories are organized by implementation area. Each story is sized for one focuse
 #### US-021: Error Handling and Graceful Degradation
 
 **Description:** As a user, I want the dashboard to work even if some data fails to load so that I can still access core functionality.
+
+**References:**
+- `docs/specs/reinforcement-sessions-spec.md`: [NFR-2: Reliability](#nfr-2-reliability)
 
 **Acceptance Criteria:**
 - [ ] If moment loading fails, dashboard shows Revisit buttons only (no error modal)
@@ -1422,6 +1492,7 @@ None — all technical questions resolved.
 | 2.3     | 2026-01-27 | Changed moment cards from 1-3 to single card. Added "days since last session" to chip row. Resolved open questions: session history N/A, reinforcement during core session behavior. |
 | 2.4     | 2026-01-27 | **Technical implementation refinement.** Key decisions: (1) Conviction assessment same as core (not simplified), (2) Moment selection uses weighted random with last_used_at deprioritization, (3) Boost sessions can assess conviction for identified illusions and update user_story, (4) All session types use same [SESSION_COMPLETE] marker, (5) Prompts extend BASE_SYSTEM_PROMPT with mode overlay, (6) No new moment types - use existing taxonomy, (7) Relative time everywhere (not absolute dates), (8) Routes: /reinforcement/[illusion] and /support, (9) Fixed 3 moments in context, (10) Custom carousel with swipe, (11) Accessibility and analytics deferred, (12) No feature flags - test and ship. Resolved all open technical questions. |
 | 2.5     | 2026-01-27 | **Added User Stories section.** 21 stories organized by implementation area (API/Backend, Dashboard UI In-Progress, Dashboard UI Post-Ceremony, Session UI, Integration). Each story sized for one Claude Code session with verifiable acceptance criteria. UI stories include browser verification requirement. |
+| 2.6     | 2026-01-27 | **Added References to User Stories.** Each story now includes document path and section references for standalone extraction (e.g., `docs/specs/reinforcement-sessions-spec.md: [Section](#anchor)`). |
 
 ---
 

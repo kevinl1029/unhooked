@@ -26,7 +26,12 @@
       </button>
 
       <!-- Illusions display -->
-      <div class="overflow-hidden py-8">
+      <div
+        class="overflow-hidden py-8"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+      >
         <div class="flex items-center justify-center gap-6 transition-transform duration-300 ease-out">
           <template v-for="(illusion, index) in illusions" :key="illusion.number">
             <div
@@ -287,6 +292,37 @@ function getLockIconSize(index: number): number {
   if (distance === 0) return 28
   if (distance === 1) return 18
   return 14
+}
+
+// Touch handling for mobile swipe
+let touchStartX = 0
+const SWIPE_THRESHOLD = 50
+
+function handleTouchStart(e: TouchEvent) {
+  touchStartX = e.touches[0].clientX
+}
+
+function handleTouchMove(e: TouchEvent) {
+  // Prevent default to avoid scrolling while swiping
+  if (Math.abs(e.touches[0].clientX - touchStartX) > 10) {
+    e.preventDefault()
+  }
+}
+
+function handleTouchEnd(e: TouchEvent) {
+  const touchEndX = e.changedTouches[0].clientX
+  const deltaX = touchEndX - touchStartX
+
+  // Swipe left (move to next)
+  if (deltaX < -SWIPE_THRESHOLD && !isLastIllusion.value) {
+    navigateNext()
+  }
+  // Swipe right (move to previous)
+  else if (deltaX > SWIPE_THRESHOLD && !isFirstIllusion.value) {
+    navigatePrevious()
+  }
+
+  touchStartX = 0
 }
 
 function handleContinue() {

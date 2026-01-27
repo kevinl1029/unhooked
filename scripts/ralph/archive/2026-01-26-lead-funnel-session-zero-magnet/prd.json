@@ -1,0 +1,174 @@
+{
+  "project": "Unhooked",
+  "branchName": "ralph/final-ceremony-bugfix",
+  "description": "Fix Final Ceremony feature - resolve duplicate type definitions, import conflicts, and missing functionality that prevents the ceremony from working",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove duplicate CeremonyNarrativeInput/Output types from ceremony-narrative.ts",
+      "description": "As a developer, I need a single source of truth for ceremony types to prevent Nuxt auto-import conflicts.",
+      "acceptanceCriteria": [
+        "Remove CeremonyNarrativeInput interface from server/utils/llm/tasks/ceremony-narrative.ts (lines 9-14)",
+        "Remove CeremonyNarrativeOutput interface from server/utils/llm/tasks/ceremony-narrative.ts (lines 22-25)",
+        "Remove JourneySegment interface from ceremony-narrative.ts if it exists",
+        "Import CeremonyNarrativeInput and CeremonyNarrativeOutput from '../task-types' instead",
+        "Update generateCeremonyNarrative function to use the imported types",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Consolidate IllusionCheatSheetEntry to single definition",
+      "description": "As a developer, I need IllusionCheatSheetEntry defined in one place with consistent field names.",
+      "acceptanceCriteria": [
+        "Remove IllusionCheatSheetEntry interface from server/utils/ceremony/cheat-sheet-generator.ts (lines 38-46)",
+        "Import IllusionCheatSheetEntry from server/utils/llm/task-types.ts instead",
+        "Update cheat-sheet-generator.ts to use camelCase field names matching task-types.ts definition",
+        "Update ILLUSION_CONTENT constant if field names changed",
+        "Update generateIllusionsCheatSheet function to return correct field names",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Update task-types.ts with correct ceremony type definitions",
+      "description": "As a developer, I need task-types.ts to have the correct type definitions that match actual usage.",
+      "acceptanceCriteria": [
+        "CeremonyNarrativeInput has selectedMoments as CapturedMoment[] (not CeremonyMomentSelection)",
+        "CeremonyNarrativeInput has optional userFirstName, alreadyQuit, and originSummary fields",
+        "CeremonyNarrativeOutput has segments as JourneySegment[] (not audioSegments as AudioSegment[])",
+        "Add JourneySegment interface with id, type, text, and optional momentId fields",
+        "IllusionCheatSheetEntry uses camelCase fields: illusionKey, name, illusion, truth, userInsight, insightMomentId",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Remove ceremony function re-exports from LLM index.ts",
+      "description": "As a developer, I need to prevent duplicate exports that conflict with Nuxt auto-imports.",
+      "acceptanceCriteria": [
+        "Remove line 37 from server/utils/llm/index.ts: export { selectCeremonyMoments }",
+        "Remove line 38 from server/utils/llm/index.ts: export { generateCeremonyNarrative }",
+        "Update server/api/ceremony/prepare.get.ts to import selectCeremonyMoments directly from tasks/ceremony-select",
+        "Update server/api/ceremony/generate-journey.post.ts to import functions directly from their source files",
+        "npm run build completes without 'Duplicated imports' warnings for ceremony functions",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Fix useUserStatus usage in ceremony page",
+      "description": "As a user, I want the ceremony page to properly check my existing progress on load.",
+      "acceptanceCriteria": [
+        "checkExistingProgress() in pages/ceremony.vue calls fetchStatus() before accessing status.value",
+        "Add isCheckingStatus ref to track loading state during status check",
+        "Show loading indicator while checking status on mount",
+        "If status.value?.ceremony?.completed_at exists, redirect to /dashboard",
+        "If status.value?.artifacts?.reflective_journey exists, load existing journey",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add ceremony readiness check on page mount",
+      "description": "As a user, I want to see a clear message if I'm not ready for the ceremony.",
+      "acceptanceCriteria": [
+        "On mount, call /api/ceremony/prepare endpoint",
+        "If response.ready is false, show 'not ready' state instead of intro",
+        "Display which requirements are missing (e.g., 'Complete all 5 illusions first')",
+        "If response.ceremony_completed is true, redirect to /dashboard",
+        "If response.total_moments < 3, show message about needing more moments",
+        "Add readinessError ref to store readiness check errors",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Create mock utilities for ceremony E2E tests",
+      "description": "As a developer, I need mock utilities to test ceremony flow without real API calls.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/utils/mock-ceremony.ts file",
+        "Add mockCeremonyPrepare(page, options) function to mock /api/ceremony/prepare response",
+        "Add mockCeremonyGenerateJourney(page, segments) function to mock journey generation",
+        "Add mockCeremonyCheatSheet(page, entries) function to mock cheat sheet response",
+        "Add mockCeremonyComplete(page) function to mock ceremony completion",
+        "Export all mock functions from the file",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Create E2E test for ceremony intro and journey generation",
+      "description": "As a developer, I need E2E tests to verify ceremony flow works correctly.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/ceremony.spec.ts file",
+        "Test: User sees intro step with 'still using' and 'already stopped' buttons",
+        "Test: Clicking 'Begin Ceremony' without selecting option shows disabled state",
+        "Test: Selecting option and clicking 'Begin Ceremony' triggers journey generation",
+        "Test: Journey generation shows loading state with 'Creating Your Journey' message",
+        "Test: After generation, journey player is displayed with segments",
+        "Tests pass: npm run test:e2e -- tests/e2e/ceremony.spec.ts",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Create E2E test for ceremony recording and completion",
+      "description": "As a developer, I need E2E tests for the recording and completion steps.",
+      "acceptanceCriteria": [
+        "Test: User can skip journey and proceed to recording step",
+        "Test: Recording step shows microphone button",
+        "Test: Cheat sheet step displays illusion entries",
+        "Test: Complete Ceremony button triggers completion API",
+        "Test: After completion, user sees success message with link to dashboard",
+        "Test: Error states show retry button",
+        "Tests pass: npm run test:e2e -- tests/e2e/ceremony.spec.ts",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Improve ceremony error messages",
+      "description": "As a user, I want clear error messages when something goes wrong in the ceremony.",
+      "acceptanceCriteria": [
+        "When journey generation fails, show 'Unable to create your journey. Please try again.'",
+        "When not enough moments, show 'You need at least 3 captured moments to begin the ceremony.'",
+        "When illusions incomplete, show 'Complete all 5 illusion sessions before the ceremony.'",
+        "When recording fails, show 'Could not access microphone. Please check your browser permissions.'",
+        "When completion fails, show 'Unable to complete ceremony. Your progress has been saved.'",
+        "All error states have a 'Try Again' or appropriate action button",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
