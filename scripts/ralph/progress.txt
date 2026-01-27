@@ -108,3 +108,21 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - Reinforcement prompt overlays in server/utils/prompts/reinforcement-prompts.ts
   - Extended buildSessionContext to handle all session types
 ---
+
+## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-006
+- Implemented ProgressCarousel.vue component with full carousel functionality
+- Files changed:
+  - components/dashboard/ProgressCarousel.vue (new)
+- **Learnings for future iterations:**
+  - Component follows existing design patterns: .glass, .btn-primary, .rounded-card, .shadow-card from assets/css/main.css
+  - Uses lucide-vue-next icons (Check, Lock, RefreshCw) consistently with other components
+  - Carousel uses CSS transform scale for size differences: focused (scale-100), adjacent (scale-75), far (scale-50)
+  - Transition duration: 300ms ease-out for carousel movement, 200ms for hover effects
+  - Illusion data structure includes: number, name, key, description, status ('completed'|'current'|'locked')
+  - Status determined from props: illusionOrder, illusionsCompleted (array), currentIllusion (number)
+  - Revisit badge only shows for completed illusions when focused
+  - Action section uses Vue Transition with fade mode for smooth content changes
+  - Desktop arrow buttons positioned absolutely with translate transforms, hidden on mobile with md: responsive classes
+  - Progress dots use width animation (w-2 to w-6) to indicate focus
+  - Build passes with `npm run build`
+---
