@@ -1,14 +1,14 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.0
+**Version:** 2.4
 **Created:** 2026-01-12
-**Updated:** 2026-01-26
-**Status:** Draft
+**Updated:** 2026-01-27
+**Status:** Ready for Implementation
 **Document Type:** Feature Specification (PRD + Technical Design)
 **Related Documents:**
-- `unhooked-core-program-implementation-v3.0.md` (Core Program)
-- `unhooked-five-illusions-framework.md` (Illusion Definitions)
-- `unhooked-progress-tracking.md` (Progress Tracking)
+- `core-program-spec` (Core Program)
+- `reinforcement-ui-design-spec.md` (UI spec)
+- `progress-carousel.final.jsx` (Reference prototype)
 
 ---
 
@@ -258,89 +258,379 @@ Reinforcement Sessions serve users in different states. The AI adapts its framin
 
 ## UI/UX Design
 
-*This section will contain wireframes and visual specifications.*
+### Design Philosophy
 
-### Dashboard Elements
+**Single Action Principle:** Each user action should have one clear entry point. Avoid duplicate CTAs that create decision paralysis or suggest different outcomes for the same action.
 
-#### Moment Cards
+**Progressive Hierarchy:** UI should match user's journey stage:
+- **In-Progress:** Emphasize current illusion (carousel with focus)
+- **Post-Ceremony:** Equal-weight access to all illusions (compact chip row)
 
+**Space Efficiency:** Post-ceremony dashboard should be compact, not overwhelming. Users shouldn't need to scroll excessively to access core features.
+
+---
+
+### Dashboard States & Layouts
+
+#### In-Progress Dashboard (During Core Program)
+
+**Order of sections:**
+1. Progress carousel with revisit badges
+2. Moment cards (1-3 cards)
+3. Current illusion CTA
+
+**Progress Carousel:**
 ```
 ┌─────────────────────────────────────────────────┐
-│  💡 Stress Relief — Day 2                       │
-│  ───────────────────────────────────────────────│
-│  "I realized that smoking after stress doesn't  │
-│  actually help—it just delays my response to    │
-│  the problem while making me feel worse."       │
-│                                                 │
-│  [Reconnect with this →]                        │
+│           Your Progress                          │
+│        2 of 5 illusions explored                 │
+│                                                  │
+│   ← [✓]    [✓]    [○]    [🔒]   [🔒] →         │
+│    Stress Pleasure Focus  Will  Identity         │
+│   [Revisit][Revisit]                             │
+│                                                  │
+│   Progress dots: • ● • • •                       │
+│                                                  │
+│   ──────────────────────────────────────────    │
+│   Continue: The Focus Illusion                   │
+│   [Description]                                  │
+│   [Continue →]  ← Large CTA for current only     │
 └─────────────────────────────────────────────────┘
 ```
 
-**Placement:** TBD — likely below progress indicator, above illusion list
-**Quantity:** 1-3 cards based on moment selection algorithm
-**Styling:** Glass card style consistent with app design system
+**Carousel Behavior:**
+- Horizontally scrollable/swipeable
+- Center illusion is largest (96px) and brightest
+- Adjacent illusions scaled down (64px, 70% opacity)
+- Far illusions smaller (48px, 40% opacity)
+- Arrow buttons on desktop, swipe on mobile
+- Progress dots below for direct navigation
+- Smooth 500ms transitions between states
+
+**Revisit Badges:**
+- Small pill button (px-3 py-1) directly under completed illusion circles
+- Always visible (not hidden/hover-only)
+- Label: "Revisit" with RefreshCw icon
+- Semi-transparent glass background
+- No duplicate large CTA when completed illusion is focused
+
+**Action Section Below Carousel:**
+- **Current illusion focused:** Show large CTA ("Continue: The [Name] Illusion" + description + button)
+- **Completed illusion focused:** NO content (badge is sufficient, avoids duplicate CTA)
+- **Locked illusion focused:** Show dimmed message ("Complete previous illusions to unlock")
+
+#### Post-Ceremony Dashboard
+
+**Order of sections:**
+1. Support section (generic reinforcement) ← PRIMARY
+2. Moment cards (1-3 cards) ← SECONDARY
+3. Your Journey chip row (all 5 illusions) ← TERTIARY
+
+**Rationale for order:**
+- Support button first because it's the primary support mechanism post-ceremony
+- Moment cards second as curated entry point based on user's needs
+- Your Journey last for explicit illusion selection (power user feature)
+
+**Support Section:**
+```
+┌─────────────────────────────────────────────────┐
+│              Need Support?                       │
+│   Reconnect with what you've already discovered  │
+│                                                  │
+│   [💬 Get Support Now]  ← Primary CTA            │
+└─────────────────────────────────────────────────┘
+```
+
+**Your Journey (Compact Chip Row):**
+```
+┌─────────────────────────────────────────────────┐
+│  Your Journey                                    │
+│  All 5 illusions dismantled                      │
+│                                                  │
+│  [✓ Stress 🔄] [✓ Pleasure 🔄] [✓ Willpower 🔄] │
+│  [✓ Focus 🔄] [✓ Identity 🔄]                    │
+└─────────────────────────────────────────────────┘
+```
+
+**Chip Row Specs:**
+- Height: ~60-80px total (vs 300px+ for vertical list)
+- Each chip: checkmark + name + small revisit icon + "X days ago" subtext
+- Days format: "Today", "Yesterday", "X days ago" (1-30), "Over a month ago" (31+)
+- Wraps to multiple rows on narrow screens
+- Hover: scale(1.05)
+- All chips equal size/weight (no hierarchy)
+
+---
+
+### Component Specifications
+
+#### Moment Cards
+
+**Visual Design:**
+```
+┌─────────────────────────────────────────────────┐
+│  STRESS RELIEF • 12 DAYS AGO  ← Eyebrow (orange, uppercase) │
+│                                                  │
+│  "I realized that smoking after stress doesn't  │
+│  actually help—it just delays my response to    │
+│  the problem while making me feel worse."       │
+│  ↑ Blockquote (17px, line-height 1.6)          │
+│                                                  │
+│  [Reconnect with this →]  ← Full-width primary CTA │
+└─────────────────────────────────────────────────┘
+```
+
+**Styling:**
+- Glass card: `background: rgba(13, 92, 99, 0.35)`, `backdrop-filter: blur(12px)`
+- Border radius: `8px` mobile, `24px` desktop
+- Padding: `24px`
+- Hover: `scale(1.01)`, cursor pointer on entire card
+- Shadow: `0 24px 64px rgba(0, 0, 0, 0.25)`
+
+**Content Rules:**
+- Eyebrow: `{ILLUSION_NAME} • {RELATIVE_TIME}` in orange (`#fc4a1a`) — e.g., "STRESS • 12 DAYS AGO"
+- Quote: 40-240 characters, truncate with "..." if longer
+- Date: Relative time format (e.g., "12 days ago", "Today", "Yesterday")
+- Button: Orange gradient primary button
+
+**Placement:**
+- **In-Progress:** Below progress carousel, above current illusion CTA
+- **Post-Ceremony:** Below support section, above Your Journey
+
+**Quantity:**
+- Show 1 card from the illusion with lowest conviction score
+- Tiebreaker: most recently completed illusion
+- Within that illusion, select moment using weighted random:
+  - Weight by `confidence_score` (higher = more likely)
+  - Deprioritize recently-used moments via `last_used_at` (older = more likely)
+- Update `last_used_at` when moment is used as anchor
+
+**Visibility:**
+- Show when: At least one moment captured from any completed illusion
+- Hide when: No moments captured yet, or currently in a session
+
+---
 
 #### Revisit Buttons
 
+**In-Progress (Carousel Badge):**
+- Placement: Directly under completed illusion circles in carousel
+- Style: Small pill button, semi-transparent glass
+- Size: `px-3 py-1`, scales with circle size when focused
+- Always visible (not hover-only)
+- Icon: RefreshCw (12px when focused, 10px otherwise)
+- Label: "Revisit"
+
+**Post-Ceremony (Chip Component):**
+- Integrated into chip: checkmark + name + revisit icon
+- Icon: Small RefreshCw (16px, opacity 0.7) on right side
+- Entire chip is clickable
+- No separate revisit button needed
+
+**Interaction:**
+- Click starts illusion-specific reinforcement session
+- Loads full illusion context (previous conviction, captured moments)
+- No duplicate large CTA below carousel
+
+---
+
+#### Support Section (Generic Reinforcement)
+
+**Visual Design:**
 ```
-Previously Completed:
-✓ Stress Relief     [Revisit]
-✓ Pleasure          [Revisit]
-```
-
-**Placement:** Within illusion progress list
-**Visibility:** Only for completed illusions
-
-#### "I Need Support" Button
-
-```
-[I Need Support]
-```
-
-**Placement:** TBD — prominent but not intrusive
-**Visibility:** Only after all 5 core illusions completed
-**Label Options:** "I Need Support" / "Talk It Through" / "Get Help"
-
-### Session UI
-
-#### Reinforcement Session Header
-
-```
-┌─────────────────────────────────────┐
-│  🔄 Reconnecting: Stress Relief     │
-│  Your last session: 5 days ago      │
-└─────────────────────────────────────┘
-```
-
-**Note:** Conviction score NOT shown (hidden from users per product decision)
-
-#### Moment Replay Within Session
-
-```
-┌─────────────────────────────────────┐
-│  💡 You said this on Day 2:         │
-│  ┌───────────────────────────────┐  │
-│  │ "I realized that smoking      │  │
-│  │  after stress doesn't         │  │
-│  │  actually help..."            │  │
-│  └───────────────────────────────┘  │
-│                                      │
-│  Does that still feel true?          │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│              Need Support?                       │
+│   Reconnect with what you've already discovered  │
+│                                                  │
+│   [💬 Get Support Now]                           │
+└─────────────────────────────────────────────────┘
 ```
 
-**Future:** Add play button for audio when voice recordings are available
+**Styling:**
+- Same glass card style as other sections
+- Padding: `32px` (more generous than moment cards)
+- Text-align: center
+- Button: Full-width, primary orange gradient, icon left of text
 
-### Design Specifications
+**Placement:**
+- **Post-Ceremony ONLY:** First section on dashboard (above moment cards)
+- **In-Progress:** NOT shown (deferred to post-MVP)
 
-*To be completed with design team:*
-- [ ] Moment card component design
-- [ ] Revisit button states (hover, active, disabled)
-- [ ] Support button placement and styling
-- [ ] Session header for reinforcement vs. core distinction
-- [ ] Moment replay component within chat
-- [ ] Empty state (no moments captured)
-- [ ] Loading states
+**Interaction:**
+- Opens generic boost conversation
+- AI can identify relevant illusions and steer toward them
+- User doesn't specify which illusion upfront
+
+**Copy:**
+- Heading: "Need Support?"
+- Description: "Reconnect with what you've already discovered"
+- Button: "Get Support Now" with MessageCircle icon
+
+---
+
+### Responsive Behavior
+
+**Mobile (< 768px):**
+- Carousel: Swipe gestures, no visible arrows
+- Moment cards: Full width, stack vertically
+- Support section: Full width
+- Chip row: Wraps to 2-3 rows
+- Border radius: `8px` (rounded-lg)
+
+**Desktop (≥ 768px):**
+- Carousel: Arrow buttons visible, click to navigate
+- Moment cards: Single column (same as mobile for readability)
+- Support section: Centered, max-width
+- Chip row: Single row if space allows, wraps if needed
+- Border radius: `24px` (rounded-3xl)
+
+---
+
+### Implementation Notes for Coding Agent
+
+#### Data Requirements
+
+**Progress Carousel:**
+```typescript
+interface IllusionProgress {
+  key: string;           // 'stress', 'pleasure', etc.
+  name: string;          // Display name
+  status: 'completed' | 'current' | 'locked';
+  number: 1 | 2 | 3 | 4 | 5;
+  daysSince?: number;    // Only for completed
+}
+```
+
+**Moment Cards:**
+```typescript
+interface MomentCard {
+  moment_id: string;
+  quote: string;         // 40-240 chars
+  illusion_key: string;
+  illusion_name: string; // Display name
+  relative_time: string; // "12 days ago", "Today", "Yesterday"
+  created_at: string;    // ISO timestamp for calculation
+}
+```
+
+**API Endpoints:**
+
+1. **Load moment cards:**
+   - `GET /api/dashboard/moments`
+   - Returns: Pre-selected 1-3 moments based on conviction algorithm
+   - Cache: 1 hour
+
+2. **Start reinforcement (from moment card):**
+   - `POST /api/reinforcement/start`
+   - Body: `{ moment_id: string, illusion_key: string }`
+   - Returns: `{ conversation_id, session_type: 'reinforcement', anchor_moment, context }`
+
+3. **Start reinforcement (from revisit badge/chip):**
+   - `POST /api/reinforcement/start`
+   - Body: `{ illusion_key: string }`
+   - Returns: `{ conversation_id, session_type: 'reinforcement', context }`
+
+4. **Start generic support:**
+   - `POST /api/reinforcement/start`
+   - Body: `{ reason: 'generic_boost' }`
+   - Returns: `{ conversation_id, session_type: 'boost', context }`
+
+#### Component Structure
+
+```
+DashboardPage
+├── InProgressDashboard (if !ceremony_complete)
+│   ├── ProgressCarousel
+│   │   ├── CarouselTrack (illusions with badges)
+│   │   ├── ProgressDots
+│   │   └── ActionSection (current/locked only)
+│   └── MomentCardsSection (1-3 cards)
+│
+└── PostCeremonyDashboard (if ceremony_complete)
+    ├── SupportSection (generic reinforcement)
+    ├── MomentCardsSection (1-3 cards)
+    └── YourJourneySection (chip row)
+```
+
+#### State Management
+
+**Carousel Active Index:**
+- Default: Index of current illusion (in-progress) or middle illusion (post-ceremony)
+- Updates: On click, arrow navigation, or dot navigation
+- Smooth transition: 500ms ease-out
+
+**Visibility Logic:**
+```typescript
+// Moment cards
+showMomentCards = hasCapturedMoments && !inSession
+
+// Support section
+showSupportSection = ceremonyComplete && !inSession
+
+// Revisit badges (carousel)
+showRevisitBadge(illusion) = illusion.status === 'completed'
+
+// Action section below carousel
+showActionContent = activeIllusion.status !== 'completed'
+```
+
+#### Accessibility
+
+- All interactive elements keyboard navigable
+- Carousel: Arrow keys work when focused
+- Progress dots: Tab navigation + Enter to select
+- Screen readers: Proper ARIA labels on all buttons
+- Focus indicators: Visible ring on all focusable elements
+
+#### Performance
+
+- Carousel transform: Use CSS `translate3d` for GPU acceleration
+- Moment cards: Lazy load if below fold
+- Images/icons: Use SVG (lucide-react)
+- Animations: Respect `prefers-reduced-motion`
+
+---
+
+### Design Specifications Checklist
+
+- [x] Moment card component design (detailed above)
+- [x] Revisit button states and placement (badge on circles, no duplicate CTA)
+- [x] Support button placement and styling (first section post-ceremony)
+- [x] Progress carousel with focus hierarchy (center largest)
+- [x] Chip row for post-ceremony (compact, equal-weight)
+- [x] Responsive breakpoints and adaptations (mobile/desktop)
+- [x] Empty state: No moments yet (don't show moment cards section)
+- [x] Loading states (inline spinner, matching existing app patterns)
+- [x] Session header for reinforcement vs. core (see below)
+- [x] Moment display in chat (AI speaks it naturally, no special component)
+
+---
+
+### Session Header Specification
+
+The session header displays context-appropriate text based on the entry point:
+
+| Entry Point | Header Text | Example |
+|-------------|-------------|---------|
+| **Revisit button/chip** | Illusion name | "Stress Relief" |
+| **Moment card click** | Abridged moment text (truncate ~60 chars with "...") | "I realized smoking after stress doesn't actually..." |
+| **Get Support Now** | Static label | "Reinforcement" |
+
+**Styling:**
+- Same header style as core sessions
+- Text truncation: Single line, ellipsis overflow
+- No additional badge or indicator needed
+
+**Within Chat:**
+- The AI speaks the full moment text naturally in its opening message
+- No special styled component for moment replay
+- Example: "You once said: '[full quote]'. Does that still feel true right now?"
+
+---
+
+### Visual Reference
+
+See `reinforcement-ui-design-spec-v1.2.md` and `progress-carousel-final.jsx` for detailed visual specifications and interactive prototype.
 
 ---
 
@@ -358,9 +648,11 @@ Previously Completed:
 - FR-1.5: **Moment Selection Algorithm:**
   - Select the illusion with the lowest conviction score
   - Tiebreaker: most recently completed illusion
-  - From that illusion, select 1-3 moments prioritizing `breakthrough` or `identity_shift` types
-  - Within those, prioritize highest `confidence_score`
-  - Rotate moments so users see different ones on repeat visits
+  - From that illusion, select moments using weighted random:
+    - Weight by `confidence_score` (higher = more likely)
+    - Deprioritize recently-used moments via `last_used_at` (older = more likely)
+    - All moment types are equal (no type-based prioritization)
+  - Update `last_used_at` on the selected moment when used as anchor
 
 **Edge Case — No Moments:**
 - FR-1.6: If the lowest-conviction illusion has zero moments, display a special "Revisit" card without a quote
@@ -395,13 +687,14 @@ Previously Completed:
 
 **Requirements:**
 - FR-4.1: Session shall load previous conviction score for the illusion
-- FR-4.2: Session shall load captured moments for the illusion (top 3-5 by confidence)
+- FR-4.2: Session shall load captured moments for the illusion (fixed 3, weighted by confidence, deprioritized by last_used_at)
 - FR-4.3: If triggered via moment card, session shall open with that moment as anchor
-- FR-4.4: If triggered via Revisit button, session shall open with the strongest moment
-- FR-4.5: AI shall use reinforcement system prompt (reconnection framing, not re-teaching)
-- FR-4.6: Session shall capture new moments with `session_type: 'reinforcement'`
-- FR-4.7: New moment types available: `re_articulation`, `application`, `depth`, `integration`
-- FR-4.8: At session end, run simplified conviction assessment
+- FR-4.4: If triggered via Revisit button, session shall open with the strongest moment (using weighted random selection)
+- FR-4.5: AI shall use reinforcement system prompt (BASE_SYSTEM_PROMPT + REINFORCEMENT_MODE_OVERLAY)
+- FR-4.6: Session shall capture new moments with `session_type: 'reinforcement'`, using existing moment types
+- FR-4.7: If a better key insight emerges, it can replace the current `{illusionKey}_key_insight_id`
+- FR-4.8: At session end, run conviction assessment (same process as core sessions)
+- FR-4.9: Update `last_used_at` on the anchor moment when session starts
 
 ### FR-5: Reinforcement Session — Generic Boost
 
@@ -410,21 +703,23 @@ Previously Completed:
 **Requirements:**
 - FR-5.1: Session shall load full user context (all moments, all conviction history)
 - FR-5.2: AI shall use generic boost system prompt (empathetic, exploratory)
-- FR-5.3: AI may identify relevant illusion(s) and pivot to illusion-specific territory
-- FR-5.4: Session shall NOT run conviction assessment at end (no specific illusion targeted)
+- FR-5.3: AI shall naturally steer toward identified illusion(s) when relevant (no explicit "start a new session" handoff)
+- FR-5.4: If AI identifies specific illusion(s) discussed substantively, run conviction assessment for those illusion(s)
 - FR-5.5: Session shall be logged with `session_type: 'boost'`
+- FR-5.6: Session can update `user_story` for any illusion(s) where insights, conviction, or resistance were discussed
 
 ### FR-6: Conviction Assessment — Reinforcement
 
-**Description:** Assess conviction after illusion-specific reinforcement sessions.
+**Description:** Assess conviction after reinforcement sessions.
 
 **Requirements:**
-- FR-6.1: Run assessment at end of illusion-specific reinforcement sessions only
-- FR-6.2: Do NOT run for generic boost sessions
-- FR-6.3: Assessment shall capture: current conviction (0-10), delta from previous, shift quality
-- FR-6.4: Shift quality values: `restored`, `deepened`, `still_struggling`, `new_insight`
-- FR-6.5: Assessment shall be stored in `conviction_assessments` table
-- FR-6.6: If a new key moment emerged, assessment may quote it
+- FR-6.1: Run assessment at end of illusion-specific reinforcement sessions
+- FR-6.2: For boost sessions: run assessment for any illusion(s) substantively discussed (AI identifies)
+- FR-6.3: Assessment uses the same process as core sessions (identical, not simplified)
+- FR-6.4: Assessment shall capture: current conviction (0-10), delta from previous, shift quality
+- FR-6.5: Shift quality values: `restored`, `deepened`, `still_struggling`, `new_insight`
+- FR-6.6: Assessment shall be stored in `conviction_assessments` table
+- FR-6.7: If a new key moment emerged, assessment may quote it
 
 ---
 
@@ -480,44 +775,79 @@ These decisions document the rationale behind key product choices.
 - `'check_in'` - Scheduled check-ins
 - `'ceremony'` - Final ceremony conversation
 
+### Session Ending
+
+**End Signal:** All session types (core, reinforcement, boost) use the same `[SESSION_COMPLETE]` marker to trigger post-session tasks.
+
+**End Criteria:** AI uses judgment to determine when a reinforcement session is complete (reconnection feels achieved). This is more open-ended than core sessions which have curriculum milestones. Can be refined based on user testing.
+
+**Concurrent Sessions:** Multiple reinforcement sessions are allowed simultaneously. No blocking at API or UI level.
+
+### Routes
+
+**Reinforcement Routes:**
+- `/reinforcement/[illusion]` — Illusion-specific reinforcement (illusion is a number 1-5)
+- `/reinforcement/[illusion]?moment_id=xyz` — Moment-anchored reinforcement
+- `/support` — Generic boost session
+
+**Route Parameters:**
+- `illusion`: Number (1-5), consistent with `/session/[illusion]` pattern
+- `moment_id`: Query param (UUID), passed when starting from a moment card
+
+**Transition:** Same pattern as core sessions — instant navigation to route, component handles loading states internally.
+
 ### System Prompts
 
-**Reinforcement Session Prompt:**
+**Architecture:** Reinforcement prompts extend the existing `BASE_SYSTEM_PROMPT` (Allen Carr methodology, tone, safety) with a mode-specific overlay. This keeps prompts DRY and ensures consistent philosophy/tone.
+
+Structure: `BASE_SYSTEM_PROMPT + REINFORCEMENT_MODE_OVERLAY + PersonalizationContext`
+
+**Reinforcement Mode Overlay:**
 ```
+--- REINFORCEMENT MODE ---
+
 You are reconnecting with a user who previously worked through [Illusion Name].
 They achieved a conviction level of [X/10] and captured these insights:
-[List of their captured moments from this illusion]
+[List of their captured moments from this illusion - max 3]
 
 Current situation: [User's stated reason for returning, or "proactive check-in"]
 
-Your role is to:
-1. Validate their previous insights without condescension
+In this mode, your session structure shifts:
+1. Open with their anchor moment (if provided) — "You once said: '[quote]'. Does that still feel true?"
 2. Explore what's changed or what triggered doubt
 3. Help them reconnect with what they already know
 4. Generate new articulations that fit their current context
 5. Deepen the emotional/identity transformation
 
 Frame: You're helping them restore a shift, not teaching them something new.
+When reconnection feels complete, end with affirmation and output [SESSION_COMPLETE].
+
+--- END REINFORCEMENT MODE ---
 ```
 
-**Generic Boost Prompt:**
+**Generic Boost Mode Overlay:**
 ```
+--- BOOST MODE ---
+
 You are supporting a user who has completed all 5 core illusions.
 They're reaching out for support but haven't specified which illusion.
 
 Their full context:
 - Story summary: [user_story]
 - Conviction scores: [per illusion]
-- Recent moments: [top moments across all illusions]
+- Recent moments: [top moments across all illusions - max 3 per illusion]
 
-Your role is to:
+In this mode:
 1. Listen with empathy—let them express what's going on
 2. Identify which illusion(s) may be at play
-3. Gently steer toward that territory when appropriate
+3. Naturally steer toward that territory when appropriate (no explicit "start a new session" handoff)
 4. Pull relevant moments from their history
-5. Suggest a focused reinforcement session if deeper work is needed
+5. If you identify a specific illusion being discussed, the session can focus there
 
 Frame: You're a supportive presence, not a diagnostic tool.
+When the conversation reaches resolution, end with affirmation and output [SESSION_COMPLETE].
+
+--- END BOOST MODE ---
 ```
 
 ### API Endpoints
@@ -540,10 +870,14 @@ Frame: You're a supportive presence, not a diagnostic tool.
   anchor_moment?: CapturedMoment
   context: {
     previous_conviction?: number
-    captured_moments: CapturedMoment[]
+    captured_moments: CapturedMoment[]  // Fixed 3 moments
     days_since_last_session: number
   }
 }
+
+// Errors
+// 400 Bad Request: illusion_key provided but illusion not completed
+// 401 Unauthorized: user not authenticated
 ```
 
 #### `POST /api/reinforcement/assess`
@@ -566,11 +900,19 @@ Frame: You're a supportive presence, not a diagnostic tool.
 
 ### Context Injection Strategy
 
+**Implementation:** Extend existing `buildSessionContext` in `context-builder.ts` to handle reinforcement mode. Same pattern as core sessions — build structured context object, format into prompt string.
+
 **What to Include:**
-1. Previous conviction trajectory for this illusion
-2. Captured moments from this illusion (3-5 most powerful)
-3. Related moments from other illusions (if user references them)
-4. Recent context (check-ins, ceremony artifacts if applicable)
+1. Previous conviction score for this illusion (from `user_story`)
+2. **Fixed 3 moments** from this illusion (weighted by confidence, deprioritized by last_used_at)
+3. Resistance notes if present
+4. User background (from intake)
+5. Origin story summary (from `user_story`)
+
+**For Boost Sessions:**
+- Include top 3 moments per illusion (across all completed illusions)
+- Include all conviction scores
+- Full user context for AI to identify relevant territory
 
 **What NOT to Include:**
 - Raw conversation transcripts (too noisy)
@@ -579,20 +921,49 @@ Frame: You're a supportive presence, not a diagnostic tool.
 
 ### Moment Capture in Reinforcement
 
-**Additional moment types for reinforcement sessions:**
-- `re_articulation` - User expresses the truth in a new way
-- `application` - User describes how they'll apply the insight
-- `depth` - User goes deeper into emotional/identity territory
-- `integration` - User connects multiple illusions
+**Moment Types:** Use existing moment type taxonomy (insight, emotional_breakthrough, rationalization, etc.). No new types for reinforcement — the `session_type` field on `captured_moments` distinguishes where moments came from.
 
-**Storage additions:**
-```typescript
-{
-  source_session_type: 'core' | 'reinforcement' | 'boost' | 'check_in'
-  references_moment_id?: string  // Link to original moment being refined
-  context_trigger?: string  // What specific situation prompted this
-}
-```
+**No Database Linking:** Anchor moments are referenced contextually in the AI conversation (quoted in prompt/response) rather than via a formal `references_moment_id` FK. Keeps schema simple for MVP.
+
+**User Story Updates:** Reinforcement sessions update `user_story` with the same fields as core sessions:
+- `{illusionKey}_conviction` — new conviction score
+- `{illusionKey}_resistance_notes` — if remaining resistance noted
+- `{illusionKey}_key_insight_id` — can be replaced if a better insight emerges
+- `primary_triggers` — merged with any new triggers
+- `personal_stakes` — merged with any new stakes
+
+---
+
+## Implementation Notes
+
+### Testing Strategy
+
+- **SQL seeds required:** Create sample moments and conviction scores for automated E2E testing
+- **Manual testing:** Also conduct manual testing with real conversations
+- **No feature flag:** Test locally/staging, then ship to production enabled
+
+### Rollout
+
+- **Dashboard transition:** Auto-switch from in-progress to post-ceremony dashboard immediately when ceremony session ends
+- **Cache invalidation:** Invalidate moment card cache when any session completes
+
+### UI Components
+
+- **Custom carousel:** Build on prototype (`progress-carousel-final.jsx`), add touch/swipe support manually
+- **Same chat UI:** Reinforcement sessions use identical chat UI to core sessions (no visual distinction)
+- **Loading states:** Follow existing patterns — inline spinners, component-level loading states
+
+### Schema
+
+- **No new tables:** Existing schema sufficient (`conversations.session_type`, `captured_moments`, `conviction_assessments`, `user_story`)
+
+### Accessibility
+
+- **Deferred:** No WCAG work for MVP — accessibility refinements in future polish pass
+
+### Analytics
+
+- **Deferred:** No in-app analytics for MVP (Plausible is landing-page only)
 
 ---
 
@@ -605,8 +976,10 @@ Frame: You're a supportive presence, not a diagnostic tool.
 | **Audio moment replay** | Requires voice recording feature | After voice recording ships |
 | **Post-slip specific flow** | Requires dedicated prompt design and slip detection | Future release |
 | **Proactive reinforcement prompts** | Email/push notifications for scheduled tune-ups | Future release |
-| **Check-in triggered recommendations** | Requires check-in feature | After check-ins ship |
+| **Check-in triggered recommendations** | Check-ins are independent of reinforcement | After check-ins ship |
 | **Multi-illusion pattern sessions** | Address multiple illusions simultaneously | Future release |
+| **Accessibility (WCAG 2.1 AA)** | Focus on functionality first | Polish pass |
+| **In-app analytics** | Plausible is landing-page only | Future release |
 
 ### Explicitly Not Building
 
@@ -624,14 +997,18 @@ Frame: You're a supportive presence, not a diagnostic tool.
 - [x] Do we show conviction scores to users? **No, hidden**
 - [x] How many reinforcement sessions per illusion before we suggest something else? **No limits**
 - [x] Should moment replay be audio-first or transcript-first? **Transcript-first (audio deferred)**
+- [x] Should reinforcement assessments update `user_story` or use separate storage? **Update user_story — same fields as core sessions**
+- [x] How many previous moments to include in context? **Fixed 3 moments per illusion**
+- [x] Do we need conversation threading (linking reinforcement to original core session)? **No DB linking — anchor moment quoted contextually in AI conversation**
+- [x] How do we visually distinguish reinforcement sessions in conversation history? **N/A - no session history viewing feature exists**
+- [x] What happens if user tries to start reinforcement while a core session is in progress? **Not allowed - user must be post-illusion to see revisit options. No special multi-tab handling for MVP.**
+- [x] What happens if user has multiple reinforcement sessions open? **Allowed — no blocking at API or UI level**
+- [x] Should check-ins influence reinforcement UI? **No — check-ins are independent**
+- [x] Should reinforcement trigger check-in scheduling? **No — only core sessions schedule check-ins**
 
 ### Still Open
 
-- [ ] Should reinforcement assessments update `user_story` or use separate storage?
-- [ ] How many previous moments to include in context? (Current assumption: 3-5)
-- [ ] Do we need conversation threading (linking reinforcement to original core session)?
-- [ ] How do we visually distinguish reinforcement sessions in conversation history?
-- [ ] What happens if user tries to start reinforcement while a core session is in progress?
+None — all technical questions resolved.
 
 ---
 
@@ -658,9 +1035,10 @@ Frame: You're a supportive presence, not a diagnostic tool.
 | **Context Available** | Basic intake + story summary | Full history: moments, conviction trajectory |
 | **Pacing** | Socratic discovery, building new belief | Faster movement, leveraging existing foundation |
 | **Emotional Tone** | Neutral optimism | Empathetic acknowledgment of struggle |
-| **Moment Capture** | Capturing original insights | Capturing refinements, new articulations |
-| **Assessment** | Full conviction assessment | Simplified conviction check |
+| **Moment Capture** | Capturing original insights | Capturing refinements, new articulations (same types) |
+| **Assessment** | Full conviction assessment | Same conviction assessment process |
 | **Session Goal** | Create new understanding | Restore/deepen existing understanding |
+| **System Prompt** | BASE_SYSTEM_PROMPT | BASE_SYSTEM_PROMPT + REINFORCEMENT_MODE_OVERLAY |
 
 ### C. Shift Quality Definitions
 
@@ -677,6 +1055,10 @@ Frame: You're a supportive presence, not a diagnostic tool.
 |---------|------------|---------|
 | 1.0     | 2026-01-12 | Initial specification |
 | 2.0     | 2026-01-26 | Major restructure: Added Solution Summary, User Journeys, Functional/Non-Functional Requirements. Reorganized for clarity. Resolved open questions from v1. |
+| 2.1     | 2026-01-27 | Refined UI/UX design specs |
+| 2.2     | 2026-01-27 | Added session header specification, loading states (inline spinner), moment display approach (AI speaks naturally) |
+| 2.3     | 2026-01-27 | Changed moment cards from 1-3 to single card. Added "days since last session" to chip row. Resolved open questions: session history N/A, reinforcement during core session behavior. |
+| 2.4     | 2026-01-27 | **Technical implementation refinement.** Key decisions: (1) Conviction assessment same as core (not simplified), (2) Moment selection uses weighted random with last_used_at deprioritization, (3) Boost sessions can assess conviction for identified illusions and update user_story, (4) All session types use same [SESSION_COMPLETE] marker, (5) Prompts extend BASE_SYSTEM_PROMPT with mode overlay, (6) No new moment types - use existing taxonomy, (7) Relative time everywhere (not absolute dates), (8) Routes: /reinforcement/[illusion] and /support, (9) Fixed 3 moments in context, (10) Custom carousel with swipe, (11) Accessibility and analytics deferred, (12) No feature flags - test and ship. Resolved all open technical questions. |
 
 ---
 
