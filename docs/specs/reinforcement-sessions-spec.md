@@ -1,6 +1,6 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.4
+**Version:** 2.5
 **Created:** 2026-01-12
 **Updated:** 2026-01-27
 **Status:** Ready for Implementation
@@ -21,11 +21,12 @@
 5. [UI/UX Design](#uiux-design)
 6. [Functional Requirements](#functional-requirements)
 7. [Non-Functional Requirements](#non-functional-requirements)
-8. [Key Product Decisions](#key-product-decisions)
-9. [Technical Design](#technical-design)
-10. [Out of Scope / Deferred](#out-of-scope--deferred)
-11. [Open Questions](#open-questions)
-12. [Appendix](#appendix)
+8. [User Stories](#user-stories)
+9. [Key Product Decisions](#key-product-decisions)
+10. [Technical Design](#technical-design)
+11. [Out of Scope / Deferred](#out-of-scope--deferred)
+12. [Open Questions](#open-questions)
+13. [Appendix](#appendix)
 
 ---
 
@@ -749,6 +750,367 @@ See `reinforcement-ui-design-spec-v1.2.md` and `progress-carousel-final.jsx` for
 
 ---
 
+## User Stories
+
+Stories are organized by implementation area. Each story is sized for one focused Claude Code session.
+
+### API & Backend
+
+#### US-001: Moment Selection API Endpoint
+
+**Description:** As a developer, I want an API endpoint that returns the optimal moment card for the dashboard so that the frontend can display the right reinforcement prompt.
+
+**Acceptance Criteria:**
+- [ ] `GET /api/dashboard/moments` endpoint exists and requires authentication
+- [ ] Endpoint returns single moment from the illusion with lowest conviction score
+- [ ] Tiebreaker: selects most recently completed illusion when conviction scores are equal
+- [ ] Moment selection uses weighted random (higher `confidence_score` = more likely)
+- [ ] Recently-used moments are deprioritized via `last_used_at` field
+- [ ] Response includes: `moment_id`, `quote` (40-240 chars, truncated with "..."), `illusion_key`, `illusion_name`, `relative_time`, `created_at`
+- [ ] Returns empty response (not error) when no moments exist
+- [ ] When lowest-conviction illusion has zero moments, returns special payload with `no_moments: true` and `illusion_key`
+- [ ] Typecheck/lint passes
+
+---
+
+#### US-002: Start Reinforcement Session API
+
+**Description:** As a developer, I want an API endpoint to start a reinforcement session so that the frontend can initiate illusion-specific or moment-anchored sessions.
+
+**Acceptance Criteria:**
+- [ ] `POST /api/reinforcement/start` endpoint exists and requires authentication
+- [ ] Accepts optional `illusion_key` (string, 1-5 mapped to illusion)
+- [ ] Accepts optional `moment_id` (UUID) for moment-anchored sessions
+- [ ] Accepts optional `reason` (string) for context
+- [ ] Creates conversation record with `session_type: 'reinforcement'`
+- [ ] Returns `conversation_id`, `session_type`, `illusion_key`, `anchor_moment` (if provided), and `context` object
+- [ ] Context includes: `previous_conviction`, `captured_moments` (max 3), `days_since_last_session`
+- [ ] Updates `last_used_at` on anchor moment when provided
+- [ ] Returns 400 if `illusion_key` provided but illusion not completed by user
+- [ ] Returns 401 if user not authenticated
+- [ ] Typecheck/lint passes
+
+---
+
+#### US-003: Start Generic Boost Session API
+
+**Description:** As a developer, I want an API endpoint to start a generic boost session so that post-ceremony users can get support without selecting a specific illusion.
+
+**Acceptance Criteria:**
+- [ ] `POST /api/reinforcement/start` with `{ reason: 'generic_boost' }` starts a boost session
+- [ ] Creates conversation record with `session_type: 'boost'`
+- [ ] Returns 403 if user has not completed all 5 core illusions
+- [ ] Context includes all conviction scores and top 3 moments per completed illusion
+- [ ] Returns `conversation_id`, `session_type: 'boost'`, and full `context` object
+- [ ] Typecheck/lint passes
+
+---
+
+#### US-004: Reinforcement Conviction Assessment API
+
+**Description:** As a developer, I want an API endpoint to run conviction assessment after reinforcement sessions so that we can track conviction changes over time.
+
+**Acceptance Criteria:**
+- [ ] `POST /api/reinforcement/assess` endpoint exists and requires authentication
+- [ ] Accepts `conversation_id` (required) and `illusion_key` (required)
+- [ ] Runs same assessment process as core sessions (not simplified)
+- [ ] Returns `current_conviction` (0-10), `delta_from_previous`, `shift_quality`
+- [ ] Shift quality is one of: `restored`, `deepened`, `still_struggling`, `new_insight`
+- [ ] Stores assessment in `conviction_assessments` table
+- [ ] Updates `user_story` fields: `{illusionKey}_conviction`, `{illusionKey}_resistance_notes`, `{illusionKey}_key_insight_id` (if better insight emerged)
+- [ ] Returns 404 if conversation not found
+- [ ] Typecheck/lint passes
+
+---
+
+#### US-005: Reinforcement System Prompts
+
+**Description:** As a developer, I want reinforcement mode overlays for the AI system prompt so that the AI uses the right framing for reconnection vs. teaching.
+
+**Acceptance Criteria:**
+- [ ] `REINFORCEMENT_MODE_OVERLAY` constant added to prompt utilities
+- [ ] Overlay includes placeholders for: illusion name, previous conviction, captured moments (max 3), current situation
+- [ ] Overlay instructs AI to: open with anchor moment, explore triggers, help reconnect, generate new articulations, end with `[SESSION_COMPLETE]`
+- [ ] `BOOST_MODE_OVERLAY` constant added for generic support
+- [ ] Boost overlay includes placeholders for: user story, all conviction scores, recent moments across all illusions
+- [ ] Boost overlay instructs AI to: listen with empathy, identify relevant illusion(s), steer naturally, pull relevant moments
+- [ ] `buildSessionContext` in `context-builder.ts` extended to handle reinforcement and boost modes
+- [ ] Typecheck/lint passes
+
+---
+
+### Dashboard UI - In Progress State
+
+#### US-006: Progress Carousel Component
+
+**Description:** As a user in the core program, I want to see my progress as a visual carousel so that I can understand where I am in my journey and navigate between illusions.
+
+**Acceptance Criteria:**
+- [ ] `ProgressCarousel.vue` component created
+- [ ] Displays all 5 illusions with status icons: ✓ (completed), ○ (current), 🔒 (locked)
+- [ ] Center illusion is largest (96px) and brightest (100% opacity)
+- [ ] Adjacent illusions scaled down (64px, 70% opacity)
+- [ ] Far illusions smaller (48px, 40% opacity)
+- [ ] Arrow buttons visible on desktop for navigation
+- [ ] Progress dots below carousel for direct navigation
+- [ ] Smooth 500ms transitions between focus states
+- [ ] Default focus: current illusion index
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-007: Carousel Touch/Swipe Support
+
+**Description:** As a mobile user, I want to swipe the progress carousel so that I can navigate between illusions without arrow buttons.
+
+**Acceptance Criteria:**
+- [ ] Carousel responds to horizontal swipe gestures on touch devices
+- [ ] Swipe left advances to next illusion (if not at end)
+- [ ] Swipe right moves to previous illusion (if not at start)
+- [ ] Arrow buttons hidden on mobile (< 768px)
+- [ ] Minimum swipe distance threshold prevents accidental navigation
+- [ ] Smooth animation matches desktop behavior (500ms ease-out)
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill (mobile viewport)
+
+---
+
+#### US-008: Revisit Badge on Carousel
+
+**Description:** As a user, I want to see a "Revisit" button under completed illusions in the carousel so that I can quickly start a reinforcement session.
+
+**Acceptance Criteria:**
+- [ ] Small pill button appears directly under completed illusion circles
+- [ ] Badge shows "Revisit" text with RefreshCw icon (12px when focused, 10px otherwise)
+- [ ] Badge uses semi-transparent glass background (`rgba(31, 108, 117, 0.5)`)
+- [ ] Badge always visible (not hover-only) for completed illusions
+- [ ] Badge scales proportionally when its illusion is focused vs. unfocused
+- [ ] Clicking badge navigates to `/reinforcement/[illusion]`
+- [ ] Badge not shown for current or locked illusions
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-009: Carousel Action Section
+
+**Description:** As a user, I want to see relevant actions below the carousel based on which illusion is focused so that I know what I can do next.
+
+**Acceptance Criteria:**
+- [ ] Action section appears below carousel and progress dots
+- [ ] When current illusion focused: shows large CTA "Continue: The [Name] Illusion" + description + button
+- [ ] When completed illusion focused: action section is empty (badge is sufficient)
+- [ ] When locked illusion focused: shows dimmed message "Complete previous illusions to unlock"
+- [ ] Continue button navigates to `/session/[illusion]`
+- [ ] Action section animates smoothly when carousel focus changes
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-010: Moment Card Component
+
+**Description:** As a user, I want to see my breakthrough moment displayed as a card so that I can reconnect with my own insight.
+
+**Acceptance Criteria:**
+- [ ] `MomentCard.vue` component created
+- [ ] Displays eyebrow text: `{ILLUSION_NAME} • {RELATIVE_TIME}` in orange (#fc4a1a), uppercase
+- [ ] Displays quote in blockquote style (17px, line-height 1.6)
+- [ ] Quote truncated with "..." if longer than 240 characters
+- [ ] Relative time format: "Today", "Yesterday", "X days ago" (1-30), "Over a month ago" (31+)
+- [ ] Full-width primary CTA button: "Reconnect with this →"
+- [ ] Glass card styling with `backdrop-filter: blur(12px)`, 24px padding
+- [ ] Border radius: 8px mobile, 24px desktop
+- [ ] Hover effect: `scale(1.01)`, cursor pointer on entire card
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-011: Moment Card Click Navigation
+
+**Description:** As a user, I want to click a moment card to start a reinforcement session anchored to that moment so that I can reconnect with that specific insight.
+
+**Acceptance Criteria:**
+- [ ] Clicking moment card navigates to `/reinforcement/[illusion]?moment_id=[uuid]`
+- [ ] Both card body and CTA button trigger navigation
+- [ ] Navigation uses Nuxt `navigateTo()` for client-side routing
+- [ ] Moment ID is preserved in query params for session initialization
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-012: No-Moments Warning Card
+
+**Description:** As a user who completed an illusion without captured moments, I want to see a special prompt so that I know this illusion needs attention.
+
+**Acceptance Criteria:**
+- [ ] When API returns `no_moments: true`, display warning card variant
+- [ ] Card copy: "You completed [Illusion Name], but we didn't capture any breakthrough moments. This one might benefit from another conversation."
+- [ ] CTA button: "Revisit [Illusion Name] →"
+- [ ] Same glass card styling as regular moment cards
+- [ ] Clicking navigates to `/reinforcement/[illusion]` (no moment_id param)
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-013: In-Progress Dashboard Layout
+
+**Description:** As a user in the core program, I want the dashboard to show my progress carousel and moment cards so that I can continue my journey or reinforce past insights.
+
+**Acceptance Criteria:**
+- [ ] Dashboard detects user is in-progress (not all 5 illusions completed)
+- [ ] Section order: Progress carousel → Moment cards → (current illusion CTA is part of carousel action section)
+- [ ] Moment cards section hidden if no moments captured yet
+- [ ] Moment cards section loads data from `GET /api/dashboard/moments`
+- [ ] Shows loading spinner while moment data loads
+- [ ] Gracefully degrades if moment loading fails (shows carousel only)
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+### Dashboard UI - Post-Ceremony State
+
+#### US-014: Support Section Component
+
+**Description:** As a post-ceremony user, I want a prominent "Get Support Now" button so that I can quickly get help when I need it.
+
+**Acceptance Criteria:**
+- [ ] `SupportSection.vue` component created
+- [ ] Heading: "Need Support?"
+- [ ] Description: "Reconnect with what you've already discovered"
+- [ ] Primary CTA button: "Get Support Now" with MessageCircle icon
+- [ ] Same glass card styling, 32px padding, text-align center
+- [ ] Button uses full-width orange gradient style
+- [ ] Clicking navigates to `/support`
+- [ ] Component only rendered when `ceremonyComplete === true`
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-015: Your Journey Chip Row
+
+**Description:** As a post-ceremony user, I want to see all my completed illusions as compact chips so that I can quickly revisit any one of them.
+
+**Acceptance Criteria:**
+- [ ] `YourJourneySection.vue` component created
+- [ ] Header: "Your Journey" with subtext "All 5 illusions dismantled"
+- [ ] Displays 5 chips, one per illusion
+- [ ] Each chip shows: checkmark icon, illusion name, small RefreshCw icon, "X days ago" subtext
+- [ ] Days format: "Today", "Yesterday", "X days ago" (1-30), "Over a month ago" (31+)
+- [ ] Chips are equal size/weight (no hierarchy)
+- [ ] Chip row wraps to multiple rows on narrow screens
+- [ ] Chip hover effect: `scale(1.05)`
+- [ ] Clicking chip navigates to `/reinforcement/[illusion]`
+- [ ] Total section height: 60-80px (vs 300px+ for vertical list)
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-016: Post-Ceremony Dashboard Layout
+
+**Description:** As a post-ceremony user, I want a compact dashboard focused on support so that I can get help quickly without excessive scrolling.
+
+**Acceptance Criteria:**
+- [ ] Dashboard detects user is post-ceremony (all 5 illusions completed)
+- [ ] Section order: Support section → Moment cards → Your Journey chip row
+- [ ] Support section is first (primary) element
+- [ ] Moment cards section loads from `GET /api/dashboard/moments`
+- [ ] Your Journey chip row loads completion data from user progress
+- [ ] Progress carousel NOT shown (replaced by chip row)
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+### Session UI
+
+#### US-017: Reinforcement Session Page
+
+**Description:** As a user, I want a dedicated page for reinforcement sessions so that I can have a focused conversation about a specific illusion.
+
+**Acceptance Criteria:**
+- [ ] `/reinforcement/[illusion].vue` page created
+- [ ] Route param `illusion` accepts 1-5
+- [ ] Query param `moment_id` is optional (UUID)
+- [ ] On mount, calls `POST /api/reinforcement/start` with appropriate params
+- [ ] Shows loading state while session initializes
+- [ ] Uses same chat UI components as core sessions
+- [ ] Session header shows illusion name (from revisit) OR abridged moment text (from moment card)
+- [ ] Abridged moment text truncated at ~60 chars with "..."
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-018: Support Session Page
+
+**Description:** As a post-ceremony user, I want a dedicated support page so that I can have a conversation when I need help but don't know which illusion to focus on.
+
+**Acceptance Criteria:**
+- [ ] `/support.vue` page created
+- [ ] On mount, calls `POST /api/reinforcement/start` with `{ reason: 'generic_boost' }`
+- [ ] Redirects to dashboard with error toast if user hasn't completed all 5 illusions
+- [ ] Shows loading state while session initializes
+- [ ] Uses same chat UI components as core sessions
+- [ ] Session header shows "Reinforcement" (static label)
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-019: Reinforcement Session Completion
+
+**Description:** As a user finishing a reinforcement session, I want the session to end gracefully and assess my conviction so that my progress is tracked.
+
+**Acceptance Criteria:**
+- [ ] Session detects `[SESSION_COMPLETE]` marker in AI response (same as core sessions)
+- [ ] For illusion-specific sessions: calls `POST /api/reinforcement/assess` with conversation_id and illusion_key
+- [ ] For boost sessions: calls assessment for each illusion substantively discussed (AI identifies in response)
+- [ ] Shows brief completion message/animation
+- [ ] Navigates back to dashboard after completion
+- [ ] New moments captured during session appear on dashboard
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+### Integration & Polish
+
+#### US-020: Dashboard State Transition
+
+**Description:** As a user completing the ceremony, I want the dashboard to immediately switch to post-ceremony layout so that I see the right interface.
+
+**Acceptance Criteria:**
+- [ ] Dashboard re-fetches user progress after any session completion
+- [ ] When `ceremonyComplete` transitions from false to true, layout switches immediately
+- [ ] No page refresh required
+- [ ] Moment card cache invalidated when any session completes
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser using dev-browser skill
+
+---
+
+#### US-021: Error Handling and Graceful Degradation
+
+**Description:** As a user, I want the dashboard to work even if some data fails to load so that I can still access core functionality.
+
+**Acceptance Criteria:**
+- [ ] If moment loading fails, dashboard shows Revisit buttons only (no error modal)
+- [ ] If reinforcement session start fails, shows toast error and stays on dashboard
+- [ ] If conviction assessment fails, session still completes successfully (logs error server-side)
+- [ ] Network errors show user-friendly messages, not technical errors
+- [ ] Retry mechanism for transient failures (moment loading)
+- [ ] Typecheck/lint passes
+
+---
+
 ## Key Product Decisions
 
 These decisions document the rationale behind key product choices.
@@ -1059,6 +1421,7 @@ None — all technical questions resolved.
 | 2.2     | 2026-01-27 | Added session header specification, loading states (inline spinner), moment display approach (AI speaks naturally) |
 | 2.3     | 2026-01-27 | Changed moment cards from 1-3 to single card. Added "days since last session" to chip row. Resolved open questions: session history N/A, reinforcement during core session behavior. |
 | 2.4     | 2026-01-27 | **Technical implementation refinement.** Key decisions: (1) Conviction assessment same as core (not simplified), (2) Moment selection uses weighted random with last_used_at deprioritization, (3) Boost sessions can assess conviction for identified illusions and update user_story, (4) All session types use same [SESSION_COMPLETE] marker, (5) Prompts extend BASE_SYSTEM_PROMPT with mode overlay, (6) No new moment types - use existing taxonomy, (7) Relative time everywhere (not absolute dates), (8) Routes: /reinforcement/[illusion] and /support, (9) Fixed 3 moments in context, (10) Custom carousel with swipe, (11) Accessibility and analytics deferred, (12) No feature flags - test and ship. Resolved all open technical questions. |
+| 2.5     | 2026-01-27 | **Added User Stories section.** 21 stories organized by implementation area (API/Backend, Dashboard UI In-Progress, Dashboard UI Post-Ceremony, Session UI, Integration). Each story sized for one Claude Code session with verifiable acceptance criteria. UI stories include browser verification requirement. |
 
 ---
 
