@@ -68,3 +68,21 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - Delta calculation: assessment.newConviction - previousConviction (from user_story)
   - Build passes with `npm run build`
 ---
+
+## Tue Jan 27 15:30:00 EST 2026 - US-005
+- Implemented reinforcement system prompts and extended context builder
+- Files changed:
+  - server/utils/prompts/reinforcement-prompts.ts (new)
+  - server/utils/personalization/context-builder.ts (extended)
+  - scripts/ralph/prd.json (updated passes: true for US-005)
+- **Learnings for future iterations:**
+  - Created REINFORCEMENT_MODE_OVERLAY and BOOST_MODE_OVERLAY constants with detailed AI instructions
+  - Reinforcement overlay focuses on reconnection (not re-teaching): open with anchor moment, explore current triggers, use user's own previous insights
+  - Boost overlay is open-ended support: listen first, identify relevant illusion naturally, apply existing knowledge to current situation
+  - Added buildReinforcementPrompt and buildBoostPrompt helper functions for dynamic placeholder replacement
+  - Extended buildSessionContext to detect session_type and return string (prompt overlay) for reinforcement/boost instead of PersonalizationContext
+  - Context builder now accepts optional sessionData parameter for anchor moments and conviction scores
+  - Used dynamic import for reinforcement-prompts to avoid circular dependencies
+  - Prompt structure mirrors existing illusion prompts: clear sections, conversation guidelines, completion signals
+  - Build passes with `npm run build`
+---

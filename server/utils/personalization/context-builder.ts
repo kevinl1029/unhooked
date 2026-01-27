@@ -121,14 +121,59 @@ async function getMomentsByIllusion(
 /**
  * Build session context for personalization
  * MVP uses simple selection: 5-8 moments total, 1 per type from current illusion only
+ * Reinforcement/boost sessions return overlay prompts instead of PersonalizationContext
  */
 export async function buildSessionContext(
   supabase: SupabaseClient,
   userId: string,
   illusionKey: string,
-  sessionType: SessionType
-): Promise<PersonalizationContext> {
-  // Fetch all relevant data in parallel
+  sessionType: SessionType,
+  sessionData?: {
+    anchorMoment?: { id: string; transcript: string }
+    allConvictionScores?: Record<string, number>
+    recentMomentsAllIllusions?: Array<{ illusion_key: string; transcript: string }>
+  }
+): Promise<PersonalizationContext | string> {
+  // Handle reinforcement and boost sessions
+  if (sessionType === 'reinforcement' || sessionType === 'boost') {
+    // Import here to avoid circular dependencies
+    const { buildReinforcementPrompt, buildBoostPrompt } = await import('../prompts/reinforcement-prompts')
+
+    const story = await getUserStory(supabase, userId)
+
+    if (sessionType === 'boost') {
+      // Generic boost session
+      return buildBoostPrompt({
+        allConvictionScores: sessionData?.allConvictionScores || {},
+        recentMomentsAllIllusions: sessionData?.recentMomentsAllIllusions || [],
+      })
+    } else {
+      // Illusion-specific reinforcement session
+      const previousConviction = (story?.[`${illusionKey}_conviction`] as number) || 0
+
+      // Get captured moments for this illusion
+      const illusionMoments = await getMomentsByIllusion(supabase, userId, illusionKey, 3)
+      const capturedMoments = illusionMoments.map(m => ({ transcript: m.transcript }))
+
+      // Map illusion key to display name
+      const illusionNames: Record<string, string> = {
+        stress_relief: 'Stress Relief',
+        pleasure: 'Pleasure',
+        willpower: 'Willpower',
+        focus: 'Focus',
+        identity: 'Identity',
+      }
+
+      return buildReinforcementPrompt({
+        illusionName: illusionNames[illusionKey] || illusionKey,
+        previousConviction,
+        capturedMoments,
+        anchorMoment: sessionData?.anchorMoment,
+      })
+    }
+  }
+
+  // Core session handling (existing logic)
   const [intake, story, illusionMoments] = await Promise.all([
     getUserIntake(supabase, userId),
     getUserStory(supabase, userId),
