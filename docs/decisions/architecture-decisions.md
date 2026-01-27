@@ -1,8 +1,8 @@
 # Unhooked: Decision Records
 
-**Version:** 1.3
+**Version:** 1.4
 **Created:** 2026-01-19
-**Last Updated:** 2026-01-26  
+**Last Updated:** 2026-01-27  
 **Document Type:** Architecture Decision Records (ADR)
 
 ---
@@ -335,6 +335,85 @@ The spec states: "Artifacts are immutable once generated."
 
 ---
 
+### ADR-005: Dashboard CTA Hierarchy — Single Primary Action Per State
+
+**Date:** 2026-01-27
+**Status:** Accepted
+**Decision Maker(s):** Kevin
+
+**Context:**
+
+The dashboard displays multiple actionable elements across different user states:
+
+1. **In-Progress** (working through illusions): Progress carousel with Continue/Next CTA, moment cards with "Reconnect with this" CTA
+2. **Ceremony-Ready** (all 5 illusions complete, ceremony not started): Final ceremony CTA, journey review, moment replay
+3. **Post-Ceremony** (ceremony completed): Support button, moment cards, Your Journey chips
+
+Current implementation styles all CTAs with the same orange gradient (primary button style). This creates:
+- **Decision paralysis**: Users unsure which action is most important
+- **Diluted emphasis**: When everything is primary, nothing is primary
+- **Visual noise**: Multiple equally-weighted buttons compete for attention
+
+**Decision:**
+
+Establish a **single primary CTA per dashboard state**, with all other actions styled as secondary:
+
+| State | Primary CTA | Secondary CTAs |
+|-------|-------------|----------------|
+| **In-Progress** | Continue/Next (current illusion) | Moment replay ("Reconnect with this"), Revisit buttons |
+| **Ceremony-Ready** | Final Ceremony button | Journey review, Moment replay |
+| **Post-Ceremony** | Get Support Now | Moment cards, Your Journey chips |
+
+**Layout Order for Ceremony-Ready State:**
+1. Final Ceremony container (top, primary CTA)
+2. Your Journey section
+3. Moment replay section
+
+**Button Styling:**
+
+*Primary:*
+```css
+background: linear-gradient(135deg, #fc4a1a, #f7b733);
+box-shadow: 0 4px 24px rgba(252, 74, 26, 0.3);
+```
+
+*Secondary:*
+```css
+background: rgba(31, 108, 117, 0.5);
+border: 1px solid rgba(255, 255, 255, 0.2);
+/* No gradient, no orange shadow */
+```
+
+**Rationale:**
+
+1. **Reduces cognitive load**: Users immediately see what the most important action is
+2. **Supports user journey**: Primary CTA always aligns with the user's primary goal for that state (continue program → complete ceremony → get ongoing support)
+3. **Maintains accessibility**: Secondary actions remain visible and accessible, just visually subordinate
+4. **Industry best practice**: Single primary CTA per viewport is standard UX guidance
+
+**Alternatives Considered:**
+
+| Alternative | Why Rejected |
+|-------------|--------------|
+| **Keep all CTAs primary** | Creates decision paralysis, especially with 3 containers in ceremony-ready state |
+| **Hide secondary actions** | Too aggressive—users may genuinely want to replay a moment or review their journey |
+| **Use size alone (not color)** | Color is a stronger differentiator; size-only hierarchy is harder to perceive |
+
+**Consequences:**
+
+- Update `MomentCard.vue` CTA button from primary to secondary style
+- Update `YourJourneySection.vue` chips to use secondary style
+- Ensure Continue/Next in ProgressCarousel uses primary style
+- Add ceremony-ready state to dashboard with ceremony CTA as primary
+- Update `reinforcement-ui-design-spec.md` with CTA hierarchy
+- Update `reinforcement-sessions-spec.md` with ceremony-ready layout order
+
+**Related Documents:**
+- `docs/specs/reinforcement-ui-design-spec.md` — Component styling specifications
+- `docs/specs/reinforcement-sessions-spec.md` — Dashboard layout and states
+
+---
+
 ## Index
 
 | ADR | Title | Status | Date |
@@ -343,6 +422,7 @@ The spec states: "Artifacts are immutable once generated."
 | 002 | Check-In System Refinements | Accepted | 2026-01-19 |
 | 003 | Migrate Cron Jobs from Vercel to GitHub Actions | Accepted | 2026-01-19 |
 | 004 | Ceremony Artifacts Use INSERT, Not UPSERT | Accepted | 2026-01-26 |
+| 005 | Dashboard CTA Hierarchy — Single Primary Action Per State | Accepted | 2026-01-27 |
 
 ---
 
@@ -354,3 +434,4 @@ The spec states: "Artifacts are immutable once generated."
 | 1.1 | 2026-01-19 | Added ADR-002 (Check-In System Refinements) |
 | 1.2 | 2026-01-19 | Added ADR-003 (Migrate Cron Jobs from Vercel to GitHub Actions) |
 | 1.3 | 2026-01-26 | Added ADR-004 (Ceremony Artifacts Use INSERT, Not UPSERT) |
+| 1.4 | 2026-01-27 | Added ADR-005 (Dashboard CTA Hierarchy — Single Primary Action Per State) |

@@ -1,7 +1,8 @@
 # Reinforcement Sessions UI Design Specification
 
-**Version:** 1.0
+**Version:** 1.5
 **Created:** 2026-01-26
+**Updated:** 2026-01-27
 **Status:** Ready for Review
 **Document Type:** UI/UX Design Specification
 **Related Documents:**
@@ -54,6 +55,20 @@ All designs follow the established Unhooked design system with careful attention
 - Multiple entry points (moment cards, revisit buttons, generic support)
 - Clear but non-urgent CTAs
 
+### CTA Hierarchy Principle
+
+**Single Primary Action Per State:** Each dashboard state should have exactly one primary CTA. All other actions use secondary styling to establish clear visual hierarchy.
+
+| Dashboard State | Primary CTA | Secondary CTAs |
+|-----------------|-------------|----------------|
+| **In-Progress** | Continue/Next (current illusion) | Moment replay, Revisit buttons |
+| **Ceremony-Ready** | Final Ceremony button | Journey review, Moment replay |
+| **Post-Ceremony** | Get Support Now | Moment cards, Your Journey chips |
+
+**Rationale:** When everything is primary, nothing is primary. Multiple equally-weighted CTAs create decision paralysis and dilute the emphasis on the user's most important next action.
+
+See **ADR-005** in `docs/decisions/architecture-decisions.md` for full decision record.
+
 ---
 
 ## Component Specifications
@@ -105,15 +120,15 @@ padding: 24px;
 4. **CTA Button** (Bottom)
    - Label: "Reconnect with this →"
    - Full width within card
-   - Primary button style (orange gradient)
+   - **Secondary button style** (glass, not orange gradient) — see ADR-005
    - Style:
      ```css
-     background: linear-gradient(135deg, #fc4a1a, #f7b733);
+     background: rgba(31, 108, 117, 0.5);
+     border: 1px solid rgba(255, 255, 255, 0.2);
      border-radius: 9999px;
      padding: 12px 24px;
      font-weight: 600;
      color: white;
-     box-shadow: 0 4px 24px rgba(252, 74, 26, 0.3);
      ```
 
 #### Interaction States
@@ -127,8 +142,9 @@ padding: 24px;
 - Only the CTA button is interactive
 
 **Button Hover:**
-- `transform: translateY(-2px)`
-- Shadow: `0 6px 32px rgba(252, 74, 26, 0.4)`
+- `transform: scale(1.02)`
+- Slightly brighter background: `rgba(31, 108, 117, 0.6)`
+- Transition: 0.2s ease
 
 **Button Active/Click:**
 - Initiates reinforcement session anchored to that moment
@@ -455,18 +471,33 @@ color: white;
 
 ### Dashboard Integration
 
+#### Ceremony-Ready Dashboard Order
+*(All 5 illusions completed, ceremony not yet started)*
+
+1. **Final Ceremony Section** ← PRIMARY CTA (orange gradient)
+2. **Your Journey Section** (Compact chip row with all 5 illusions) ← Secondary
+3. **Moment Cards Section** (1 card from weakest conviction illusion) ← Secondary
+
+**Rationale:** The ceremony is the culmination of the program. Placing it at the top with primary styling ensures users see their most important next action immediately.
+
 #### Post-Ceremony Dashboard Order
+*(Ceremony completed)*
+
 1. Header (Unhooked status, completion date)
-2. **Support Section** (Generic boost button) ← Primary support mechanism
-3. **Moment Cards Section** (1 card from weakest conviction illusion)
-4. **Your Journey Section** (Compact chip row with all 5 illusions)
+2. **Support Section** (Generic boost button) ← PRIMARY CTA
+3. **Moment Cards Section** (1 card from weakest conviction illusion) ← Secondary
+4. **Your Journey Section** (Compact chip row with all 5 illusions) ← Secondary
 5. Ceremony Artifacts (Journey audio, Message audio, Toolkit)
 
 #### In-Progress Dashboard Order
-1. Progress indicator with **Revisit buttons on completed illusions**
-2. **Moment Cards Section** (1 card from weakest conviction illusion) ← Available once first moment captured
-3. Current illusion CTA
+*(Still working through illusions 1-5)*
+
+1. Progress indicator with **Revisit buttons on completed illusions** ← Secondary
+2. **Moment Cards Section** (1 card from weakest conviction illusion) ← Secondary, available once first moment captured
+3. Current illusion CTA ← PRIMARY (Continue/Next button with orange gradient)
 4. Optional: Support Section (Dual options variant) ← DEFERRED (post-MVP)
+
+**Rationale:** The user's primary goal is to progress through the program. The Continue/Next button for the current illusion is the most important action.
 
 ### Spacing
 
@@ -847,6 +878,7 @@ interface SupportSection {
 | 1.2     | 2026-01-26 | Corrected moment cards availability: Present in both in-progress and post-ceremony states (not post-ceremony only). Added visibility rules section for moment cards. |
 | 1.3     | 2026-01-27 | Updated post-ceremony section order (Support → Moments → Your Journey). Changed moment cards from 1-3 to 1 card. Aligned Your Journey to chip row layout with "days since last session" display. |
 | 1.4     | 2026-01-27 | Removed card-level click from Moment Cards for consistency with app patterns. Only the CTA button is now clickable. |
+| 1.5     | 2026-01-27 | **CTA Hierarchy update (ADR-005).** Added "CTA Hierarchy Principle" to Design Philosophy. Changed Moment Card CTA from primary (orange gradient) to secondary (glass) styling. Added Ceremony-Ready dashboard state with layout order. Clarified primary/secondary CTA designations for all dashboard states. |
 
 ---
 

@@ -1,6 +1,6 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.6
+**Version:** 2.7
 **Created:** 2026-01-12
 **Updated:** 2026-01-27
 **Status:** Ready for Implementation
@@ -261,10 +261,17 @@ Reinforcement Sessions serve users in different states. The AI adapts its framin
 
 ### Design Philosophy
 
-**Single Action Principle:** Each user action should have one clear entry point. Avoid duplicate CTAs that create decision paralysis or suggest different outcomes for the same action.
+**Single Primary CTA Per State:** Each dashboard state should have exactly one primary CTA (orange gradient). All other actions use secondary styling (glass) to establish clear visual hierarchy. See **ADR-005** for full decision record.
+
+| Dashboard State | Primary CTA | Secondary CTAs |
+|-----------------|-------------|----------------|
+| **In-Progress** | Continue/Next (current illusion) | Moment replay, Revisit buttons |
+| **Ceremony-Ready** | Final Ceremony button | Journey review, Moment replay |
+| **Post-Ceremony** | Get Support Now | Moment cards, Your Journey chips |
 
 **Progressive Hierarchy:** UI should match user's journey stage:
 - **In-Progress:** Emphasize current illusion (carousel with focus)
+- **Ceremony-Ready:** Emphasize ceremony (top of page, primary CTA)
 - **Post-Ceremony:** Equal-weight access to all illusions (compact chip row)
 
 **Space Efficiency:** Post-ceremony dashboard should be compact, not overwhelming. Users shouldn't need to scroll excessively to access core features.
@@ -276,9 +283,9 @@ Reinforcement Sessions serve users in different states. The AI adapts its framin
 #### In-Progress Dashboard (During Core Program)
 
 **Order of sections:**
-1. Progress carousel with revisit badges
-2. Moment cards (1-3 cards)
-3. Current illusion CTA
+1. Progress carousel with revisit badges ← Secondary
+2. Moment cards (1 card) ← Secondary
+3. Current illusion CTA ← **PRIMARY** (orange gradient)
 
 **Progress Carousel:**
 ```
@@ -320,12 +327,24 @@ Reinforcement Sessions serve users in different states. The AI adapts its framin
 - **Completed illusion focused:** NO content (badge is sufficient, avoids duplicate CTA)
 - **Locked illusion focused:** Show dimmed message ("Complete previous illusions to unlock")
 
-#### Post-Ceremony Dashboard
+#### Ceremony-Ready Dashboard (All 5 Illusions Complete, Ceremony Not Started)
 
 **Order of sections:**
-1. Support section (generic reinforcement) ← PRIMARY
-2. Moment cards (1-3 cards) ← SECONDARY
-3. Your Journey chip row (all 5 illusions) ← TERTIARY
+1. Final Ceremony section ← **PRIMARY** (orange gradient CTA)
+2. Your Journey chip row (all 5 illusions) ← Secondary
+3. Moment cards (1 card) ← Secondary
+
+**Rationale for order:**
+- Ceremony is the culmination of the program—most important next action
+- Your Journey provides context for the upcoming ceremony
+- Moment cards available for optional reconnection before ceremony
+
+#### Post-Ceremony Dashboard (Ceremony Completed)
+
+**Order of sections:**
+1. Support section (generic reinforcement) ← **PRIMARY** (orange gradient CTA)
+2. Moment cards (1 card) ← Secondary
+3. Your Journey chip row (all 5 illusions) ← Secondary
 
 **Rationale for order:**
 - Support button first because it's the primary support mechanism post-ceremony
@@ -954,7 +973,7 @@ Stories are organized by implementation area. Each story is sized for one focuse
 - [ ] Displays quote in blockquote style (17px, line-height 1.6)
 - [ ] Quote truncated with "..." if longer than 240 characters
 - [ ] Relative time format: "Today", "Yesterday", "X days ago" (1-30), "Over a month ago" (31+)
-- [ ] Full-width primary CTA button: "Reconnect with this →"
+- [ ] Full-width **secondary** CTA button: "Reconnect with this →" (glass style per ADR-005)
 - [ ] Glass card styling with `backdrop-filter: blur(12px)`, 24px padding
 - [ ] Border radius: 8px mobile, 24px desktop
 - [ ] Hover effect: `scale(1.01)`, cursor pointer on entire card
@@ -1493,6 +1512,7 @@ None — all technical questions resolved.
 | 2.4     | 2026-01-27 | **Technical implementation refinement.** Key decisions: (1) Conviction assessment same as core (not simplified), (2) Moment selection uses weighted random with last_used_at deprioritization, (3) Boost sessions can assess conviction for identified illusions and update user_story, (4) All session types use same [SESSION_COMPLETE] marker, (5) Prompts extend BASE_SYSTEM_PROMPT with mode overlay, (6) No new moment types - use existing taxonomy, (7) Relative time everywhere (not absolute dates), (8) Routes: /reinforcement/[illusion] and /support, (9) Fixed 3 moments in context, (10) Custom carousel with swipe, (11) Accessibility and analytics deferred, (12) No feature flags - test and ship. Resolved all open technical questions. |
 | 2.5     | 2026-01-27 | **Added User Stories section.** 21 stories organized by implementation area (API/Backend, Dashboard UI In-Progress, Dashboard UI Post-Ceremony, Session UI, Integration). Each story sized for one Claude Code session with verifiable acceptance criteria. UI stories include browser verification requirement. |
 | 2.6     | 2026-01-27 | **Added References to User Stories.** Each story now includes document path and section references for standalone extraction (e.g., `docs/specs/reinforcement-sessions-spec.md: [Section](#anchor)`). |
+| 2.7     | 2026-01-27 | **CTA Hierarchy update (ADR-005).** Added Ceremony-Ready dashboard state. Updated Design Philosophy with Single Primary CTA principle. Changed Moment Card CTA from primary to secondary styling. Clarified primary/secondary designations for all dashboard states. |
 
 ---
 

@@ -10,9 +10,9 @@
       "{{ truncatedQuote }}"
     </blockquote>
 
-    <!-- CTA button -->
+    <!-- CTA button (secondary per ADR-005) -->
     <button
-      class="btn-primary w-full text-white py-3 px-6 rounded-pill font-semibold shadow-card"
+      class="btn-secondary w-full text-white py-3 px-6 rounded-pill font-semibold"
       @click="handleClick"
     >
       Reconnect with this →
