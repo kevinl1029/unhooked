@@ -11,7 +11,7 @@
         </svg>
         Exit
       </NuxtLink>
-      <h1 class="text-xl md:text-2xl font-semibold text-white text-right line-clamp-2">
+      <h1 class="text-xl md:text-2xl font-semibold text-white text-right truncate">
         {{ sessionHeader || 'Loading...' }}
       </h1>
     </div>
