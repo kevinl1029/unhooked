@@ -22,3 +22,33 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - Build passes with `npm run build` (no separate typecheck script)
   - Pre-existing test failures in ceremony/journey-contract.test.ts are unrelated to reinforcement sessions
 ---
+
+## Tue Jan 27 14:45:00 EST 2026 - US-002
+- Implemented POST /api/reinforcement/start endpoint
+- Files changed:
+  - server/api/reinforcement/start.post.ts (new)
+  - scripts/ralph/prd.json (updated passes: true for US-002)
+- **Learnings for future iterations:**
+  - Endpoint handles two distinct session types: 'reinforcement' (illusion-specific) and 'boost' (generic, post-ceremony only)
+  - Illusion keys in database are: 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity' (NOT 'stress')
+  - The PRD acceptance criteria specified 'stress' but database uses 'stress_relief' - implementation uses database keys
+  - Boost sessions require ceremony_completed_at to be non-null (user completed all 5 illusions)
+  - Weighted moment selection reuses same algorithm from US-001: confidence_score * recencyMultiplier
+  - When moment_id is provided for anchored sessions, update last_used_at timestamp for that moment
+  - Context building varies by session type: reinforcement gets illusion-specific data, boost gets all conviction scores + top 3 moments per illusion (15 max)
+  - Days since last session calculated from most recent completed_at for the illusion
+  - Build passes with `npm run build` (same pre-existing warnings as before)
+---
+
+## Tue Jan 27 15:00:00 EST 2026 - US-003
+- No implementation needed - functionality already exists in server/api/reinforcement/start.post.ts
+- Files changed:
+  - scripts/ralph/prd.json (updated passes: true for US-003)
+  - scripts/ralph/progress.txt (this file)
+- **Learnings for future iterations:**
+  - US-003 was actually completed as part of US-002 implementation
+  - The generic boost session handling (lines 62-151 in start.post.ts) fulfills all US-003 acceptance criteria
+  - When reviewing PRD stories, check if functionality already exists before starting implementation
+  - All US-003 acceptance criteria verified: handles { reason: 'generic_boost' }, returns 403 if ceremony not complete, creates 'boost' session type, includes all conviction scores and top 3 moments per illusion
+  - Build passes with `npm run build` (verified typecheck passes)
+---
