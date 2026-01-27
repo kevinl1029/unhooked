@@ -122,13 +122,15 @@ padding: 24px;
 - Subtle scale animation on page load (fadeInUp)
 - Soft glow from card shadow
 
-**Hover:**
-- Card: `transform: scale(1.01)`
-- Button: `transform: translateY(-2px)`
-- Button shadow: `0 6px 32px rgba(252, 74, 26, 0.4)`
-- Cursor: pointer on entire card
+**Card Hover:**
+- No hover effect (card is not clickable)
+- Only the CTA button is interactive
 
-**Active/Click:**
+**Button Hover:**
+- `transform: translateY(-2px)`
+- Shadow: `0 6px 32px rgba(252, 74, 26, 0.4)`
+
+**Button Active/Click:**
 - Initiates reinforcement session anchored to that moment
 - Navigates to chat interface with moment pre-loaded in context
 
@@ -560,9 +562,9 @@ color: white;
 
 **Moment Cards:**
 - Default: Standard shadow
-- Hover: Scale (1.01) + cursor pointer on entire card
-- Active/Click: Navigate to session
-- Focus: Subtle outline ring (keyboard navigation)
+- Hover: No card-level hover (card is not clickable)
+- CTA Button: Standard primary button states
+- Focus: CTA button receives focus ring (keyboard navigation)
 
 **Static Cards:**
 - No hover state
@@ -844,6 +846,7 @@ interface SupportSection {
 | 1.1     | 2026-01-26 | Clarified Option C implementation: Revisit buttons in both in-progress (within progress indicator) and post-ceremony (in dedicated "Your Journey" section). Deferred in-progress support section to post-MVP. |
 | 1.2     | 2026-01-26 | Corrected moment cards availability: Present in both in-progress and post-ceremony states (not post-ceremony only). Added visibility rules section for moment cards. |
 | 1.3     | 2026-01-27 | Updated post-ceremony section order (Support → Moments → Your Journey). Changed moment cards from 1-3 to 1 card. Aligned Your Journey to chip row layout with "days since last session" display. |
+| 1.4     | 2026-01-27 | Removed card-level click from Moment Cards for consistency with app patterns. Only the CTA button is now clickable. |
 
 ---
 

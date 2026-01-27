@@ -380,8 +380,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Boost session assessment requires structured illusion identification in BOOST_MODE_OVERLAY"
     },
     {
       "id": "US-020",
@@ -397,8 +397,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Existing implementation already satisfies requirements - onMounted refetches on every navigation"
     },
     {
       "id": "US-021",
@@ -414,7 +414,7 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

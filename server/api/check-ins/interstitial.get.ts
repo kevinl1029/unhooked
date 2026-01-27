@@ -16,8 +16,6 @@ export default defineEventHandler(async (event) => {
 
   const { checkIns } = await getPendingCheckIns(supabase, user.sub)
 
-  console.log(`[interstitial] Found ${checkIns.length} pending check-ins for user ${user.sub}`)
-
   // Find the first non-expired check-in that's ready (scheduled time has passed)
   const now = new Date()
   const readyCheckIn = checkIns.find(checkIn => {

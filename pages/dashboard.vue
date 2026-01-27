@@ -20,14 +20,14 @@
       <!-- Post-Ceremony Dashboard -->
       <div v-else-if="isPostCeremony" class="animate-fade-in-up space-y-8">
         <!-- Support Section (primary CTA) -->
-        <SupportSection />
+        <DashboardSupportSection />
 
         <!-- Moment cards section (only if moments exist) -->
         <div v-if="!isMomentLoading && momentData" class="space-y-4">
           <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
 
           <!-- Show regular moment card -->
-          <MomentCard
+          <DashboardMomentCard
             v-if="!momentData.no_moments"
             :moment-id="momentData.moment_id"
             :quote="momentData.quote"
@@ -38,7 +38,7 @@
           />
 
           <!-- Show no-moments warning card -->
-          <NoMomentsCard
+          <DashboardNoMomentsCard
             v-else
             :illusion-key="momentData.illusion_key"
             :illusion-name="momentData.illusion_name"
@@ -46,7 +46,7 @@
         </div>
 
         <!-- Your Journey chip row -->
-        <YourJourneySection :illusions="journeyIllusions" />
+        <DashboardYourJourneySection :illusions="journeyIllusions" />
 
         <!-- Artifacts Section -->
         <div v-if="hasJourneyArtifact || hasFinalRecording || hasCheatSheet" class="grid gap-4 md:grid-cols-2">
@@ -167,19 +167,32 @@
 
       <!-- Ceremony-Ready Dashboard -->
       <div v-else-if="isCeremonyReady" class="animate-fade-in-up space-y-8">
-        <!-- Progress complete -->
-        <div class="glass rounded-lg md:rounded-card p-6 md:p-8 shadow-card border border-brand-border">
-          <h2 class="text-2xl font-bold text-white mb-6 text-center">Your Progress</h2>
-          <div class="mb-6">
-            <ProgressIndicator
-              :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
-              :illusions-completed="status?.progress?.illusions_completed || []"
-              :current-illusion="5"
-            />
-          </div>
-          <p class="text-center text-white-85">
-            <span class="font-semibold text-brand-accent">All illusions explored</span>
-          </p>
+        <!-- Progress carousel (all illusions completed, all revisitable) -->
+        <DashboardProgressCarousel
+          :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
+          :illusions-completed="status?.progress?.illusions_completed || []"
+          :current-illusion="5"
+        />
+
+        <!-- Moment cards section (if moments exist) -->
+        <div v-if="!isMomentLoading && momentData" class="space-y-4">
+          <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
+
+          <DashboardMomentCard
+            v-if="!momentData.no_moments"
+            :moment-id="momentData.moment_id"
+            :quote="momentData.quote"
+            :illusion-key="momentData.illusion_key"
+            :illusion-name="momentData.illusion_name"
+            :relative-time="momentData.relative_time"
+            @click="handleMomentClick"
+          />
+
+          <DashboardNoMomentsCard
+            v-else
+            :illusion-key="momentData.illusion_key"
+            :illusion-name="momentData.illusion_name"
+          />
         </div>
 
         <!-- Ceremony CTA -->
@@ -205,7 +218,7 @@
       <!-- In-Progress Dashboard -->
       <div v-else-if="isInProgress" class="animate-fade-in-up space-y-8">
         <!-- Progress carousel -->
-        <ProgressCarousel
+        <DashboardProgressCarousel
           :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
           :illusions-completed="status?.progress?.illusions_completed || []"
           :current-illusion="status?.progress?.current_illusion || 1"
@@ -216,7 +229,7 @@
           <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
 
           <!-- Show regular moment card -->
-          <MomentCard
+          <DashboardMomentCard
             v-if="!momentData.no_moments"
             :moment-id="momentData.moment_id"
             :quote="momentData.quote"
@@ -227,7 +240,7 @@
           />
 
           <!-- Show no-moments warning card -->
-          <NoMomentsCard
+          <DashboardNoMomentsCard
             v-else
             :illusion-key="momentData.illusion_key"
             :illusion-name="momentData.illusion_name"
@@ -401,8 +414,8 @@ onMounted(async () => {
     await checkForInterstitial()
   }
 
-  // Fetch moment data for in-progress and post-ceremony users
-  if (isInProgress.value || isPostCeremony.value) {
+  // Fetch moment data for in-progress, ceremony-ready, and post-ceremony users
+  if (isInProgress.value || isCeremonyReady.value || isPostCeremony.value) {
     await fetchMomentData()
   }
 })
