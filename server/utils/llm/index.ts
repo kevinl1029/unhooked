@@ -24,17 +24,6 @@ export function getDefaultModel(): ModelType {
   return (config.defaultLlmProvider as ModelType) || FALLBACK_MODEL
 }
 
-export * from './types'
-export * from './task-types'
-export * from './task-executor'
-
-// Task implementations
-export { detectMoment, shouldAttemptDetection, getSessionDetectionTracker, TRANSCRIPT_CAPTURE_THRESHOLD, AUDIO_CAPTURE_THRESHOLD } from './tasks/moment-detection'
-export { assessConviction } from './tasks/conviction-assessment'
-export { selectKeyInsight } from './tasks/key-insight-selection'
-export { personalizeCheckIn } from './tasks/checkin-personalization'
-export { summarizeOriginStory, shouldGenerateSummary } from './tasks/story-summarization'
-// Note: selectCeremonyMoments and generateCeremonyNarrative are NOT re-exported here
-// to avoid Nuxt auto-import duplicate warnings. Import directly from their source files:
-// - selectCeremonyMoments: from './tasks/ceremony-select'
-// - generateCeremonyNarrative: from './tasks/ceremony-narrative'
+// Note: Individual task files (moment-detection.ts, conviction-assessment.ts, etc.)
+// are NOT re-exported here to avoid Nuxt auto-import duplicate warnings.
+// Nuxt auto-imports all exports from server/utils/ - import directly from source files if needed.

@@ -1,7 +1,8 @@
 import { getModelRouter, getDefaultModel } from '../utils/llm'
 import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { buildSystemPrompt, buildCheckInSystemPrompt, ILLUSION_NAMES, BASE_SYSTEM_PROMPT } from '../utils/prompts'
+import { buildSystemPrompt, buildCheckInSystemPrompt, ILLUSION_NAMES } from '../utils/prompts'
+import { BASE_SYSTEM_PROMPT } from '../utils/prompts/base-system'
 import {
   detectMoment,
   shouldAttemptDetection,

@@ -8,7 +8,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { IllusionKey, IllusionLayer, SessionType, MomentType } from '../llm/task-types'
 
 // Types for personalization context
-export interface UserContext {
+// Note: Named IntakeUserContext to distinguish from UserContext in prompts/base-system.ts
+export interface IntakeUserContext {
   productsUsed: string[]
   usageFrequency: string
   yearsUsing: number | null
@@ -36,7 +37,7 @@ export interface MomentContext {
 }
 
 export interface PersonalizationContext {
-  userContext: UserContext
+  userContext: IntakeUserContext
   storyContext: StoryContext
   beliefContext: BeliefContext
   momentContext: MomentContext

@@ -1,16 +1,13 @@
 // Prompt builder utilities for illusion-focused sessions
+// Note: BASE_SYSTEM_PROMPT, buildPersonalizationContext, and UserContext are NOT re-exported
+// here to avoid Nuxt auto-import duplicate warnings. Import directly from './base-system' if needed.
 import { BASE_SYSTEM_PROMPT, buildPersonalizationContext as buildPersonalization } from './base-system'
 import type { UserContext } from './base-system'
-
-// Re-export BASE_SYSTEM_PROMPT for reinforcement/boost sessions
-export { BASE_SYSTEM_PROMPT }
 import { ILLUSION_1_STRESS_PROMPT } from './illusions/illusion-1-stress'
 import { ILLUSION_2_PLEASURE_PROMPT } from './illusions/illusion-2-pleasure'
 import { ILLUSION_3_WILLPOWER_PROMPT } from './illusions/illusion-3-willpower'
 import { ILLUSION_4_FOCUS_PROMPT } from './illusions/illusion-4-focus'
 import { ILLUSION_5_IDENTITY_PROMPT } from './illusions/illusion-5-identity'
-
-export type { UserContext }
 
 // Extended options for buildSystemPrompt
 export interface BuildSystemPromptOptions {
@@ -107,9 +104,8 @@ export function buildSystemPrompt(
   return prompt
 }
 
-export function buildPersonalizationContext(userContext: UserContext): string {
-  return buildPersonalization(userContext)
-}
+// Note: buildPersonalizationContext is NOT re-exported here to avoid Nuxt auto-import
+// duplicate warnings. Import directly from './base-system' if needed.
 
 // Opening messages for each illusion session
 // These are shown immediately when user enters a session, creating the first exchange
