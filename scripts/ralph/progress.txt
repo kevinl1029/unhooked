@@ -184,3 +184,96 @@ Started: Tue Jan 27 14:17:25 EST 2026
   - components/dashboard/MomentCard.vue - Breakthrough moment display card  
   - components/dashboard/NoMomentsCard.vue - Warning card for illusions without moments
 ---
+## Mon Jan 27 14:46:00 EST 2026 - US-013
+- Implemented in-progress dashboard layout with ProgressCarousel and MomentCard integration
+- Files changed:
+  - pages/dashboard.vue (updated)
+  - scripts/ralph/prd.json (updated passes for US-013)
+- **Learnings for future iterations:**
+  - In-progress dashboard now shows ProgressCarousel instead of old ProgressIndicator
+  - Added moment data fetching from GET /api/dashboard/moments on mount for in-progress users
+  - Moment card section only shows if moments exist (gracefully degrades if API fails)
+  - MomentCard component emits click event that parent handles for navigation to /reinforcement/{illusionKey}?moment_id={momentId}
+  - NoMomentsCard shows when API returns { no_moments: true, illusion_key, illusion_name }
+  - Loading state managed separately (isMomentLoading) to avoid blocking dashboard render
+  - Dashboard layout structure: ProgressCarousel first, then moment cards section below
+  - Build passes with `npm run build` (same pre-existing warnings)
+---
+
+## Mon Jan 27 14:50:00 EST 2026 - US-014
+- Implemented SupportSection.vue component for post-ceremony users
+- Files changed:
+  - components/dashboard/SupportSection.vue (new)
+  - scripts/ralph/prd.json (updated passes for US-014)
+- **Learnings for future iterations:**
+  - Component follows existing design patterns: .glass, .rounded-card, .shadow-card, .btn-primary
+  - Uses MessageCircle icon from lucide-vue-next
+  - Centered layout with text-center on container
+  - Button navigates to /support using navigateTo()
+  - Clean, minimal design matching overall app aesthetic
+  - Build passes with `npm run build`
+---
+
+## Mon Jan 27 14:53:00 EST 2026 - US-015
+- Implemented YourJourneySection.vue component for post-ceremony users
+- Files changed:
+  - components/dashboard/YourJourneySection.vue (new)
+  - scripts/ralph/prd.json (updated passes for US-015)
+- **Learnings for future iterations:**
+  - Component displays all 5 completed illusions as chips in a flex-wrap row
+  - Each chip includes: checkmark circle with gradient (btn-primary), illusion name, refresh icon
+  - Uses glass-input background (from tailwind brand tokens) and rounded-full for pill shape
+  - Hover effect: scale-105 and text color change from white-85 to white
+  - Clicking any chip navigates to /reinforcement/{illusionKey}
+  - Props accept illusions array with { key, name, daysSince } - daysSince currently unused but available for future enhancement
+  - Compact design to avoid excessive height
+  - Build passes with `npm run build`
+---
+
+## Mon Jan 27 15:00:00 EST 2026 - US-016
+- Implemented post-ceremony dashboard layout with new component integration
+- Files changed:
+  - pages/dashboard.vue (updated)
+  - scripts/ralph/prd.json (updated passes for US-016)
+- **Learnings for future iterations:**
+  - Post-ceremony dashboard layout order: SupportSection (primary CTA), MomentCard section, YourJourneySection (chip row), Artifacts (existing), Follow-ups (existing)
+  - Progress carousel NOT shown for post-ceremony users (replaced by compact chip row in YourJourneySection)
+  - Moment data fetched for both in-progress AND post-ceremony users (updated fetchMomentData condition)
+  - Added journeyIllusions computed property to build illusion data for YourJourneySection component
+  - Illusion data maps illusion numbers to { key, name, daysSince } - daysSince currently hardcoded to 0
+  - Dashboard sections conditionally shown: moment cards only if data exists, artifacts only if any exist
+  - Build passes with `npm run build`
+---
+
+## Mon Jan 27 15:07:00 EST 2026 - US-017
+- Implemented reinforcement session page at pages/reinforcement/[illusion].vue
+- Files changed:
+  - pages/reinforcement/[illusion].vue (new)
+  - scripts/ralph/prd.json (updated passes for US-017)
+- **Learnings for future iterations:**
+  - Page follows existing session page pattern: layout: false, mobile-safe-container, VoiceSessionView component
+  - Route param illusion accepts illusion keys: 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity'
+  - Query param moment_id (optional UUID string) for moment-anchored sessions
+  - On mount, calls POST /api/reinforcement/start with { illusion_key, moment_id? }
+  - Session header shows abridged moment quote (truncated ~60 chars) if moment_id provided, otherwise shows illusion display name
+  - Error handling: 400 (not completed), 401 (not auth), 403 (ceremony not complete) - redirects to dashboard with 2-second delay
+  - Reuses VoiceSessionView component with existing-conversation-id prop
+  - Session complete handler navigates back to dashboard
+  - Build passes with `npm run build`
+---
+
+## Mon Jan 27 15:12:00 EST 2026 - US-018
+- Implemented support session page at pages/support.vue (replaced old implementation)
+- Files changed:
+  - pages/support.vue (updated - replaced chat implementation with voice session)
+  - scripts/ralph/prd.json (updated passes for US-018)
+- **Learnings for future iterations:**
+  - Replaced old /api/support/chat endpoint with new POST /api/reinforcement/start endpoint
+  - Support page now uses VoiceSessionView component like other sessions
+  - Calls API with { reason: 'generic_boost' } to start boost session type
+  - Session header shows static label "Reinforcement"
+  - Error handling: 401 (not auth), 403 (ceremony not complete) - redirects to dashboard with 2-second delay
+  - Same layout and patterns as reinforcement session page
+  - Build passes with `npm run build`
+---
+
