@@ -288,6 +288,7 @@ const {
   sessionType: props.sessionType,
   illusionKey: props.illusionKey,
   anchorMoment: props.anchorMoment,
+  initialConversationId: props.existingConversationId,
   onSessionComplete: () => {
     // Will be handled via watch
   }

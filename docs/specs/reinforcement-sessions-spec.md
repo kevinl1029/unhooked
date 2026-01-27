@@ -1,6 +1,6 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.7
+**Version:** 2.8
 **Created:** 2026-01-12
 **Updated:** 2026-01-27
 **Status:** Ready for Implementation
@@ -1226,6 +1226,18 @@ These decisions document the rationale behind key product choices.
 - `'check_in'` - Scheduled check-ins
 - `'ceremony'` - Final ceremony conversation
 
+**Conversation `title` format:**
+
+The `title` field in the `conversations` table uses a prefix pattern to distinguish session types:
+
+| Session Type | Title Format | Example |
+|--------------|--------------|---------|
+| Core | `"{Illusion Name}"` | `"Stress Relief"` |
+| Reinforcement | `"Reinforcement: {Illusion Name}"` | `"Reinforcement: Stress Relief"` |
+| Boost | `"Boost: Support"` | `"Boost: Support"` |
+
+This format makes it easy to identify session types when debugging or analyzing conversation data. Note: The database `title` is for internal use and may differ from the UI session header (which follows the Session Header Specification).
+
 ### Session Ending
 
 **End Signal:** All session types (core, reinforcement, boost) use the same `[SESSION_COMPLETE]` marker to trigger post-session tasks.
@@ -1513,6 +1525,7 @@ None — all technical questions resolved.
 | 2.5     | 2026-01-27 | **Added User Stories section.** 21 stories organized by implementation area (API/Backend, Dashboard UI In-Progress, Dashboard UI Post-Ceremony, Session UI, Integration). Each story sized for one Claude Code session with verifiable acceptance criteria. UI stories include browser verification requirement. |
 | 2.6     | 2026-01-27 | **Added References to User Stories.** Each story now includes document path and section references for standalone extraction (e.g., `docs/specs/reinforcement-sessions-spec.md: [Section](#anchor)`). |
 | 2.7     | 2026-01-27 | **CTA Hierarchy update (ADR-005).** Added Ceremony-Ready dashboard state. Updated Design Philosophy with Single Primary CTA principle. Changed Moment Card CTA from primary to secondary styling. Clarified primary/secondary designations for all dashboard states. |
+| 2.8     | 2026-01-27 | **Conversation title format.** Added documentation for database `title` field format: reinforcement sessions use `"Reinforcement: {Illusion Name}"`, boost sessions use `"Boost: Support"`. This distinguishes session types in the database for debugging and analytics. |
 
 ---
 

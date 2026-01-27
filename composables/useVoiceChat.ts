@@ -7,6 +7,7 @@ interface VoiceChatOptions {
   checkInId?: string
   checkInPrompt?: string
   anchorMoment?: { id: string; transcript: string } | null // For reinforcement sessions
+  initialConversationId?: string | null // Pre-created conversation ID (e.g., from /api/reinforcement/start)
   onSessionComplete?: () => void
   enableStreamingTTS?: boolean // Enable streaming TTS when supported
 }
@@ -19,13 +20,14 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     checkInId,
     checkInPrompt,
     anchorMoment,
+    initialConversationId = null,
     onSessionComplete,
     enableStreamingTTS = true
   } = options
 
   // State
   const messages = ref<Message[]>([])
-  const conversationId = ref<string | null>(null)
+  const conversationId = ref<string | null>(initialConversationId)
   const isLoading = ref(false)
   const sessionComplete = ref(false)
   const error = ref<string | null>(null)
@@ -174,7 +176,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [],
-            conversationId: null,
+            conversationId: conversationId.value,
             illusionNumber,
             illusionKey,
             sessionType,
@@ -219,7 +221,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           method: 'POST',
           body: {
             messages: [],
-            conversationId: null,
+            conversationId: conversationId.value,
             illusionNumber,
             illusionKey,
             sessionType,

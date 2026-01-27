@@ -130,7 +130,7 @@ export default defineEventHandler(async (event): Promise<ReinforcementResponse> 
       .from('conversations')
       .insert({
         user_id: user.sub,
-        title: 'Boost Session',
+        title: 'Boost: Support',
         session_type: 'boost',
       })
       .select()
@@ -271,11 +271,12 @@ export default defineEventHandler(async (event): Promise<ReinforcementResponse> 
   }
 
   // Create conversation record with session_type: 'reinforcement'
+  const illusionDisplayName = ILLUSION_DISPLAY_NAMES[illusion_key] || illusion_key
   const { data: conversation, error: convError } = await supabase
     .from('conversations')
     .insert({
       user_id: user.sub,
-      title: ILLUSION_DISPLAY_NAMES[illusion_key] || illusion_key,
+      title: `Reinforcement: ${illusionDisplayName}`,
       session_type: 'reinforcement',
       illusion_key,
     })
