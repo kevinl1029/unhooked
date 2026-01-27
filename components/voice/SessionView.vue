@@ -230,6 +230,7 @@ interface Props {
   existingMessages?: Message[]
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
   illusionKey?: string
+  anchorMoment?: { id: string; transcript: string } | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -237,7 +238,8 @@ const props = withDefaults(defineProps<Props>(), {
   existingConversationId: null,
   existingMessages: () => [],
   sessionType: 'core',
-  illusionKey: undefined
+  illusionKey: undefined,
+  anchorMoment: null
 })
 
 const emit = defineEmits<{
@@ -285,6 +287,7 @@ const {
   illusionNumber: props.illusionNumber,
   sessionType: props.sessionType,
   illusionKey: props.illusionKey,
+  anchorMoment: props.anchorMoment,
   onSessionComplete: () => {
     // Will be handled via watch
   }

@@ -6,6 +6,7 @@ interface VoiceChatOptions {
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
   checkInId?: string
   checkInPrompt?: string
+  anchorMoment?: { id: string; transcript: string } | null // For reinforcement sessions
   onSessionComplete?: () => void
   enableStreamingTTS?: boolean // Enable streaming TTS when supported
 }
@@ -17,6 +18,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     sessionType = 'core',
     checkInId,
     checkInPrompt,
+    anchorMoment,
     onSessionComplete,
     enableStreamingTTS = true
   } = options
@@ -71,6 +73,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             sessionType,
             checkInId,
             checkInPrompt,
+            anchorMoment,
             stream: true,
             streamTTS: true,
             inputModality
@@ -116,6 +119,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             sessionType,
             checkInId,
             checkInPrompt,
+            anchorMoment,
             stream: false,
             inputModality
           }
@@ -176,6 +180,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             sessionType,
             checkInId,
             checkInPrompt,
+            anchorMoment,
             stream: true,
             streamTTS: true
           })
@@ -220,6 +225,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             sessionType,
             checkInId,
             checkInPrompt,
+            anchorMoment,
             stream: false
           }
         })

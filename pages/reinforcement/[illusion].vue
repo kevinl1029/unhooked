@@ -25,6 +25,7 @@
           :illusion-number="0"
           :illusion-key="illusionKey"
           session-type="reinforcement"
+          :anchor-moment="anchorMoment"
           :read-only="false"
           @session-complete="handleSessionComplete"
           @error="handleError"
@@ -81,6 +82,7 @@ const momentId = computed(() => route.query.moment_id as string | undefined)
 // Session state
 const conversationId = ref<string | null>(null)
 const sessionHeader = ref<string>('')
+const anchorMoment = ref<{ id: string; transcript: string } | null>(null)
 const errorMessage = ref<string | null>(null)
 const showErrorToast = ref(false)
 const toastMessage = ref('')
@@ -114,7 +116,8 @@ onMounted(async () => {
       session_type: string
       illusion_key?: string
       anchor_moment?: {
-        quote: string
+        id: string
+        transcript: string
       }
     }>('/api/reinforcement/start', {
       method: 'POST',
@@ -123,10 +126,15 @@ onMounted(async () => {
 
     conversationId.value = response.conversation_id
 
+    // Store anchor moment for passing to session
+    if (response.anchor_moment) {
+      anchorMoment.value = response.anchor_moment
+    }
+
     // Set session header
-    if (response.anchor_moment?.quote) {
+    if (response.anchor_moment?.transcript) {
       // Abridged moment quote (truncate ~60 chars)
-      const quote = response.anchor_moment.quote
+      const quote = response.anchor_moment.transcript
       sessionHeader.value = quote.length <= 60 ? quote : quote.substring(0, 60) + '...'
     } else {
       // Illusion display name

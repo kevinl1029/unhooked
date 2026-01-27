@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
     priorMoments = [],
     checkInId,
     checkInPrompt,
+    anchorMoment,
   } = body as {
     messages: Message[]
     conversationId?: string
@@ -54,6 +55,7 @@ export default defineEventHandler(async (event) => {
     priorMoments?: Array<{ transcript: string; moment_type: string }>
     checkInId?: string
     checkInPrompt?: string
+    anchorMoment?: { id: string; transcript: string }
   }
 
   if (!messages || !Array.isArray(messages)) {
@@ -78,7 +80,8 @@ export default defineEventHandler(async (event) => {
       supabase,
       user.sub,
       providedIllusionKey,
-      sessionType
+      sessionType,
+      { anchorMoment: anchorMoment || undefined }
     )
 
     // For reinforcement/boost, buildSessionContext returns a string (the overlay)
@@ -95,7 +98,8 @@ export default defineEventHandler(async (event) => {
       supabase,
       user.sub,
       '', // No specific illusion for generic boost
-      sessionType
+      sessionType,
+      {} // No anchor moment for generic boost
     )
 
     const systemPrompt = BASE_SYSTEM_PROMPT + '\n\n' + overlayPrompt
