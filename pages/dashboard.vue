@@ -208,41 +208,34 @@
 
       <!-- In-Progress Dashboard -->
       <div v-else-if="isInProgress" class="animate-fade-in-up space-y-8">
-        <!-- Progress card -->
-        <div class="glass rounded-lg md:rounded-card p-6 md:p-8 shadow-card border border-brand-border">
-          <h2 class="text-2xl font-bold text-white mb-6 text-center">Your Progress</h2>
+        <!-- Progress carousel -->
+        <ProgressCarousel
+          :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
+          :illusions-completed="status?.progress?.illusions_completed || []"
+          :current-illusion="status?.progress?.current_illusion || 1"
+        />
 
-          <div class="mb-6">
-            <ProgressIndicator
-              :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
-              :illusions-completed="status?.progress?.illusions_completed || []"
-              :current-illusion="status?.progress?.current_illusion || 1"
-            />
-          </div>
+        <!-- Moment cards section (only if moments exist) -->
+        <div v-if="!isMomentLoading && momentData" class="space-y-4">
+          <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
 
-          <p class="text-center text-white-85">
-            <span class="font-semibold text-brand-accent">{{ illusionsCompletedCount }}</span>
-            <span> of 5 illusions explored</span>
-          </p>
-        </div>
+          <!-- Show regular moment card -->
+          <MomentCard
+            v-if="!momentData.no_moments"
+            :moment-id="momentData.moment_id"
+            :quote="momentData.quote"
+            :illusion-key="momentData.illusion_key"
+            :illusion-name="momentData.illusion_name"
+            :relative-time="momentData.relative_time"
+            @click="handleMomentClick"
+          />
 
-        <!-- Next session card -->
-        <div class="glass rounded-lg md:rounded-card p-6 md:p-8 shadow-card border border-brand-border">
-          <div class="mb-4">
-            <h3 class="text-xl font-semibold text-white mb-2">
-              {{ nextSessionTitle }}
-            </h3>
-            <p class="text-white-85">
-              {{ nextSessionDescription }}
-            </p>
-          </div>
-
-          <NuxtLink
-            :to="`/session/${status?.next_session?.illusionNumber || status?.progress?.current_illusion || 1}`"
-            class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card inline-block"
-          >
-            {{ illusionsCompletedCount === 0 ? 'Start First Session' : 'Continue' }}
-          </NuxtLink>
+          <!-- Show no-moments warning card -->
+          <NoMomentsCard
+            v-else
+            :illusion-key="momentData.illusion_key"
+            :illusion-name="momentData.illusion_name"
+          />
         </div>
       </div>
 
@@ -373,6 +366,24 @@ const audioPlayerTitle = ref('')
 const audioPlayerSrc = ref('')
 const audioPlayerRef = ref<HTMLAudioElement | null>(null)
 
+// Moment card state
+interface MomentData {
+  moment_id: string
+  quote: string
+  illusion_key: string
+  illusion_name: string
+  relative_time: string
+}
+
+interface NoMomentsData {
+  no_moments: true
+  illusion_key: string
+  illusion_name: string
+}
+
+const momentData = ref<MomentData | NoMomentsData | null>(null)
+const isMomentLoading = ref(false)
+
 // Fetch data on mount
 onMounted(async () => {
   await Promise.all([
@@ -392,6 +403,11 @@ onMounted(async () => {
   // Check for pending check-in interstitial (only if not post-ceremony)
   if (!isPostCeremony.value) {
     await checkForInterstitial()
+  }
+
+  // Fetch moment data for in-progress users
+  if (isInProgress.value) {
+    await fetchMomentData()
   }
 })
 
@@ -495,5 +511,24 @@ function closeAudioPlayer() {
 
 function openSupportChat(mode: 'struggling' | 'boost') {
   router.push(`/support?mode=${mode}`)
+}
+
+async function fetchMomentData() {
+  isMomentLoading.value = true
+
+  try {
+    const data = await $fetch<MomentData | NoMomentsData | null>('/api/dashboard/moments')
+    momentData.value = data
+  } catch (err) {
+    console.error('Failed to load moment data:', err)
+    // Gracefully degrade - don't show error modal, just hide moment card section
+    momentData.value = null
+  } finally {
+    isMomentLoading.value = false
+  }
+}
+
+function handleMomentClick(payload: { momentId: string; illusionKey: string }) {
+  navigateTo(`/reinforcement/${payload.illusionKey}?moment_id=${payload.momentId}`)
 }
 </script>
