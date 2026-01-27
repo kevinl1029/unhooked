@@ -527,7 +527,7 @@ function openSupportChat(mode: 'struggling' | 'boost') {
   router.push(`/support?mode=${mode}`)
 }
 
-async function fetchMomentData() {
+async function fetchMomentData(retryCount = 0) {
   isMomentLoading.value = true
 
   try {
@@ -535,7 +535,17 @@ async function fetchMomentData() {
     momentData.value = data
   } catch (err) {
     console.error('Failed to load moment data:', err)
-    // Gracefully degrade - don't show error modal, just hide moment card section
+
+    // Retry once after 2 second delay on failure
+    if (retryCount === 0) {
+      console.log('Retrying moment data fetch in 2 seconds...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      await fetchMomentData(1)
+      return
+    }
+
+    // After retry fails, gracefully degrade - don't show error modal, just hide moment card section
+    console.error('Moment data fetch failed after retry')
     momentData.value = null
   } finally {
     isMomentLoading.value = false

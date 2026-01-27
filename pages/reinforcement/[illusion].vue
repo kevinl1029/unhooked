@@ -28,12 +28,38 @@
           @error="handleError"
         />
 
-        <!-- Loading state -->
-        <div v-else class="flex items-center justify-center h-full">
-          <div class="text-white-65">{{ errorMessage || 'Starting session...' }}</div>
+        <!-- Loading/Error state -->
+        <div v-else class="flex flex-col items-center justify-center h-full gap-4 px-4">
+          <div :class="errorMessage ? 'text-red-400' : 'text-white-65'">
+            {{ errorMessage || 'Starting session...' }}
+          </div>
+          <button
+            v-if="errorMessage"
+            @click="router.push('/dashboard')"
+            class="px-4 py-2 bg-brand-glass rounded-pill text-white text-sm hover:bg-brand-glass/80 transition"
+          >
+            Return to Dashboard
+          </button>
         </div>
       </div>
     </div>
+
+    <!-- Error Toast -->
+    <Teleport to="body">
+      <Transition name="toast">
+        <div
+          v-if="showErrorToast"
+          class="fixed top-6 left-1/2 -translate-x-1/2 z-50 glass rounded-pill px-6 py-3 shadow-card border border-red-500/50 flex items-center gap-3"
+        >
+          <div class="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
+            <svg class="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <span class="text-white font-medium">{{ toastMessage }}</span>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -54,6 +80,8 @@ const momentId = computed(() => route.query.moment_id as string | undefined)
 const conversationId = ref<string | null>(null)
 const sessionHeader = ref<string>('')
 const errorMessage = ref<string | null>(null)
+const showErrorToast = ref(false)
+const toastMessage = ref('')
 
 // Illusion display names
 const ILLUSION_NAMES: Record<string, string> = {
@@ -105,7 +133,7 @@ onMounted(async () => {
   } catch (err: any) {
     console.error('Failed to start reinforcement session:', err)
 
-    // Handle errors with redirect and toast
+    // Handle errors with toast and redirect
     let message = 'Failed to start session'
     if (err.statusCode === 400) {
       message = 'Illusion not completed yet'
@@ -115,13 +143,18 @@ onMounted(async () => {
       message = 'Complete all illusions to access this session'
     }
 
+    // Show error in loading state
     errorMessage.value = message
-    console.error(message)
 
-    // Redirect to dashboard after delay
+    // Show toast notification
+    toastMessage.value = message
+    showErrorToast.value = true
+
+    // Auto-hide toast and redirect after 3 seconds
     setTimeout(() => {
+      showErrorToast.value = false
       router.push('/dashboard')
-    }, 2000)
+    }, 3000)
   }
 })
 
@@ -154,3 +187,35 @@ function handleError(err: any) {
   errorMessage.value = 'An error occurred during the session'
 }
 </script>
+
+<style scoped>
+.toast-enter-active {
+  animation: toastIn 0.3s ease-out;
+}
+
+.toast-leave-active {
+  animation: toastOut 0.3s ease-in;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+}
+</style>
