@@ -19,22 +19,37 @@
 
       <!-- Post-Ceremony Dashboard -->
       <div v-else-if="isPostCeremony" class="animate-fade-in-up space-y-8">
-        <!-- Header -->
-        <div class="glass rounded-lg md:rounded-card p-8 md:p-12 shadow-card border border-brand-border text-center">
-          <div class="w-24 h-24 rounded-full bg-brand-accent/20 border-2 border-brand-accent flex items-center justify-center mx-auto mb-6">
-            <svg class="w-12 h-12 text-brand-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
+        <!-- Support Section (primary CTA) -->
+        <SupportSection />
 
-          <h1 class="text-4xl font-bold text-white mb-4">You're Unhooked</h1>
-          <p v-if="ceremonyDate" class="text-white-65">
-            Completed on {{ formatDate(ceremonyDate) }}
-          </p>
+        <!-- Moment cards section (only if moments exist) -->
+        <div v-if="!isMomentLoading && momentData" class="space-y-4">
+          <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
+
+          <!-- Show regular moment card -->
+          <MomentCard
+            v-if="!momentData.no_moments"
+            :moment-id="momentData.moment_id"
+            :quote="momentData.quote"
+            :illusion-key="momentData.illusion_key"
+            :illusion-name="momentData.illusion_name"
+            :relative-time="momentData.relative_time"
+            @click="handleMomentClick"
+          />
+
+          <!-- Show no-moments warning card -->
+          <NoMomentsCard
+            v-else
+            :illusion-key="momentData.illusion_key"
+            :illusion-name="momentData.illusion_name"
+          />
         </div>
 
+        <!-- Your Journey chip row -->
+        <YourJourneySection :illusions="journeyIllusions" />
+
         <!-- Artifacts Section -->
-        <div class="grid gap-4 md:grid-cols-2">
+        <div v-if="hasJourneyArtifact || hasFinalRecording || hasCheatSheet" class="grid gap-4 md:grid-cols-2">
           <!-- Journey Artifact -->
           <div
             v-if="hasJourneyArtifact"
@@ -125,25 +140,6 @@
                 </svg>
               </span>
             </NuxtLink>
-          </div>
-        </div>
-
-        <!-- Support Section -->
-        <div class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border">
-          <h3 class="text-lg font-semibold text-white mb-4 text-center">Need Support?</h3>
-          <div class="flex flex-col sm:flex-row gap-3">
-            <button
-              class="flex-1 px-4 py-3 rounded-pill border border-brand-border bg-brand-glass text-white font-medium hover:bg-brand-glass-input transition"
-              @click="openSupportChat('struggling')"
-            >
-              I'm struggling
-            </button>
-            <button
-              class="flex-1 px-4 py-3 rounded-pill border border-brand-border bg-brand-glass text-white font-medium hover:bg-brand-glass-input transition"
-              @click="openSupportChat('boost')"
-            >
-              Give me a boost
-            </button>
           </div>
         </div>
 
@@ -405,8 +401,8 @@ onMounted(async () => {
     await checkForInterstitial()
   }
 
-  // Fetch moment data for in-progress users
-  if (isInProgress.value) {
+  // Fetch moment data for in-progress and post-ceremony users
+  if (isInProgress.value || isPostCeremony.value) {
     await fetchMomentData()
   }
 })
@@ -434,6 +430,24 @@ const nextSessionDescription = computed(() => {
 
   const illusionNumber = status.value.next_session?.illusionNumber || status.value.progress.current_illusion
   return descriptions[illusionNumber] || 'Continue your journey.'
+})
+
+const journeyIllusions = computed(() => {
+  const illusionData: Record<number, { key: string; name: string }> = {
+    1: { key: 'stress_relief', name: 'Stress Relief' },
+    2: { key: 'pleasure', name: 'Pleasure' },
+    3: { key: 'willpower', name: 'Willpower' },
+    4: { key: 'focus', name: 'Focus' },
+    5: { key: 'identity', name: 'Identity' },
+  }
+
+  const illusionOrder = status.value?.progress?.illusion_order || [1, 2, 3, 4, 5]
+
+  return illusionOrder.map(num => ({
+    key: illusionData[num].key,
+    name: illusionData[num].name,
+    daysSince: 0, // TODO: calculate from completion dates if needed
+  }))
 })
 
 // Methods
