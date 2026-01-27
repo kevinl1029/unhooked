@@ -1,11 +1,23 @@
 <template>
   <div class="glass rounded-card p-6 md:p-8 shadow-card border border-brand-border">
+    <!-- Header -->
+    <h2 class="text-2xl font-semibold text-white mb-2 text-center">Your Progress</h2>
+    <p class="text-white-65 text-center mb-8">
+      {{ completedCount }} of 5 illusions explored
+    </p>
+
     <!-- Carousel container -->
     <div class="relative">
       <!-- Arrow navigation (desktop only) -->
       <button
-        v-if="!isFirstIllusion"
-        class="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-16 w-12 h-12 rounded-full glass border border-brand-border items-center justify-center hover:scale-110 transition-transform duration-200"
+        class="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full items-center justify-center transition-all"
+        :class="isFirstIllusion ? 'cursor-not-allowed' : 'cursor-pointer'"
+        :style="{
+          background: isFirstIllusion ? 'rgba(31, 108, 117, 0.2)' : 'rgba(31, 108, 117, 0.5)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          opacity: isFirstIllusion ? 0.3 : 1
+        }"
+        :disabled="isFirstIllusion"
         @click="navigatePrevious"
         aria-label="Previous illusion"
       >
@@ -15,8 +27,14 @@
       </button>
 
       <button
-        v-if="!isLastIllusion"
-        class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-16 w-12 h-12 rounded-full glass border border-brand-border items-center justify-center hover:scale-110 transition-transform duration-200"
+        class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full items-center justify-center transition-all"
+        :class="isLastIllusion ? 'cursor-not-allowed' : 'cursor-pointer'"
+        :style="{
+          background: isLastIllusion ? 'rgba(31, 108, 117, 0.2)' : 'rgba(31, 108, 117, 0.5)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          opacity: isLastIllusion ? 0.3 : 1
+        }"
+        :disabled="isLastIllusion"
         @click="navigateNext"
         aria-label="Next illusion"
       >
@@ -27,46 +45,57 @@
 
       <!-- Illusions display -->
       <div
-        class="overflow-hidden py-8"
+        class="overflow-hidden py-8 px-12"
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
       >
-        <div class="flex items-center justify-center gap-6 transition-transform duration-300 ease-out">
+        <div
+          class="flex items-center justify-center gap-4 transition-transform duration-300 ease-out"
+          :style="{ transform: `translateX(${-(focusedIndex - 2) * 140}px)` }"
+        >
           <template v-for="(illusion, index) in illusions" :key="illusion.number">
             <div
-              class="flex flex-col items-center gap-3 transition-all duration-300"
-              :class="getIllusionContainerClasses(index)"
+              class="flex flex-col items-center transition-all duration-300 cursor-pointer"
+              :style="getIllusionContainerStyles(index)"
+              @click="focusIllusion(index)"
             >
               <!-- Illusion circle -->
-              <button
-                class="rounded-full border-2 flex items-center justify-center transition-all duration-300"
-                :class="getIllusionCircleClasses(illusion, index)"
-                @click="focusIllusion(index)"
+              <div
+                class="rounded-full flex items-center justify-center transition-all duration-300 mb-2"
+                :style="getCircleStyles(illusion, index)"
               >
                 <!-- Check icon for completed -->
-                <Check v-if="illusion.status === 'completed'" class="text-white" :size="getIconSize(index)" />
+                <svg v-if="illusion.status === 'completed'" class="text-white" :style="getIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                </svg>
                 <!-- Dot for current -->
-                <div v-else-if="illusion.status === 'current'" class="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
+                <div v-else-if="illusion.status === 'current'" class="w-3 h-3 rounded-full bg-brand-accent animate-pulse" />
                 <!-- Lock icon for locked -->
-                <Lock v-else class="text-white-65" :size="getLockIconSize(index)" />
-              </button>
+                <svg v-else :style="getIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path style="color: rgba(255, 255, 255, 0.3)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
 
               <!-- Illusion name -->
-              <span
-                class="text-sm text-center transition-all duration-300 leading-tight"
-                :class="getIllusionTextClasses(illusion, index)"
+              <div
+                class="font-semibold text-white mb-1 transition-all duration-300 text-center"
+                :style="getNameStyles(illusion, index)"
               >
                 {{ illusion.name }}
-              </span>
+              </div>
 
-              <!-- Revisit badge (only for completed illusions when focused) -->
+              <!-- Revisit badge (always visible for completed illusions) -->
               <button
-                v-if="illusion.status === 'completed' && isFocused(index)"
-                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-input border border-brand-border text-xs text-white-85 hover:text-white hover:scale-105 transition-all duration-200"
+                v-if="illusion.status === 'completed'"
+                class="rounded-full px-3 py-1 font-medium text-white transition-all duration-300 flex items-center gap-1"
+                :style="getRevisitBadgeStyles(index)"
                 @click.stop="handleRevisit(illusion.key)"
               >
-                <RefreshCw :size="12" />
+                <!-- RefreshCw icon -->
+                <svg :style="getRevisitIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 <span>Revisit</span>
               </button>
             </div>
@@ -88,13 +117,16 @@
     </div>
 
     <!-- Action section -->
-    <div class="mt-6 pt-6 border-t border-brand-border">
+    <div class="mt-8 pt-6 border-t" style="border-color: rgba(255, 255, 255, 0.1)">
       <Transition name="fade" mode="out-in">
         <div v-if="focusedIllusion.status === 'current'" :key="'current'" class="text-center">
-          <h3 class="text-xl font-semibold text-white mb-2">{{ focusedIllusion.name }}</h3>
+          <h3 class="text-xl font-semibold text-white mb-2">
+            Continue: The {{ focusedIllusion.name }} Illusion
+          </h3>
           <p class="text-white-65 mb-4">{{ focusedIllusion.description }}</p>
           <button
-            class="btn-primary text-white px-6 py-3 rounded-pill font-semibold shadow-card"
+            class="w-full rounded-full py-3 px-6 font-semibold text-white transition-all hover:-translate-y-0.5"
+            style="background: linear-gradient(135deg, #fc4a1a, #f7b733); box-shadow: 0 4px 24px rgba(252, 74, 26, 0.3)"
             @click="handleContinue"
           >
             Continue
@@ -102,19 +134,20 @@
         </div>
 
         <div v-else-if="focusedIllusion.status === 'locked'" :key="'locked'" class="text-center">
-          <p class="text-white-65">Complete previous illusions to unlock</p>
+          <h3 class="text-xl font-semibold text-white mb-2" style="opacity: 0.5">
+            {{ focusedIllusion.name }} Illusion
+          </h3>
+          <p class="text-white" style="opacity: 0.4">Complete previous illusions to unlock</p>
         </div>
 
         <!-- Completed illusions show nothing (revisit badge on circle is sufficient) -->
-        <div v-else :key="'completed'" class="h-8" />
+        <div v-else :key="'completed'" />
       </Transition>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Check, Lock, RefreshCw } from 'lucide-vue-next'
-
 interface Illusion {
   number: number
   name: string
@@ -197,6 +230,7 @@ onMounted(() => {
 const focusedIllusion = computed(() => illusions.value[focusedIndex.value])
 const isFirstIllusion = computed(() => focusedIndex.value === 0)
 const isLastIllusion = computed(() => focusedIndex.value === illusions.value.length - 1)
+const completedCount = computed(() => illusions.value.filter((i: Illusion) => i.status === 'completed').length)
 
 // Methods
 function isFocused(index: number): boolean {
@@ -219,79 +253,88 @@ function navigateNext() {
   }
 }
 
-function getIllusionContainerClasses(index: number): string {
+// Style functions matching the reference implementation
+function getCircleSizeConfig(index: number) {
   const distance = Math.abs(index - focusedIndex.value)
-  if (distance === 0) {
-    return 'scale-100 opacity-100'
-  } else if (distance === 1) {
-    return 'scale-75 opacity-75'
-  } else {
-    return 'scale-50 opacity-50'
+  if (distance === 0) return { size: 96, iconSize: 48, fontSize: '1rem' }
+  if (distance === 1) return { size: 64, iconSize: 32, fontSize: '0.875rem' }
+  return { size: 48, iconSize: 24, fontSize: '0.75rem' }
+}
+
+function getOpacity(index: number): number {
+  const distance = Math.abs(index - focusedIndex.value)
+  if (distance === 0) return 1
+  if (distance === 1) return 0.7
+  return 0.4
+}
+
+function getIllusionContainerStyles(index: number): Record<string, string | number> {
+  const isActive = index === focusedIndex.value
+  return {
+    opacity: getOpacity(index),
+    transform: `scale(${isActive ? 1 : 0.85})`,
+    minWidth: '120px'
   }
 }
 
-function getIllusionCircleClasses(illusion: Illusion, index: number): string {
-  const baseClasses = []
-  const distance = Math.abs(index - focusedIndex.value)
+function getCircleStyles(illusion: Illusion, index: number): Record<string, string | number> {
+  const { size } = getCircleSizeConfig(index)
 
-  // Size based on focus distance
-  if (distance === 0) {
-    baseClasses.push('w-24 h-24')
-  } else if (distance === 1) {
-    baseClasses.push('w-16 h-16')
-  } else {
-    baseClasses.push('w-12 h-12')
-  }
-
-  // Color based on status
-  if (illusion.status === 'completed') {
-    baseClasses.push('btn-primary border-brand-accent')
-  } else if (illusion.status === 'current') {
-    baseClasses.push('border-brand-accent bg-brand-accent/20')
-  } else {
-    baseClasses.push('border-brand-border bg-brand-glass')
-  }
-
-  // Hover effect
-  baseClasses.push('hover:scale-110 cursor-pointer')
-
-  return baseClasses.join(' ')
-}
-
-function getIllusionTextClasses(illusion: Illusion, index: number): string {
-  const distance = Math.abs(index - focusedIndex.value)
-  const baseClasses = []
+  let background: string
+  let border: string
 
   if (illusion.status === 'completed') {
-    baseClasses.push('text-white-85 font-medium')
+    background = 'linear-gradient(135deg, #fc4a1a, #f7b733)'
+    border = 'none'
   } else if (illusion.status === 'current') {
-    baseClasses.push('text-brand-accent font-semibold')
+    background = 'rgba(252, 74, 26, 0.3)'
+    border = '2px solid #fc4a1a'
   } else {
-    baseClasses.push('text-white-65 font-normal')
+    background = 'rgba(31, 108, 117, 0.3)'
+    border = '1px solid rgba(255, 255, 255, 0.1)'
   }
 
-  // Size based on focus
-  if (distance === 0) {
-    baseClasses.push('text-base')
-  } else {
-    baseClasses.push('text-sm')
+  return {
+    width: `${size}px`,
+    height: `${size}px`,
+    background,
+    border
   }
-
-  return baseClasses.join(' ')
 }
 
-function getIconSize(index: number): number {
-  const distance = Math.abs(index - focusedIndex.value)
-  if (distance === 0) return 32
-  if (distance === 1) return 20
-  return 16
+function getIconStyles(index: number): Record<string, string> {
+  const { iconSize } = getCircleSizeConfig(index)
+  return {
+    width: `${iconSize}px`,
+    height: `${iconSize}px`
+  }
 }
 
-function getLockIconSize(index: number): number {
-  const distance = Math.abs(index - focusedIndex.value)
-  if (distance === 0) return 28
-  if (distance === 1) return 18
-  return 14
+function getNameStyles(illusion: Illusion, index: number): Record<string, string> {
+  const { fontSize } = getCircleSizeConfig(index)
+  return {
+    fontSize,
+    color: illusion.status === 'current' ? '#fc4a1a' : 'white'
+  }
+}
+
+function getRevisitBadgeStyles(index: number): Record<string, string | number> {
+  const isActive = index === focusedIndex.value
+  return {
+    background: 'rgba(31, 108, 117, 0.5)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    opacity: isActive ? 1 : 0.7,
+    fontSize: isActive ? '0.75rem' : '0.625rem'
+  }
+}
+
+function getRevisitIconStyles(index: number): Record<string, string> {
+  const isActive = index === focusedIndex.value
+  const size = isActive ? 12 : 10
+  return {
+    width: `${size}px`,
+    height: `${size}px`
+  }
 }
 
 // Touch handling for mobile swipe
