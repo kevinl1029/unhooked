@@ -165,16 +165,35 @@
         </div>
       </div>
 
-      <!-- Ceremony-Ready Dashboard -->
+      <!-- Ceremony-Ready Dashboard (per ADR-005: Ceremony → Progress → Moments) -->
       <div v-else-if="isCeremonyReady" class="animate-fade-in-up space-y-8">
-        <!-- Progress carousel (all illusions completed, all revisitable) -->
+        <!-- Ceremony CTA (PRIMARY - at top per ADR-005) -->
+        <div class="glass rounded-lg md:rounded-card p-8 md:p-12 shadow-card border border-brand-border text-center">
+          <div class="w-20 h-20 rounded-full bg-brand-accent/20 border-2 border-brand-accent flex items-center justify-center mx-auto mb-6">
+            <svg class="w-10 h-10 text-brand-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+          </div>
+
+          <h2 class="text-3xl font-bold text-white mb-3">You're ready for the final step</h2>
+          <p class="text-white-65 mb-6">Set aside about 15 minutes for your ceremony</p>
+
+          <NuxtLink
+            to="/ceremony"
+            class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card inline-block text-lg"
+          >
+            Begin Ceremony
+          </NuxtLink>
+        </div>
+
+        <!-- Progress carousel (secondary - all illusions completed, all revisitable) -->
         <DashboardProgressCarousel
           :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
           :illusions-completed="status?.progress?.illusions_completed || []"
           :current-illusion="5"
         />
 
-        <!-- Moment cards section (if moments exist) -->
+        <!-- Moment cards section (secondary - if moments exist) -->
         <div v-if="!isMomentLoading && momentData" class="space-y-4">
           <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
 
@@ -193,25 +212,6 @@
             :illusion-key="momentData.illusion_key"
             :illusion-name="momentData.illusion_name"
           />
-        </div>
-
-        <!-- Ceremony CTA -->
-        <div class="glass rounded-lg md:rounded-card p-8 md:p-12 shadow-card border border-brand-border text-center">
-          <div class="w-20 h-20 rounded-full bg-brand-accent/20 border-2 border-brand-accent flex items-center justify-center mx-auto mb-6">
-            <svg class="w-10 h-10 text-brand-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-            </svg>
-          </div>
-
-          <h2 class="text-3xl font-bold text-white mb-3">You're ready for the final step</h2>
-          <p class="text-white-65 mb-6">Set aside about 15 minutes for your ceremony</p>
-
-          <NuxtLink
-            to="/ceremony"
-            class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card inline-block text-lg"
-          >
-            Begin Ceremony
-          </NuxtLink>
         </div>
       </div>
 
