@@ -35,14 +35,14 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // 1. Check if ceremony already completed
-  const { data: userStory } = await supabase
-    .from('user_story')
+  // 1. Check if ceremony already completed (use user_progress per ADR-004)
+  const { data: userProgress } = await supabase
+    .from('user_progress')
     .select('ceremony_completed_at, timezone')
     .eq('user_id', user.sub)
     .single()
 
-  if (userStory?.ceremony_completed_at) {
+  if (userProgress?.ceremony_completed_at) {
     throw createError({ statusCode: 400, message: 'Ceremony already completed' })
   }
 
@@ -63,21 +63,21 @@ export default defineEventHandler(async (event) => {
   }
 
   const completedAt = new Date()
-  const timezone = userStory?.timezone || 'America/New_York'
+  const timezone = userProgress?.timezone || 'America/New_York'
 
-  // 3. Mark ceremony as complete in user_story
-  const { error: storyError } = await supabase
-    .from('user_story')
+  // 3. Mark ceremony as complete in user_progress (per ADR-004)
+  // Note: already_quit is a request parameter only, not stored in database
+  const { error: progressError } = await supabase
+    .from('user_progress')
     .update({
       ceremony_completed_at: completedAt.toISOString(),
-      already_quit: already_quit || false,
       ceremony_skipped_final_dose: already_quit || false,
       updated_at: completedAt.toISOString(),
     })
     .eq('user_id', user.sub)
 
-  if (storyError) {
-    console.error('[ceremony-complete] Failed to update user_story:', storyError)
+  if (progressError) {
+    console.error('[ceremony-complete] Failed to update user_progress:', progressError)
     throw createError({ statusCode: 500, message: 'Failed to complete ceremony' })
   }
 

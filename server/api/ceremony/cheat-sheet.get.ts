@@ -35,14 +35,14 @@ export default defineEventHandler(async (event) => {
   // Generate fresh cheat sheet
   const cheatSheet = await generateIllusionsCheatSheet(supabase, user.sub)
 
-  // Check if ceremony is completed
-  const { data: userStory } = await supabase
-    .from('user_story')
+  // Check if ceremony is completed (use user_progress per ADR-004)
+  const { data: userProgress } = await supabase
+    .from('user_progress')
     .select('ceremony_completed_at')
     .eq('user_id', user.sub)
     .single()
 
-  const ceremonyCompleted = !!userStory?.ceremony_completed_at
+  const ceremonyCompleted = !!userProgress?.ceremony_completed_at
 
   // Save artifact (will be marked final when ceremony completes)
   const artifactId = await saveCheatSheetArtifact(supabase, user.sub, cheatSheet)

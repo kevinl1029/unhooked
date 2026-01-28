@@ -2238,6 +2238,7 @@ The following features are explicitly deferred:
 8. **Cheat sheet download/share** — In-app only
 9. **Server-side audio stitching** — Client-side sequential playback
 10. **Session summary in check-in personalization** — Uses moments only
+11. **Final dose ritual (Part 5)** — Ceremony step where user takes last hit and discards paraphernalia; referenced in spec but not detailed or implemented; `ceremony_skipped_final_dose` flag exists in `user_progress` for future use
 
 ---
 

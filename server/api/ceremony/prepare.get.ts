@@ -37,6 +37,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'User story not found' })
   }
 
+  // Get ceremony completion status from user_progress (per ADR-004)
+  const { data: userProgress } = await supabase
+    .from('user_progress')
+    .select('ceremony_completed_at')
+    .eq('user_id', user.sub)
+    .single()
+
   // Check illusion completion status
   const illusionKeys = ['stress_relief', 'pleasure', 'willpower', 'focus', 'identity']
   const completedIllusions: string[] = []
@@ -51,8 +58,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Check if ceremony already completed
-  const ceremonyCompleted = !!userStory.ceremony_completed_at
+  // Check if ceremony already completed (from user_progress)
+  const ceremonyCompleted = !!userProgress?.ceremony_completed_at
 
   // 2. Fetch all captured moments for this user
   const { data: allMomentsRaw } = await supabase
@@ -126,8 +133,8 @@ export default defineEventHandler(async (event) => {
       origin_summary: userStory.origin_summary,
       primary_triggers: userStory.primary_triggers,
       personal_stakes: userStory.personal_stakes,
-      ceremony_completed_at: userStory.ceremony_completed_at,
-      already_quit: userStory.already_quit,
+      // ceremony_completed_at comes from user_progress per ADR-004
+      ceremony_completed_at: userProgress?.ceremony_completed_at || null,
     },
     moments_by_type: momentsByType,
     illusions_completed: completedIllusions,

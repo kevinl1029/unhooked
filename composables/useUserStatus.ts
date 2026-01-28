@@ -15,7 +15,7 @@ export interface UserStatus {
   } | null
   ceremony: {
     completed_at: string | null
-    already_quit: boolean
+    // already_quit is not stored - it's a request parameter only (see ADR-004)
   } | null
   artifacts: {
     reflective_journey: { id: string; audio_duration_ms?: number } | null

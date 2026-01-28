@@ -21,19 +21,19 @@ export default defineEventHandler(async (event) => {
     .eq('user_id', user.sub)
     .single()
 
-  // Fetch user story for ceremony status
+  // Fetch user story for origin summary (ceremony status comes from user_progress per ADR-004)
   const { data: userStory } = await supabase
     .from('user_story')
-    .select('ceremony_completed_at, already_quit, origin_summary')
+    .select('origin_summary')
     .eq('user_id', user.sub)
     .single()
 
-  // Determine user phase
+  // Determine user phase (ceremony_completed_at is in user_progress per ADR-004)
   let phase: 'not_started' | 'in_progress' | 'ceremony_ready' | 'post_ceremony'
 
   if (!progress) {
     phase = 'not_started'
-  } else if (userStory?.ceremony_completed_at) {
+  } else if (progress.ceremony_completed_at) {
     phase = 'post_ceremony'
   } else if (progress.program_status === 'completed') {
     phase = 'ceremony_ready'
@@ -98,9 +98,10 @@ export default defineEventHandler(async (event) => {
       total_sessions: progress.total_sessions,
       started_at: progress.started_at,
     } : null,
-    ceremony: userStory ? {
-      completed_at: userStory.ceremony_completed_at,
-      already_quit: userStory.already_quit,
+    // ceremony_completed_at comes from user_progress per ADR-004
+    // already_quit is not stored - it's a request parameter only
+    ceremony: progress?.ceremony_completed_at ? {
+      completed_at: progress.ceremony_completed_at,
     } : null,
     artifacts,
     pending_follow_ups: pendingFollowUps,

@@ -83,8 +83,8 @@ export async function mockCeremonyPrepare(
           origin_summary: merged.originSummary,
           primary_triggers: ['morning', 'stress'],
           personal_stakes: ['health', 'finances'],
+          // ceremony_completed_at comes from user_progress per ADR-004
           ceremony_completed_at: merged.ceremonyCompleted ? new Date().toISOString() : null,
-          already_quit: false,
         },
         moments_by_type: {
           origin_story: [suggestedMoments[0]],

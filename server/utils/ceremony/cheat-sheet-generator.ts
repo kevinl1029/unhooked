@@ -113,27 +113,54 @@ export async function generateIllusionsCheatSheet(
 
 /**
  * Save cheat sheet as an artifact
+ * Uses SELECT-then-UPDATE/INSERT pattern per ADR-004 (no unique constraint on user_id,artifact_type)
  */
 export async function saveCheatSheetArtifact(
   supabase: SupabaseClient,
   userId: string,
   cheatSheet: CheatSheetData
 ): Promise<string> {
+  // Check for existing artifact first
+  const { data: existing } = await supabase
+    .from('ceremony_artifacts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('artifact_type', 'illusions_cheat_sheet')
+    .single()
+
+  if (existing) {
+    // Update existing artifact
+    const { data, error } = await supabase
+      .from('ceremony_artifacts')
+      .update({
+        content_json: cheatSheet,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('[cheat-sheet] Failed to update artifact:', error)
+      throw new Error('Failed to save cheat sheet')
+    }
+
+    return data.id
+  }
+
+  // Insert new artifact
   const { data, error } = await supabase
     .from('ceremony_artifacts')
-    .upsert({
+    .insert({
       user_id: userId,
       artifact_type: 'illusions_cheat_sheet',
       content_json: cheatSheet,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'user_id,artifact_type',
     })
     .select('id')
     .single()
 
   if (error) {
-    console.error('[cheat-sheet] Failed to save artifact:', error)
+    console.error('[cheat-sheet] Failed to create artifact:', error)
     throw new Error('Failed to save cheat sheet')
   }
 

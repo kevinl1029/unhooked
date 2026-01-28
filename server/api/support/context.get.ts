@@ -64,7 +64,14 @@ export default defineEventHandler(async (event) => {
     .order('created_at', { ascending: false })
     .limit(10)
 
-  // 5. Build context object
+  // 5. Fetch ceremony status from user_progress (per ADR-004)
+  const { data: userProgress } = await supabase
+    .from('user_progress')
+    .select('ceremony_completed_at')
+    .eq('user_id', user.sub)
+    .single()
+
+  // 6. Build context object
   const context = {
     // User background
     background: intake ? {
@@ -98,9 +105,9 @@ export default defineEventHandler(async (event) => {
     personalStakes: userStory?.personal_stakes || [],
     primaryTriggers: userStory?.primary_triggers || [],
 
-    // Ceremony status
-    ceremonyCompleted: !!userStory?.ceremony_completed_at,
-    alreadyQuit: userStory?.already_quit || false,
+    // Ceremony status (from user_progress per ADR-004)
+    // Note: already_quit is not stored - it's a request parameter only
+    ceremonyCompleted: !!userProgress?.ceremony_completed_at,
   }
 
   return context
