@@ -1,6 +1,7 @@
-# Final Ceremony Feature - Restructure Spec
+# Final Ceremony Feature - Pre-Audio Version Spec
 
 **Status:** Draft
+**Version:** Pre-Audio (v1.0)
 **Last Updated:** 2026-01-28
 **Author:** Kevin Lee
 
@@ -11,6 +12,16 @@
 The Final Ceremony is the culminating experience of the Unhooked nicotine cessation program. It occurs after users complete all 5 illusion sessions (Phase 4) and serves as a transformative ritual to cement their freedom from nicotine.
 
 The ceremony is designed to replay the user's most powerful moments from their journey—creating an emotionally impactful experience that reinforces their transformation and provides lasting artifacts they can revisit.
+
+### Why "Pre-Audio"?
+
+This spec defines the **pre-audio version** of the Final Ceremony—designed to work effectively without user audio capture during sessions. This is an intentional interim solution that:
+
+- Provides a complete, high-quality ceremony experience today
+- Works within current technical constraints (text-only sessions)
+- Can be enhanced later when audio capture is implemented
+
+**Future:** When voice input during sessions is implemented, we'll create a "Final Ceremony - Audio Version" that integrates actual user voice recordings into the journey playback.
 
 ### Current Implementation State
 
@@ -326,10 +337,13 @@ The current schema already supports the new approach:
 - [ ] Smooth transitions between segments
 - [ ] Loading state improvements
 
-### Future: Audio Capture
+### Future: Audio Version (Separate Initiative)
+
+When audio capture is implemented, create "Final Ceremony - Audio Version":
 - [ ] Voice input infrastructure during sessions
 - [ ] Prompted moment recording with consent flow
-- [ ] Hybrid journey with real user audio clips
+- [ ] Hybrid journey: AI narration + real user audio clips
+- [ ] Migration plan from pre-audio to audio version for existing users
 
 ---
 
