@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
 
   // Generate signed URL (1 hour expiry)
   const { data: signedUrlData, error: signError } = await supabase.storage
-    .from('final-recordings')
+    .from('ceremony-artifacts')
     .createSignedUrl(artifact.audio_path, 3600)
 
   if (signError || !signedUrlData) {
