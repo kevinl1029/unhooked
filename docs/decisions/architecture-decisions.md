@@ -1,6 +1,6 @@
 # Unhooked: Decision Records
 
-**Version:** 1.4
+**Version:** 1.5
 **Created:** 2026-01-19
 **Last Updated:** 2026-01-27  
 **Document Type:** Architecture Decision Records (ADR)
@@ -414,6 +414,77 @@ border: 1px solid rgba(255, 255, 255, 0.2);
 
 ---
 
+### ADR-006: Deprecate `illusion_number` in Favor of `illusion_key`
+
+**Date:** 2026-01-27
+**Status:** Accepted
+**Decision Maker(s):** Kevin
+
+**Context:**
+
+The codebase uses two parallel identifiers for illusions:
+- `illusion_number` (integer 1-5): Originally the primary identifier, used in URLs, API parameters, and database columns
+- `illusion_key` (string: `stress_relief`, `pleasure`, `willpower`, `focus`, `identity`): Added later as a semantic identifier
+
+Analysis revealed significant inconsistency and redundancy:
+
+1. **Route inconsistency**: Core session routes use numbers (`/session/1`) while reinforcement routes use keys (`/reinforcement/stress_relief`)
+2. **API layer converts immediately**: The chat endpoint accepts `illusionNumber` but converts it to `illusionKey` via `illusionNumberToKey()` before any logic runs
+3. **All downstream logic uses keys**: Context building, moment detection, conviction tracking, and reinforcement sessions exclusively use `illusion_key`
+4. **Database has both columns**: The `conversations` table stores both, but only `illusion_key` is indexed and queried
+5. **`illusion_number` is never queried**: It's stored but never read back from the database
+
+The conversion functions (`illusionNumberToKey()`, `illusionKeyToNumber()`) exist in `server/utils/llm/task-types.ts`, confirming this is a 1:1 static mapping with no runtime variability.
+
+**Decision:**
+
+1. **Deprecate `illusion_number`** as the primary identifier throughout the codebase
+2. **Migrate to `illusion_key`** for all APIs, routes, and client code
+3. **Keep conversion utilities** for backward compatibility during transition
+4. **Eventually remove** the `illusion_number` column from the database after migration
+
+**Migration Scope:**
+
+| Layer | Current State | Target State |
+|-------|---------------|--------------|
+| Routes | `/session/1` | `/session/stress_relief` |
+| API params | `illusionNumber: number` | `illusionKey: string` |
+| Database | Both columns, only `illusion_key` queried | Only `illusion_key` |
+| Client code | Sends `illusionNumber` | Sends `illusionKey` |
+
+**Rationale:**
+
+1. **Semantic clarity**: `/session/stress_relief` is self-documenting; `/session/1` requires lookup
+2. **Eliminates redundancy**: One source of truth instead of parallel identifiers
+3. **Already the operational standard**: All LLM logic, context building, and business rules use `illusion_key`
+4. **Future-proof**: Keys don't depend on ordering—illusions could be reordered or personalized per user without breaking logic
+5. **Reduces conversion overhead**: No more `illusionNumberToKey()` calls throughout the codebase
+6. **Consistency with reinforcement routes**: Those already use keys; core sessions should match
+
+**Alternatives Considered:**
+
+| Alternative | Why Rejected |
+|-------------|--------------|
+| **Keep both indefinitely** | Creates ongoing maintenance burden; confuses new contributors; encourages inconsistent patterns |
+| **Migrate to numbers everywhere** | Numbers are opaque; keys are self-documenting; keys are already used in all business logic |
+| **Use numbers in URLs only** | Preserves old URLs but still requires conversion; doesn't solve the fundamental redundancy |
+
+**Consequences:**
+
+- Create migration spec (`docs/specs/illusion-key-migration-spec.md`) to guide implementation
+- Phase 1: APIs accept both `illusionNumber` and `illusionKey`, prefer key
+- Phase 2: Update routes from `[illusion]` (number) to `[illusionKey]` (string)
+- Phase 3: Update all client code to send `illusionKey`
+- Phase 4: Remove `illusionNumber` parameter support from APIs
+- Phase 5: Database migration to drop `illusion_number` column
+- Add redirects from old numeric routes to new key-based routes
+
+**Related Documents:**
+- `docs/specs/illusion-key-migration-spec.md` — Detailed implementation guide (to be created)
+- `server/utils/llm/task-types.ts` — Contains conversion utilities and `ILLUSION_DATA` mapping
+
+---
+
 ## Index
 
 | ADR | Title | Status | Date |
@@ -423,6 +494,7 @@ border: 1px solid rgba(255, 255, 255, 0.2);
 | 003 | Migrate Cron Jobs from Vercel to GitHub Actions | Accepted | 2026-01-19 |
 | 004 | Ceremony Artifacts Use INSERT, Not UPSERT | Accepted | 2026-01-26 |
 | 005 | Dashboard CTA Hierarchy — Single Primary Action Per State | Accepted | 2026-01-27 |
+| 006 | Deprecate `illusion_number` in Favor of `illusion_key` | Accepted | 2026-01-27 |
 
 ---
 
@@ -435,3 +507,4 @@ border: 1px solid rgba(255, 255, 255, 0.2);
 | 1.2 | 2026-01-19 | Added ADR-003 (Migrate Cron Jobs from Vercel to GitHub Actions) |
 | 1.3 | 2026-01-26 | Added ADR-004 (Ceremony Artifacts Use INSERT, Not UPSERT) |
 | 1.4 | 2026-01-27 | Added ADR-005 (Dashboard CTA Hierarchy — Single Primary Action Per State) |
+| 1.5 | 2026-01-27 | Added ADR-006 (Deprecate `illusion_number` in Favor of `illusion_key`) |
