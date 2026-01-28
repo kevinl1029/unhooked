@@ -1,8 +1,8 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.9
+**Version:** 2.10
 **Created:** 2026-01-12
-**Updated:** 2026-01-28
+**Updated:** 2026-01-27
 **Status:** Ready for Implementation
 **Document Type:** Feature Specification (PRD + Technical Design)
 **Related Documents:**
@@ -308,15 +308,20 @@ Reinforcement Sessions serve users in different states. The AI adapts its framin
 
 **Carousel Behavior:**
 - Horizontally scrollable/swipeable
-- Center illusion is largest (96px) and brightest
-- Adjacent illusions scaled down (64px, 70% opacity)
-- Far illusions smaller (48px, 40% opacity)
+- Desktop circle sizes: Center 96px, adjacent 64px, far 48px
+- Mobile circle sizes: Center 72px, adjacent 48px, far 36px (compact for above-fold visibility)
+- Opacity scaling: Center 100%, adjacent 70%, far 40%
 - Arrow buttons on desktop, swipe on mobile
 - Progress dots below for direct navigation
-- Smooth 500ms transitions between states
+- Smooth 300ms transitions between states
+
+**Visual Balance:**
+- Fixed-height "circle zone" (72px mobile, 96px desktop) centers all circles horizontally regardless of individual size
+- Reserved badge area (h-6) below all illusions ensures consistent container height whether badge is shown or not
+- This prevents visual imbalance when completed illusions (with badges) appear next to locked illusions (without)
 
 **Revisit Badges:**
-- Small pill button (px-3 py-1) directly under completed illusion circles
+- Small pill button (px-3 py-1) inside reserved badge area under completed illusion circles
 - Always visible (not hidden/hover-only)
 - Label: "Revisit" with RefreshCw icon
 - Semi-transparent glass background
@@ -1529,6 +1534,7 @@ None — all technical questions resolved.
 | 2.7     | 2026-01-27 | **CTA Hierarchy update (ADR-005).** Added Ceremony-Ready dashboard state. Updated Design Philosophy with Single Primary CTA principle. Changed Moment Card CTA from primary to secondary styling. Clarified primary/secondary designations for all dashboard states. |
 | 2.8     | 2026-01-27 | **Conversation title format.** Added documentation for database `title` field format: reinforcement sessions use `"Reinforcement: {Illusion Name}"`, boost sessions use `"Boost: Support"`. This distinguishes session types in the database for debugging and analytics. |
 | 2.9     | 2026-01-28 | **Unified session types: boost → reinforcement.** Removed separate `'boost'` session type. All reinforcement sessions now use `session_type: 'reinforcement'`. Generic support sessions are distinguished by `illusion_key: null`. Updated FR-5, FR-6, US-003, US-005, and API documentation. Title format for generic sessions changed from `"Boost: Support"` to `"Reinforcement: Support"`. |
+| 2.10    | 2026-01-27 | **Mobile-optimized carousel sizing and visual balance.** Added responsive circle sizes (72/48/36px mobile vs 96/64/48px desktop) to improve above-fold visibility of MomentCard. Added "Visual Balance" section documenting fixed-height circle zone and reserved badge area for consistent container heights. |
 
 ---
 

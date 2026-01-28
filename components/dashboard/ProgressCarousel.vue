@@ -60,21 +60,27 @@
               :style="getIllusionContainerStyles(index)"
               @click="focusIllusion(index)"
             >
-              <!-- Illusion circle -->
+              <!-- Circle zone - fixed height to align circle centers horizontally -->
               <div
-                class="rounded-full flex items-center justify-center transition-all duration-300 mb-2"
-                :style="getCircleStyles(illusion, index)"
+                class="flex items-center justify-center mb-2"
+                :style="{ height: isMobile ? '72px' : '96px' }"
               >
-                <!-- Check icon for completed -->
-                <svg v-if="illusion.status === 'completed'" class="text-white" :style="getIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                </svg>
-                <!-- Dot for current -->
-                <div v-else-if="illusion.status === 'current'" class="w-3 h-3 rounded-full bg-brand-accent animate-pulse" />
-                <!-- Lock icon for locked -->
-                <svg v-else :style="getIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path style="color: rgba(255, 255, 255, 0.3)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+                <!-- Illusion circle -->
+                <div
+                  class="rounded-full flex items-center justify-center transition-all duration-300"
+                  :style="getCircleStyles(illusion, index)"
+                >
+                  <!-- Check icon for completed -->
+                  <svg v-if="illusion.status === 'completed'" class="text-white" :style="getIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <!-- Dot for current -->
+                  <div v-else-if="illusion.status === 'current'" class="w-3 h-3 rounded-full bg-brand-accent animate-pulse" />
+                  <!-- Lock icon for locked -->
+                  <svg v-else :style="getIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path style="color: rgba(255, 255, 255, 0.3)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
               </div>
 
               <!-- Illusion name -->
@@ -85,19 +91,21 @@
                 {{ illusion.name }}
               </div>
 
-              <!-- Revisit badge (always visible for completed illusions) -->
-              <button
-                v-if="illusion.status === 'completed'"
-                class="rounded-full px-3 py-1 font-medium text-white transition-all duration-300 flex items-center gap-1"
-                :style="getRevisitBadgeStyles(index)"
-                @click.stop="handleRevisit(illusion.key)"
-              >
-                <!-- RefreshCw icon -->
-                <svg :style="getRevisitIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Revisit</span>
-              </button>
+              <!-- Badge area - reserved height for visual balance -->
+              <div class="h-6">
+                <button
+                  v-if="illusion.status === 'completed'"
+                  class="rounded-full px-3 py-1 font-medium text-white transition-all duration-300 flex items-center gap-1"
+                  :style="getRevisitBadgeStyles(index)"
+                  @click.stop="handleRevisit(illusion.key)"
+                >
+                  <!-- RefreshCw icon -->
+                  <svg :style="getRevisitIconStyles(index)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Revisit</span>
+                </button>
+              </div>
             </div>
           </template>
         </div>
