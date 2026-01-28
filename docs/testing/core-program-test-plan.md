@@ -65,11 +65,13 @@ This document outlines the manual smoke testing plan for Phase 4 (Core Program) 
 
 | Step | Action | Expected Result | Pass/Fail |
 |------|--------|-----------------|-----------|
-| 1 | Return to an in-progress session after leaving | Check-in interstitial appears |  |
-| 2 | Select mood option | Selection registers |  |
-| 3 | Optionally add notes | Notes field accepts input |  |
-| 4 | Click continue | Check-in saved, conversation resumes |  |
-| 5 | Check `check_in_responses` table | Row created with `mood`, `notes`, `conversation_id` |  |
+| 1 | Open app with pending check-in | Check-in interstitial modal appears |  |
+| 2 | Verify prompt displays | Personalized check-in prompt shown |  |
+| 3 | Tap mic button to record response | Recording starts, waveform visible |  |
+| 4 | Tap again to stop and send | Response transcribed and processed |  |
+| 5 | Check `check_in_schedule` table | Row updated with `completed_at`, `response_conversation_id` |  |
+| 6 | Alternative: Click "Skip for now" | Check-in dismissed, `skipped_at` set |  |
+| 7 | Swipe down (mobile) or click outside (desktop) | Modal dismissed without action |  |
 
 ### 4B-2: Abandoned Session Detection
 
