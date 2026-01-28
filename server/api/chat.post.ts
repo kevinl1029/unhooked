@@ -73,10 +73,10 @@ export default defineEventHandler(async (event) => {
   let processedMessages = messages
   const isNewConversation = messages.length === 0
 
-  // Handle reinforcement and boost sessions separately
+  // Handle reinforcement sessions separately
   // These use BASE_SYSTEM_PROMPT + mode overlay (not illusion-specific prompts)
-  if ((sessionType === 'reinforcement' || sessionType === 'boost') && providedIllusionKey) {
-    // Build reinforcement/boost context - returns overlay string directly
+  if (sessionType === 'reinforcement' && providedIllusionKey) {
+    // Illusion-specific reinforcement - build context with the provided illusion
     const overlayPrompt = await buildSessionContext(
       supabase,
       user.sub,
@@ -85,7 +85,7 @@ export default defineEventHandler(async (event) => {
       { anchorMoment: anchorMoment || undefined }
     )
 
-    // For reinforcement/boost, buildSessionContext returns a string (the overlay)
+    // For reinforcement, buildSessionContext returns a string (the overlay)
     // Combine with BASE_SYSTEM_PROMPT
     const systemPrompt = BASE_SYSTEM_PROMPT + '\n\n' + overlayPrompt
 
@@ -93,14 +93,14 @@ export default defineEventHandler(async (event) => {
       { role: 'system', content: systemPrompt },
       ...messages
     ]
-  } else if (sessionType === 'boost' && !providedIllusionKey) {
-    // Generic boost session (no specific illusion)
+  } else if (sessionType === 'reinforcement' && !providedIllusionKey) {
+    // Generic reinforcement session (no specific illusion, post-ceremony support)
     const overlayPrompt = await buildSessionContext(
       supabase,
       user.sub,
-      '', // No specific illusion for generic boost
+      '', // No specific illusion for generic reinforcement
       sessionType,
-      {} // No anchor moment for generic boost
+      {} // No anchor moment for generic reinforcement
     )
 
     const systemPrompt = BASE_SYSTEM_PROMPT + '\n\n' + overlayPrompt
@@ -196,6 +196,8 @@ export default defineEventHandler(async (event) => {
   // Get or create conversation
   let convId = conversationId
   const conversationIllusionKey = illusionNumber ? illusionNumberToKey(illusionNumber) : null
+  // For reinforcement sessions, use providedIllusionKey as the effective illusion key
+  const effectiveIllusionKey = conversationIllusionKey || providedIllusionKey || null
 
   if (!convId) {
     // Create new conversation with enhanced tracking
@@ -252,8 +254,9 @@ export default defineEventHandler(async (event) => {
 
       // Start moment detection in parallel (if eligible)
       // Only detect on user messages with 20+ words, and within rate limit
+      // Use effectiveIllusionKey to support both core sessions (via illusionNumber) and reinforcement sessions (via providedIllusionKey)
       if (
-        conversationIllusionKey &&
+        effectiveIllusionKey &&
         shouldAttemptDetection(lastUserMessage.content) &&
         detectionTracker.canDetect(convId)
       ) {
@@ -265,7 +268,7 @@ export default defineEventHandler(async (event) => {
             const result = await detectMoment({
               userMessage: lastUserMessage.content,
               recentHistory: messages.slice(-6),
-              currentIllusionKey: conversationIllusionKey,
+              currentIllusionKey: effectiveIllusionKey,
               sessionType,
             })
 
@@ -277,7 +280,7 @@ export default defineEventHandler(async (event) => {
                 message_id: savedMessageId,
                 moment_type: result.momentType,
                 transcript: result.keyPhrase || lastUserMessage.content, // Use key phrase if available
-                illusion_key: conversationIllusionKey,
+                illusion_key: effectiveIllusionKey,
                 session_type: sessionType,
                 illusion_layer: illusionLayer,
                 confidence_score: result.confidence,
@@ -388,14 +391,17 @@ export default defineEventHandler(async (event) => {
               if (sessionComplete) {
                 await supabase
                   .from('conversations')
-                  .update({ completed_at: new Date().toISOString() })
+                  .update({
+                    completed_at: new Date().toISOString(),
+                    session_completed: true,
+                  })
                   .eq('id', convId)
 
                 // Reset detection tracker for this conversation
                 detectionTracker.resetCount(convId)
 
-                // Run conviction assessment and post-session tasks (only for core sessions with illusion)
-                if (sessionType === 'core' && conversationIllusionKey) {
+                // Run conviction assessment and post-session tasks for core and reinforcement sessions with illusion
+                if ((sessionType === 'core' || sessionType === 'reinforcement') && effectiveIllusionKey) {
                   // Wait for moment detection to complete first
                   if (momentDetectionPromise) {
                     await momentDetectionPromise
@@ -407,10 +413,11 @@ export default defineEventHandler(async (event) => {
                   handleSessionComplete({
                     userId: user.sub,
                     conversationId: convId,
-                    illusionKey: conversationIllusionKey as IllusionKey,
+                    illusionKey: effectiveIllusionKey as IllusionKey,
                     illusionLayer,
                     messages: processedMessages,
                     supabase,
+                    sessionType,
                   }).catch(err => {
                     console.error('[chat] Session complete handler failed:', err)
                   })
@@ -473,14 +480,17 @@ export default defineEventHandler(async (event) => {
       if (sessionComplete) {
         await supabase
           .from('conversations')
-          .update({ completed_at: new Date().toISOString() })
+          .update({
+            completed_at: new Date().toISOString(),
+            session_completed: true,
+          })
           .eq('id', convId)
 
         // Reset detection tracker for this conversation
         detectionTracker.resetCount(convId)
 
-        // Run conviction assessment and post-session tasks (only for core sessions with illusion)
-        if (sessionType === 'core' && conversationIllusionKey) {
+        // Run conviction assessment and post-session tasks for core and reinforcement sessions with illusion
+        if ((sessionType === 'core' || sessionType === 'reinforcement') && effectiveIllusionKey) {
           // Wait for moment detection to complete first
           if (momentDetectionPromise) {
             await momentDetectionPromise
@@ -492,10 +502,11 @@ export default defineEventHandler(async (event) => {
           handleSessionComplete({
             userId: user.sub,
             conversationId: convId,
-            illusionKey: conversationIllusionKey as IllusionKey,
+            illusionKey: effectiveIllusionKey as IllusionKey,
             illusionLayer,
             messages: processedMessages,
             supabase,
+            sessionType,
           }).catch(err => {
             console.error('[chat] Session complete handler failed:', err)
           })

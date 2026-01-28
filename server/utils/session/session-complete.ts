@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Message } from '../llm/types'
-import type { IllusionKey, IllusionLayer, CapturedMoment, UserIntakeData } from '../llm/task-types'
+import type { IllusionKey, IllusionLayer, CapturedMoment, UserIntakeData, SessionType } from '../llm/task-types'
 import { assessConviction } from '../llm/tasks/conviction-assessment'
 import { selectKeyInsight } from '../llm/tasks/key-insight-selection'
 import { summarizeOriginStory, shouldGenerateSummary } from '../llm/tasks/story-summarization'
@@ -18,6 +18,7 @@ interface SessionCompleteInput {
   illusionLayer: IllusionLayer
   messages: Message[]
   supabase: SupabaseClient
+  sessionType?: SessionType // Optional for backwards compatibility, defaults to 'core'
 }
 
 interface SessionCompleteResult {
@@ -43,7 +44,7 @@ interface SessionCompleteResult {
  * 6. Update key insight in user_story
  */
 export async function handleSessionComplete(input: SessionCompleteInput): Promise<SessionCompleteResult> {
-  const { userId, conversationId, illusionKey, illusionLayer, messages, supabase } = input
+  const { userId, conversationId, illusionKey, illusionLayer, messages, supabase, sessionType = 'core' } = input
 
   try {
     // 1. Fetch user story for context
@@ -282,55 +283,60 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
       }
     }
 
-    // 8. Schedule check-ins
-    // Fetch user's timezone from user_progress
-    const { data: userProgress } = await supabase
-      .from('user_progress')
-      .select('timezone')
-      .eq('user_id', userId)
-      .single()
-
-    const userTimezone = userProgress?.timezone || 'America/New_York'
-
-    // Expire any pending post-session check-ins from previous sessions
-    // User should only get check-ins about their most recent core session
-    try {
-      const { error: expireError } = await supabase
-        .from('check_in_schedule')
-        .update({
-          status: 'expired',
-          expired_at: new Date().toISOString(),
-        })
+    // 8. Schedule check-ins (only for core sessions, not reinforcement)
+    // Per spec: Check-in sessions should not follow after reinforcement sessions
+    if (sessionType === 'core') {
+      // Fetch user's timezone from user_progress
+      const { data: userProgress } = await supabase
+        .from('user_progress')
+        .select('timezone')
         .eq('user_id', userId)
-        .eq('check_in_type', 'post_session')
-        .in('status', ['scheduled', 'sent', 'opened'])
+        .single()
 
-      if (expireError) {
-        console.error('[session-complete] Failed to expire old check-ins:', expireError)
-      } else {
-        console.log('[session-complete] Expired any pending post-session check-ins from previous sessions')
+      const userTimezone = userProgress?.timezone || 'America/New_York'
+
+      // Expire any pending post-session check-ins from previous sessions
+      // User should only get check-ins about their most recent core session
+      try {
+        const { error: expireError } = await supabase
+          .from('check_in_schedule')
+          .update({
+            status: 'expired',
+            expired_at: new Date().toISOString(),
+          })
+          .eq('user_id', userId)
+          .eq('check_in_type', 'post_session')
+          .in('status', ['scheduled', 'sent', 'opened'])
+
+        if (expireError) {
+          console.error('[session-complete] Failed to expire old check-ins:', expireError)
+        } else {
+          console.log('[session-complete] Expired any pending post-session check-ins from previous sessions')
+        }
+      } catch (expireErr) {
+        console.error('[session-complete] Error expiring old check-ins:', expireErr)
       }
-    } catch (expireErr) {
-      console.error('[session-complete] Error expiring old check-ins:', expireErr)
-    }
 
-    try {
-      const scheduledCheckIns = await scheduleCheckIns({
-        userId,
-        timezone: userTimezone,
-        trigger: 'session_complete',
-        sessionId: conversationId,
-        illusionKey,
-        sessionEndTime: new Date(),
-        supabase,
-      })
+      try {
+        const scheduledCheckIns = await scheduleCheckIns({
+          userId,
+          timezone: userTimezone,
+          trigger: 'session_complete',
+          sessionId: conversationId,
+          illusionKey,
+          sessionEndTime: new Date(),
+          supabase,
+        })
 
-      if (scheduledCheckIns.length > 0) {
-        console.log(`[session-complete] Scheduled ${scheduledCheckIns.length} check-in(s)`)
+        if (scheduledCheckIns.length > 0) {
+          console.log(`[session-complete] Scheduled ${scheduledCheckIns.length} check-in(s)`)
+        }
+      } catch (checkInError) {
+        // Don't fail the whole handler if check-in scheduling fails
+        console.error('[session-complete] Failed to schedule check-ins:', checkInError)
       }
-    } catch (checkInError) {
-      // Don't fail the whole handler if check-in scheduling fails
-      console.error('[session-complete] Failed to schedule check-ins:', checkInError)
+    } else {
+      console.log(`[session-complete] Skipping check-in scheduling for ${sessionType} session`)
     }
 
     console.log(`[session-complete] Completed for ${illusionKey}: conviction ${previousConviction} -> ${assessment.newConviction} (delta: ${assessment.delta})`)

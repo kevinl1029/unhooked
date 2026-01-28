@@ -1,10 +1,10 @@
 /**
  * POST /api/reinforcement/start
- * Start a reinforcement or boost session
+ * Start a reinforcement session
  *
- * Handles two types of sessions:
+ * Handles two types of reinforcement sessions:
  * 1. Illusion-specific reinforcement (with optional moment anchor)
- * 2. Generic boost (post-ceremony users only)
+ * 2. Generic reinforcement (post-ceremony users only, no specific illusion)
  */
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 
@@ -42,7 +42,7 @@ interface SessionContext {
 
 interface ReinforcementResponse {
   conversation_id: string
-  session_type: 'reinforcement' | 'boost'
+  session_type: 'reinforcement'
   illusion_key?: string
   anchor_moment?: { id: string; transcript: string }
   context: SessionContext
@@ -59,7 +59,7 @@ export default defineEventHandler(async (event): Promise<ReinforcementResponse> 
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // Handle generic boost session
+  // Handle generic reinforcement session (no specific illusion)
   if (reason === 'generic_boost') {
     // Check if user has completed all 5 illusions (ceremony_completed_at must be set)
     const { data: progress, error: progressError } = await supabase
@@ -71,7 +71,7 @@ export default defineEventHandler(async (event): Promise<ReinforcementResponse> 
     if (progressError || !progress || !progress.ceremony_completed_at) {
       throw createError({
         statusCode: 403,
-        message: 'Generic boost sessions are only available after completing all 5 core illusions',
+        message: 'Generic reinforcement sessions are only available after completing all 5 core illusions',
       })
     }
 
@@ -125,13 +125,14 @@ export default defineEventHandler(async (event): Promise<ReinforcementResponse> 
         moment_type: m.moment_type,
       }))
 
-    // Create conversation record with session_type: 'boost'
+    // Create conversation record with session_type: 'reinforcement' (generic, no illusion_key)
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .insert({
         user_id: user.sub,
-        title: 'Boost: Support',
-        session_type: 'boost',
+        title: 'Reinforcement: Support',
+        session_type: 'reinforcement',
+        // illusion_key intentionally null for generic reinforcement
       })
       .select()
       .single()
@@ -142,7 +143,7 @@ export default defineEventHandler(async (event): Promise<ReinforcementResponse> 
 
     return {
       conversation_id: conversation.id,
-      session_type: 'boost',
+      session_type: 'reinforcement',
       context: {
         all_conviction_scores: allConvictionScores,
         recent_moments_all_illusions: recentMomentsAllIllusions,

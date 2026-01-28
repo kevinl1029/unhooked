@@ -122,7 +122,7 @@ async function getMomentsByIllusion(
 /**
  * Build session context for personalization
  * MVP uses simple selection: 5-8 moments total, 1 per type from current illusion only
- * Reinforcement/boost sessions return overlay prompts instead of PersonalizationContext
+ * Reinforcement sessions return overlay prompts instead of PersonalizationContext
  */
 export async function buildSessionContext(
   supabase: SupabaseClient,
@@ -135,15 +135,16 @@ export async function buildSessionContext(
     recentMomentsAllIllusions?: Array<{ illusion_key: string; transcript: string }>
   }
 ): Promise<PersonalizationContext | string> {
-  // Handle reinforcement and boost sessions
-  if (sessionType === 'reinforcement' || sessionType === 'boost') {
+  // Handle reinforcement sessions
+  if (sessionType === 'reinforcement') {
     // Import here to avoid circular dependencies
     const { buildReinforcementPrompt, buildBoostPrompt } = await import('../prompts/reinforcement-prompts')
 
     const story = await getUserStory(supabase, userId)
 
-    if (sessionType === 'boost') {
-      // Generic boost session - fetch all conviction scores and moments if not provided
+    // Generic reinforcement (no specific illusion) - use boost prompt
+    if (!illusionKey) {
+      // Generic reinforcement session - fetch all conviction scores and moments if not provided
       let allConvictionScores = sessionData?.allConvictionScores
       let recentMomentsAllIllusions = sessionData?.recentMomentsAllIllusions
 

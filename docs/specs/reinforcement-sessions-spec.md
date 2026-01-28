@@ -1,8 +1,8 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.8
+**Version:** 2.9
 **Created:** 2026-01-12
-**Updated:** 2026-01-27
+**Updated:** 2026-01-28
 **Status:** Ready for Implementation
 **Document Type:** Feature Specification (PRD + Technical Design)
 **Related Documents:**
@@ -716,16 +716,16 @@ See `reinforcement-ui-design-spec-v1.2.md` and `progress-carousel-final.jsx` for
 - FR-4.8: At session end, run conviction assessment (same process as core sessions)
 - FR-4.9: Update `last_used_at` on the anchor moment when session starts
 
-### FR-5: Reinforcement Session — Generic Boost
+### FR-5: Reinforcement Session — Generic Support
 
 **Description:** Conduct a supportive conversation not targeting a specific illusion.
 
 **Requirements:**
 - FR-5.1: Session shall load full user context (all moments, all conviction history)
-- FR-5.2: AI shall use generic boost system prompt (empathetic, exploratory)
+- FR-5.2: AI shall use generic support system prompt (empathetic, exploratory)
 - FR-5.3: AI shall naturally steer toward identified illusion(s) when relevant (no explicit "start a new session" handoff)
 - FR-5.4: If AI identifies specific illusion(s) discussed substantively, run conviction assessment for those illusion(s)
-- FR-5.5: Session shall be logged with `session_type: 'boost'`
+- FR-5.5: Session shall be logged with `session_type: 'reinforcement'` and `illusion_key: null`
 - FR-5.6: Session can update `user_story` for any illusion(s) where insights, conviction, or resistance were discussed
 
 ### FR-6: Conviction Assessment — Reinforcement
@@ -734,7 +734,7 @@ See `reinforcement-ui-design-spec-v1.2.md` and `progress-carousel-final.jsx` for
 
 **Requirements:**
 - FR-6.1: Run assessment at end of illusion-specific reinforcement sessions
-- FR-6.2: For boost sessions: run assessment for any illusion(s) substantively discussed (AI identifies)
+- FR-6.2: For generic reinforcement sessions: run assessment for any illusion(s) substantively discussed (AI identifies)
 - FR-6.3: Assessment uses the same process as core sessions (identical, not simplified)
 - FR-6.4: Assessment shall capture: current conviction (0-10), delta from previous, shift quality
 - FR-6.5: Shift quality values: `restored`, `deepened`, `still_struggling`, `new_insight`
@@ -819,19 +819,19 @@ Stories are organized by implementation area. Each story is sized for one focuse
 
 ---
 
-#### US-003: Start Generic Boost Session API
+#### US-003: Start Generic Reinforcement Session API
 
-**Description:** As a developer, I want an API endpoint to start a generic boost session so that post-ceremony users can get support without selecting a specific illusion.
+**Description:** As a developer, I want an API endpoint to start a generic reinforcement session so that post-ceremony users can get support without selecting a specific illusion.
 
 **References:**
-- `docs/specs/reinforcement-sessions-spec.md`: [FR-5: Reinforcement Session — Generic Boost](#fr-5-reinforcement-session--generic-boost), [Technical Design > API Endpoints](#api-endpoints), [Technical Design > Context Injection Strategy](#context-injection-strategy)
+- `docs/specs/reinforcement-sessions-spec.md`: [FR-5: Reinforcement Session — Generic Support](#fr-5-reinforcement-session--generic-support), [Technical Design > API Endpoints](#api-endpoints), [Technical Design > Context Injection Strategy](#context-injection-strategy)
 
 **Acceptance Criteria:**
-- [ ] `POST /api/reinforcement/start` with `{ reason: 'generic_boost' }` starts a boost session
-- [ ] Creates conversation record with `session_type: 'boost'`
+- [ ] `POST /api/reinforcement/start` with `{ reason: 'generic_boost' }` starts a generic reinforcement session
+- [ ] Creates conversation record with `session_type: 'reinforcement'` and `illusion_key: null`
 - [ ] Returns 403 if user has not completed all 5 core illusions
 - [ ] Context includes all conviction scores and top 3 moments per completed illusion
-- [ ] Returns `conversation_id`, `session_type: 'boost'`, and full `context` object
+- [ ] Returns `conversation_id`, `session_type: 'reinforcement'`, and full `context` object
 - [ ] Typecheck/lint passes
 
 ---
@@ -867,10 +867,10 @@ Stories are organized by implementation area. Each story is sized for one focuse
 - [ ] `REINFORCEMENT_MODE_OVERLAY` constant added to prompt utilities
 - [ ] Overlay includes placeholders for: illusion name, previous conviction, captured moments (max 3), current situation
 - [ ] Overlay instructs AI to: open with anchor moment, explore triggers, help reconnect, generate new articulations, end with `[SESSION_COMPLETE]`
-- [ ] `BOOST_MODE_OVERLAY` constant added for generic support
-- [ ] Boost overlay includes placeholders for: user story, all conviction scores, recent moments across all illusions
-- [ ] Boost overlay instructs AI to: listen with empathy, identify relevant illusion(s), steer naturally, pull relevant moments
-- [ ] `buildSessionContext` in `context-builder.ts` extended to handle reinforcement and boost modes
+- [ ] `GENERIC_REINFORCEMENT_OVERLAY` constant added for generic support (no specific illusion)
+- [ ] Generic overlay includes placeholders for: user story, all conviction scores, recent moments across all illusions
+- [ ] Generic overlay instructs AI to: listen with empathy, identify relevant illusion(s), steer naturally, pull relevant moments
+- [ ] `buildSessionContext` in `context-builder.ts` extended to handle both reinforcement modes (illusion-specific and generic)
 - [ ] Typecheck/lint passes
 
 ---
@@ -1221,10 +1221,11 @@ These decisions document the rationale behind key product choices.
 
 `session_type` values in `conversations` table:
 - `'core'` - Original illusion exploration
-- `'reinforcement'` - Returning to previously covered illusion
-- `'boost'` - Generic support conversation
+- `'reinforcement'` - Returning to previously covered illusion (includes generic support post-ceremony)
 - `'check_in'` - Scheduled check-ins
 - `'ceremony'` - Final ceremony conversation
+
+**Note:** Generic support sessions (post-ceremony "I Need Support") use `session_type: 'reinforcement'` with `illusion_key: null`. The distinction between illusion-specific and generic reinforcement is based on whether `illusion_key` is set, not the session type.
 
 **Conversation `title` format:**
 
@@ -1233,8 +1234,8 @@ The `title` field in the `conversations` table uses a prefix pattern to distingu
 | Session Type | Title Format | Example |
 |--------------|--------------|---------|
 | Core | `"{Illusion Name}"` | `"Stress Relief"` |
-| Reinforcement | `"Reinforcement: {Illusion Name}"` | `"Reinforcement: Stress Relief"` |
-| Boost | `"Boost: Support"` | `"Boost: Support"` |
+| Reinforcement (illusion-specific) | `"Reinforcement: {Illusion Name}"` | `"Reinforcement: Stress Relief"` |
+| Reinforcement (generic support) | `"Reinforcement: Support"` | `"Reinforcement: Support"` |
 
 This format makes it easy to identify session types when debugging or analyzing conversation data. Note: The database `title` is for internal use and may differ from the UI session header (which follows the Session Header Specification).
 
@@ -1288,9 +1289,9 @@ When reconnection feels complete, end with affirmation and output [SESSION_COMPL
 --- END REINFORCEMENT MODE ---
 ```
 
-**Generic Boost Mode Overlay:**
+**Generic Reinforcement Mode Overlay (for sessions with no specific illusion):**
 ```
---- BOOST MODE ---
+--- GENERIC REINFORCEMENT MODE ---
 
 You are supporting a user who has completed all 5 core illusions.
 They're reaching out for support but haven't specified which illusion.
@@ -1310,7 +1311,7 @@ In this mode:
 Frame: You're a supportive presence, not a diagnostic tool.
 When the conversation reaches resolution, end with affirmation and output [SESSION_COMPLETE].
 
---- END BOOST MODE ---
+--- END GENERIC REINFORCEMENT MODE ---
 ```
 
 ### API Endpoints
@@ -1320,16 +1321,16 @@ When the conversation reaches resolution, end with affirmation and output [SESSI
 ```typescript
 // Request
 {
-  illusion_key?: string  // Optional: null for generic boost
+  illusion_key?: string  // Optional: null for generic reinforcement
   moment_id?: string     // Optional: specific moment to anchor to
-  reason?: string        // Optional: why they're seeking reinforcement
+  reason?: string        // Optional: 'generic_boost' for post-ceremony support
 }
 
 // Response
 {
   conversation_id: string
-  session_type: 'reinforcement' | 'boost'
-  illusion_key?: string
+  session_type: 'reinforcement'  // Always 'reinforcement', generic vs specific determined by illusion_key
+  illusion_key?: string          // Present for illusion-specific, null for generic
   anchor_moment?: CapturedMoment
   context: {
     previous_conviction?: number
@@ -1341,6 +1342,7 @@ When the conversation reaches resolution, end with affirmation and output [SESSI
 // Errors
 // 400 Bad Request: illusion_key provided but illusion not completed
 // 401 Unauthorized: user not authenticated
+// 403 Forbidden: generic_boost requested but user hasn't completed all 5 illusions
 ```
 
 #### `POST /api/reinforcement/assess`
@@ -1526,6 +1528,7 @@ None — all technical questions resolved.
 | 2.6     | 2026-01-27 | **Added References to User Stories.** Each story now includes document path and section references for standalone extraction (e.g., `docs/specs/reinforcement-sessions-spec.md: [Section](#anchor)`). |
 | 2.7     | 2026-01-27 | **CTA Hierarchy update (ADR-005).** Added Ceremony-Ready dashboard state. Updated Design Philosophy with Single Primary CTA principle. Changed Moment Card CTA from primary to secondary styling. Clarified primary/secondary designations for all dashboard states. |
 | 2.8     | 2026-01-27 | **Conversation title format.** Added documentation for database `title` field format: reinforcement sessions use `"Reinforcement: {Illusion Name}"`, boost sessions use `"Boost: Support"`. This distinguishes session types in the database for debugging and analytics. |
+| 2.9     | 2026-01-28 | **Unified session types: boost → reinforcement.** Removed separate `'boost'` session type. All reinforcement sessions now use `session_type: 'reinforcement'`. Generic support sessions are distinguished by `illusion_key: null`. Updated FR-5, FR-6, US-003, US-005, and API documentation. Title format for generic sessions changed from `"Boost: Support"` to `"Reinforcement: Support"`. |
 
 ---
 
