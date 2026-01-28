@@ -1,7 +1,7 @@
 # Unhooked Core Program Technical Implementation
 
-**Version:** 3.2
-**Last Updated:** 2026-01-04
+**Version:** 4.1
+**Last Updated:** 2026-01-28
 **Status:** Active Development
 **Implements:** Unhooked Core Program v2.0
 
@@ -13,7 +13,7 @@ This document specifies the technical implementation for the Unhooked Core Progr
 
 **Prerequisites:**
 - Phase 1.3 complete — Chat with Gemini, conversations persisted
-- Phase 2 complete — Program structure, myths, progress tracking
+- Phase 2 complete — Program structure, illusions, progress tracking
 - Phase 3 complete — Voice chat interface with STT/TTS
 
 **Builds upon:** Existing Supabase schema (users, conversations, messages, user_intake, user_progress)
@@ -62,10 +62,10 @@ This document specifies the technical implementation for the Unhooked Core Progr
 
 #### 0. `myths` (Reference Table)
 
-Reference table for myth keys. Used for foreign key constraints and UI display.
+Reference table for illusion keys. Used for foreign key constraints and UI display.
 
 ```sql
-CREATE TABLE public.myths (
+CREATE TABLE public.illusions (
   myth_key TEXT PRIMARY KEY,
   myth_number INTEGER UNIQUE NOT NULL CHECK (myth_number BETWEEN 1 AND 5),
   display_name TEXT NOT NULL,
@@ -73,15 +73,15 @@ CREATE TABLE public.myths (
 );
 
 -- Seed data
-INSERT INTO public.myths (myth_key, myth_number, display_name, short_name) VALUES
-  ('stress_relief', 1, 'The Stress Relief Myth', 'Stress'),
-  ('pleasure', 2, 'The Pleasure Myth', 'Pleasure'),
-  ('willpower', 3, 'The Willpower Myth', 'Willpower'),
-  ('focus', 4, 'The Focus Myth', 'Focus'),
-  ('identity', 5, 'The Identity Myth', 'Identity');
+INSERT INTO public.illusions (myth_key, myth_number, display_name, short_name) VALUES
+  ('stress_relief', 1, 'The Stress Relief Illusion', 'Stress'),
+  ('pleasure', 2, 'The Pleasure Illusion', 'Pleasure'),
+  ('willpower', 3, 'The Willpower Illusion', 'Willpower'),
+  ('focus', 4, 'The Focus Illusion', 'Focus'),
+  ('identity', 5, 'The Identity Illusion', 'Identity');
 
--- Note: Myth statements, truths, layer content, and prompts are stored in TypeScript constants
--- (version controlled). Database is for 'what myths exist', code is for 'how to present them'.
+-- Note: Illusion statements, truths, layer content, and prompts are stored in TypeScript constants
+-- (version controlled). Database is for 'what illusions exist', code is for 'how to present them'.
 ```
 
 ---
@@ -115,7 +115,7 @@ CREATE TABLE public.captured_moments (
   audio_duration_ms INTEGER,  -- NULL if no audio
 
   -- Context
-  myth_key TEXT REFERENCES public.myths(myth_key),
+  myth_key TEXT REFERENCES public.illusions(myth_key),
   session_type TEXT CHECK (session_type IN ('core', 'check_in', 'ceremony', 'reinforcement')),
   myth_layer TEXT CHECK (myth_layer IN ('intellectual', 'emotional', 'identity')),
 
@@ -172,7 +172,7 @@ CREATE TABLE public.conviction_assessments (
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
 
   -- Context
-  myth_key TEXT REFERENCES public.myths(myth_key) NOT NULL,
+  myth_key TEXT REFERENCES public.illusions(myth_key) NOT NULL,
   myth_layer TEXT CHECK (myth_layer IN ('intellectual', 'emotional', 'identity')),
 
   -- Assessment results
@@ -226,7 +226,7 @@ CREATE TABLE public.user_story (
   primary_triggers TEXT[],  -- Derived from intake + conversations
   personal_stakes TEXT[],  -- Kids, health, career, etc.
 
-  -- Current belief state per myth (snapshot of latest conviction per myth)
+  -- Current belief state per illusion (snapshot of latest conviction per illusion)
   -- Updated after each conviction assessment
   stress_relief_conviction INTEGER DEFAULT 0 CHECK (stress_relief_conviction BETWEEN 0 AND 10),
   stress_relief_key_insight_id UUID REFERENCES public.captured_moments(id),
@@ -292,7 +292,7 @@ CREATE TABLE public.check_in_schedule (
     'morning',
     'evening'
   )),
-  trigger_myth_key TEXT REFERENCES public.myths(myth_key),
+  trigger_myth_key TEXT REFERENCES public.illusions(myth_key),
   trigger_session_id UUID REFERENCES public.conversations(id),
 
   -- Content
@@ -362,7 +362,7 @@ CREATE TABLE public.ceremony_artifacts (
 
   -- Content
   content_text TEXT,           -- For text-based artifacts
-  content_json JSONB,          -- For structured data (myths cheat sheet) - validated by TypeScript interface
+  content_json JSONB,          -- For structured data (illusions cheat sheet) - validated by TypeScript interface
   audio_path TEXT,             -- For audio artifacts
   audio_duration_ms INTEGER,
 
@@ -445,10 +445,10 @@ CREATE POLICY "Users can read own follow-ups"
 
 ```sql
 -- Add enhanced tracking fields
--- Note: No explicit program_day counter. Stage is derived from myth progress:
---   early (myths 1-2), mid (myths 3-4), late (myth 5+)
+-- Note: No explicit program_day counter. Stage is derived from illusion progress:
+--   early (illusions 1-2), mid (illusions 3-4), late (illusion 5+)
 ALTER TABLE public.user_progress
-ADD COLUMN current_myth_key TEXT REFERENCES public.myths(myth_key),
+ADD COLUMN current_myth_key TEXT REFERENCES public.illusions(myth_key),
 ADD COLUMN current_layer TEXT DEFAULT 'intellectual'
   CHECK (current_layer IN ('intellectual', 'emotional', 'identity')),
 ADD COLUMN timezone TEXT DEFAULT 'America/New_York',
@@ -463,7 +463,7 @@ ADD COLUMN ceremony_skipped_final_dose BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.conversations
 ADD COLUMN session_type TEXT DEFAULT 'core'
   CHECK (session_type IN ('core', 'check_in', 'ceremony', 'reinforcement')),
-ADD COLUMN myth_key TEXT REFERENCES public.myths(myth_key),
+ADD COLUMN myth_key TEXT REFERENCES public.illusions(myth_key),
 ADD COLUMN myth_layer TEXT CHECK (myth_layer IN ('intellectual', 'emotional', 'identity')),
 ADD COLUMN check_in_id UUID REFERENCES public.check_in_schedule(id),
 ADD COLUMN completed_at TIMESTAMP WITH TIME ZONE;  -- Set when [SESSION_COMPLETE] detected
@@ -473,7 +473,7 @@ ADD COLUMN completed_at TIMESTAMP WITH TIME ZONE;  -- Set when [SESSION_COMPLETE
 
 ## TypeScript Interfaces
 
-### Myths Cheat Sheet Schema
+### Illusions Cheat Sheet Schema
 
 The cheat sheet is stored as JSONB but must match this TypeScript interface:
 
@@ -483,7 +483,7 @@ The cheat sheet is stored as JSONB but must match this TypeScript interface:
 export interface MythCheatSheetEntry {
   myth_key: string           // e.g., 'stress_relief'
   myth_number: number        // 1-5
-  display_name: string       // e.g., 'The Stress Relief Myth'
+  display_name: string       // e.g., 'The Stress Relief Illusion'
   the_myth: string           // The false belief
   the_truth: string          // The reframe
   your_insight: string | null  // User's captured insight (text only if no audio)
@@ -491,7 +491,7 @@ export interface MythCheatSheetEntry {
 }
 
 export interface MythsCheatSheet {
-  myths: MythCheatSheetEntry[]
+  illusions: MythCheatSheetEntry[]
   generated_at: string  // ISO timestamp
 }
 
@@ -542,7 +542,7 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=gemini-pro
 
 #### 1. `llm.conversation` — Main Therapeutic Dialogue
 
-**Purpose:** The core myth-dismantling conversation with the user.
+**Purpose:** The core illusion-dismantling conversation with the user.
 
 **Existing implementation:** Phase 3 chat flow with system prompts from Phase 2.
 
@@ -630,7 +630,7 @@ Respond with JSON only:
 
 #### 3. `llm.conviction.assess` — Conviction Assessment + Enrichment
 
-**Purpose:** Evaluate the user's belief shift for a specific myth after a session AND extract any new triggers/stakes discovered.
+**Purpose:** Evaluate the user's belief shift for a specific illusion after a session AND extract any new triggers/stakes discovered.
 
 **When called:** At the end of each core session (triggered by `[SESSION_COMPLETE]` token only). Incomplete sessions do NOT trigger assessment.
 
@@ -640,7 +640,7 @@ Respond with JSON only:
   conversationTranscript: Message[]
   mythKey: string
   previousConviction: number  // 0-10, from user_story
-  previousInsights: string[]  // Their prior insights on this myth
+  previousInsights: string[]  // Their prior insights on this illusion
   existingTriggers: string[]  // Current triggers from user_story
   existingStakes: string[]    // Current stakes from user_story
 }
@@ -683,12 +683,12 @@ ${conversationTranscript}
 
 Assess their current belief state AND extract any new information:
 
-1. CONVICTION (0-10): How deeply do they now believe the truth vs. the myth?
-   - 0-2: Still fully believes the myth
+1. CONVICTION (0-10): How deeply do they now believe the truth vs. the illusion?
+   - 0-2: Still fully believes the illusion
    - 3-4: Intellectually questioning but emotionally attached
    - 5-6: Sees the logic but hasn't felt it
    - 7-8: Genuine shift, some residual doubt
-   - 9-10: Fully sees through the myth, embodied understanding
+   - 9-10: Fully sees through the illusion, embodied understanding
 
 2. REMAINING RESISTANCE: What are they still holding onto, if anything?
 
@@ -716,14 +716,14 @@ Respond with JSON only:
 
 #### 4. `llm.key_insight.select` — Key Insight Selection
 
-**Purpose:** Select the most impactful insight from multiple candidates for a myth.
+**Purpose:** Select the most impactful insight from multiple candidates for a illusion.
 
-**When called:** At session end when multiple insights exist for the same myth.
+**When called:** At session end when multiple insights exist for the same illusion.
 
 **Input:**
 ```typescript
 {
-  insights: CapturedMoment[]  // All insights for this myth
+  insights: CapturedMoment[]  // All insights for this illusion
   mythKey: string
   sessionContext: string  // Brief context about what was discussed
 }
@@ -1071,7 +1071,7 @@ Retrieve user's captured moments with filtering.
 
 #### `GET /api/moments/for-context`
 
-Get moments optimized for prompt injection. Returns simple selection (5-8 moments, 1 per type from current myth).
+Get moments optimized for prompt injection. Returns simple selection (5-8 moments, 1 per type from current illusion).
 
 **Future enhancement:** Smart selection with variety across sessions (deferred).
 
@@ -1377,8 +1377,8 @@ Check if user has pending check-in to show as modal overlay.
 
 Get personalization data for prompt injection. Context is used transiently, not stored.
 
-MVP uses simple selection: 5-8 moments total, 1 per type from current myth only.
-Cross-myth context is deferred to post-MVP.
+MVP uses simple selection: 5-8 moments total, 1 per type from current illusion only.
+Cross-illusion context is deferred to post-MVP.
 
 ```typescript
 // Query params
@@ -1399,7 +1399,7 @@ Cross-myth context is deferred to post-MVP.
   }
   belief_context: {
     current_myth_conviction: number
-    previous_insights: string[]  // Current myth only
+    previous_insights: string[]  // Current illusion only
     resistance_points: string[]
   }
   moment_context: {
@@ -1628,7 +1628,7 @@ When user skips a check-in, it's just logged. No reschedule. They'll get the nex
 
 Context is built fresh for each request and injected transiently (not stored in message history).
 
-MVP uses simple selection: 5-8 moments total, 1 per type from current myth only.
+MVP uses simple selection: 5-8 moments total, 1 per type from current illusion only.
 
 ```typescript
 // server/utils/personalization/context-builder.ts
@@ -1643,7 +1643,7 @@ export async function buildSessionContext(
   const [intake, story, mythMoments] = await Promise.all([
     getUserIntake(userId),
     getUserStory(userId),
-    getMomentsByMyth(userId, mythKey, { limit: 8 })  // 1 per type max
+    getMomentsByIllusion(userId, mythKey, { limit: 8 })  // 1 per type max
   ])
 
   return {
@@ -1687,9 +1687,9 @@ export async function buildSessionContext(
 }
 ```
 
-### Cross-Layer Context (Within Same Myth)
+### Cross-Layer Context (Within Same Illusion)
 
-When a user returns for Layer 2 or Layer 3 of a myth, the AI needs context from previous layers. Uses key moments only — 1 per type.
+When a user returns for Layer 2 or Layer 3 of a illusion, the AI needs context from previous layers. Uses key moments only — 1 per type.
 
 ```typescript
 // server/utils/personalization/cross-layer-context.ts
@@ -1747,7 +1747,7 @@ export function buildBridgeContext(crossLayerContext: CrossLayerContext): string
   }
 
   return `
-The user is continuing from a previous session on this myth.
+The user is continuing from a previous session on this illusion.
 Last time, they expressed: "${crossLayerContext.previousLayerInsights[0].quote}"
 ${crossLayerContext.breakthroughs.length > 0
   ? `They had a breakthrough: "${crossLayerContext.breakthroughs[0]}"`
@@ -1801,7 +1801,7 @@ if (aiResponse.includes('[SESSION_COMPLETE]')) {
   await updateUserStoryAfterSession(userId, currentMythKey, assessment)
 
   // 5. Select key insight if multiple candidates
-  await selectKeyInsightForMyth(userId, currentMythKey)
+  await selectKeyInsightForIllusion(userId, currentMythKey)
 
   // 6. Schedule check-ins
   await scheduleCheckIns({
@@ -1873,7 +1873,7 @@ The dashboard adapts based on user's program status:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Progress indicator (5 circles, filled = all 3 layers done) │
-│  ○ ● ● ○ ○  "3 of 5 myths explored"                        │
+│  ○ ● ● ○ ○  "3 of 5 illusions explored"                        │
 ├─────────────────────────────────────────────────────────────┤
 │  Next Session Card (layer hidden from user)                 │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -1885,12 +1885,12 @@ The dashboard adapts based on user's program status:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Note:** Myth "explored" = all 3 layers complete for that myth. Layer details hidden from user.
+**Note:** Illusion "explored" = all 3 layers complete for that illusion. Layer details hidden from user.
 
 **2. Ceremony-Ready Dashboard**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ● ● ● ● ●  "All myths explored"                           │
+│  ● ● ● ● ●  "All illusions explored"                           │
 ├─────────────────────────────────────────────────────────────┤
 │  Ceremony Card (prominent, centered)                        │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -1940,22 +1940,22 @@ The dashboard adapts based on user's program status:
    │  ✓ Session Complete                                     │
    │  "Nice work. Let that settle."                          │
    │                                                          │
-   │  [Continue to Next Session]  ← If more layers/myths     │
+   │  [Continue to Next Session]  ← If more layers/illusions     │
    │  [Return to Dashboard]                                   │
    └─────────────────────────────────────────────────────────┘
    ```
 4. "Continue" creates new conversation with bridge message
 
-**Between Layers (Same Myth):**
+**Between Layers (Same Illusion):**
 - No explicit "layer complete" celebration
 - Continue button advances to Layer 2 or 3
 - System prompt changes, new conversation created
 - AI opens with bridge message acknowledging previous session
 
-**Myth Complete (Layer 3 Done):**
+**Illusion Complete (Layer 3 Done):**
 - Slightly more prominent completion card
 - "Focus complete. 1 more to go." messaging
-- Continue advances to next myth, Layer 1
+- Continue advances to next illusion, Layer 1
 
 ### Check-In Interstitial
 
@@ -2014,7 +2014,7 @@ interface Props {
 - User moment segments visually distinguished
 ```
 
-### Myths Cheat Sheet Page
+### Illusions Cheat Sheet Page
 
 In-app only, no download/share for MVP:
 
@@ -2023,14 +2023,14 @@ In-app only, no download/share for MVP:
 │  ← Back to Dashboard                                        │
 │                                                             │
 │  "Your Toolkit"                                             │
-│  "The myths you've seen through"                            │
+│  "The illusions you've seen through"                            │
 ├─────────────────────────────────────────────────────────────┤
-│  Scrollable myth cards:                                     │
+│  Scrollable illusion cards:                                     │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │  Myth 1: Stress Relief                              │   │
+│  │  Illusion 1: Stress Relief                              │   │
 │  │                                                      │   │
-│  │  The Myth: "Nicotine helps me manage stress"        │   │
+│  │  The Illusion: "Nicotine helps me manage stress"        │   │
 │  │  The Truth: "Nicotine creates the stress it         │   │
 │  │             appears to relieve"                      │   │
 │  │                                                      │   │
@@ -2040,8 +2040,8 @@ In-app only, no download/share for MVP:
 │  │  (no play button - text only if no audio)           │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
-│  (If no insight captured for a myth, "Your Insight"        │
-│   section is omitted for that myth)                         │
+│  (If no insight captured for a illusion, "Your Insight"        │
+│   section is omitted for that illusion)                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -2113,7 +2113,7 @@ In-app only, no download/share for MVP:
 ### Phase 4C: Personalization Engine
 
 **Context Building:**
-- [ ] Build context builder (5-8 moments, 1 per type from current myth)
+- [ ] Build context builder (5-8 moments, 1 per type from current illusion)
 - [ ] Implement prompt injection (transient, not stored)
 - [ ] Build cross-layer context (1 per type max)
 - [ ] Implement bridge message for session continuity
@@ -2148,7 +2148,7 @@ In-app only, no download/share for MVP:
 - [ ] Implement `llm.ceremony.narrative` task
 - [ ] Build journey playlist generator with lazy TTS
 - [ ] Implement journey audio endpoint with retry + text fallback
-- [ ] Build myths cheat sheet generator (strict TypeScript validation)
+- [ ] Build illusions cheat sheet generator (strict TypeScript validation)
 - [ ] Implement final recording with unlimited re-record attempts
 
 **Ceremony UX:**
@@ -2188,7 +2188,7 @@ In-app only, no download/share for MVP:
 - Follow-up milestones shown in dashboard and delivered via email
 
 **Deferred to Later Build:**
-- Structured reinforcement sessions (myth-specific review)
+- Structured reinforcement sessions (illusion-specific review)
 - Conviction re-assessment after reinforcement
 - Relapse re-onboarding flow
 - Smart moment selection with variety
@@ -2203,9 +2203,9 @@ In-app only, no download/share for MVP:
 | Cron job hosting | Vercel Cron, GitHub Actions, Supabase Edge Functions | GitHub Actions (5 min) + Vercel Cron (daily fallback) | **Decided** (ADR-003) |
 | Journey audio playback | Server-side stitching, client-side sequential | Client-side sequential | **Decided** |
 | Moment confidence threshold | 0.7, 0.8, 0.85 | 0.7 for transcript, 0.85 for audio | **Decided** |
-| Max moments per context | 5, 10, 15 | 5-8 (1 per type from current myth) | **Decided** |
+| Max moments per context | 5, 10, 15 | 5-8 (1 per type from current illusion) | **Decided** |
 | Audio URL strategy | Signed, public, RLS | Signed (1 hour expiry) | **Decided** |
-| Myth keys | Numbers, strings | snake_case strings with FK | **Decided** |
+| Illusion keys | Numbers, strings | snake_case strings with FK | **Decided** |
 
 ### LLM Task Model Assignments
 
@@ -2230,7 +2230,7 @@ The following features are explicitly deferred:
 
 1. **Audio capture for moments** — MVP stores transcript only
 2. **User-highlighted moments** — `is_user_highlighted` field exists but not implemented
-3. **Cross-myth context injection** — Only current myth moments used
+3. **Cross-illusion context injection** — Only current illusion moments used
 4. **Smart moment selection with variety** — Simple 1-per-type selection
 5. **Observation debrief check-ins** — Removed from schema
 6. **Structured reinforcement sessions** — Generic conversation fallback
@@ -2239,6 +2239,10 @@ The following features are explicitly deferred:
 9. **Server-side audio stitching** — Client-side sequential playback
 10. **Session summary in check-in personalization** — Uses moments only
 11. **Final dose ritual (Part 5)** — Ceremony step where user takes last hit and discards paraphernalia; referenced in spec but not detailed or implemented; `ceremony_skipped_final_dose` flag exists in `user_progress` for future use
+12. **Morning/evening daily check-ins** — Code exists but dormant per ADR-002; only post-session check-ins active
+13. **Follow-up email delivery** — Database schema exists, milestones scheduled at ceremony completion, but no email sending implemented
+14. **Follow-up magic link open endpoint** — No `/api/follow-ups/open/:token` endpoint exists
+15. **Follow-up conversation design** — Uses generic "boost" mode; no milestone-specific prompts or conversation flow
 
 ---
 
@@ -2270,7 +2274,7 @@ The following features are explicitly deferred:
 | | | - Emails via Resend from coach@unhooked.app (link only, no prompt) |
 | | | - Skip just logs, no reschedule |
 | | | - Context injection is transient (not stored) |
-| | | - Simple moment selection (5-8, 1 per type from current myth) |
+| | | - Simple moment selection (5-8, 1 per type from current illusion) |
 | | | - Cross-layer context: 1 per type max |
 | | | - Bridge message for session continuity |
 | | | - SESSION_COMPLETE locks conversation |
@@ -2309,3 +2313,12 @@ The following features are explicitly deferred:
 | | | - Migrated primary cron to GitHub Actions (every 5 minutes, free) |
 | | | - Vercel Cron kept as daily fallback at 8am UTC |
 | | | - Both sources call same idempotent /api/cron/check-ins endpoint |
+| 4.0 | 2026-01-28 | **Terminology update:** |
+| | | - Renamed "myth" to "illusion" throughout user-facing content |
+| | | - Database columns unchanged (`illusion_key`, `illusion_number` reference table columns) |
+| | | - Illusion keys remain snake_case: stress_relief, pleasure, willpower, focus, identity |
+| 4.1 | 2026-01-28 | **Implementation status clarification:** |
+| | | - Expanded deferred features list (items 11-15) |
+| | | - Clarified: follow-up email delivery not implemented |
+| | | - Clarified: morning/evening check-ins dormant (ADR-002) |
+| | | - Clarified: final dose ritual deferred |
