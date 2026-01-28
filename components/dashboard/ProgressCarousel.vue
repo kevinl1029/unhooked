@@ -1,8 +1,8 @@
 <template>
-  <div class="glass rounded-card p-6 md:p-8 shadow-card border border-brand-border">
+  <div class="glass rounded-card p-4 md:p-8 shadow-card border border-brand-border">
     <!-- Header -->
     <h2 class="text-2xl font-semibold text-white mb-2 text-center">Your Progress</h2>
-    <p class="text-white-65 text-center mb-8">
+    <p class="text-white-65 text-center mb-4 md:mb-8">
       {{ completedCount }} of 5 illusions explored
     </p>
 
@@ -45,14 +45,14 @@
 
       <!-- Illusions display -->
       <div
-        class="overflow-hidden py-8 px-12"
+        class="overflow-hidden py-4 md:py-8 px-8 md:px-12"
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
       >
         <div
           class="flex items-center justify-center gap-4 transition-transform duration-300 ease-out"
-          :style="{ transform: `translateX(${-(focusedIndex - 2) * 140}px)` }"
+          :style="{ transform: `translateX(${-(focusedIndex - 2) * (isMobile ? 100 : 140)}px)` }"
         >
           <template v-for="(illusion, index) in illusions" :key="illusion.number">
             <div
@@ -117,7 +117,7 @@
     </div>
 
     <!-- Action section -->
-    <div class="mt-8 pt-6 border-t" style="border-color: rgba(255, 255, 255, 0.1)">
+    <div class="mt-4 pt-4 md:mt-8 md:pt-6 border-t" style="border-color: rgba(255, 255, 255, 0.1)">
       <Transition name="fade" mode="out-in">
         <div v-if="focusedIllusion.status === 'current'" :key="'current'" class="text-center">
           <h3 class="text-xl font-semibold text-white mb-2">
@@ -218,12 +218,29 @@ const illusions = computed<Illusion[]>(() => {
 // Focused illusion index
 const focusedIndex = ref(0)
 
-// Initialize focus to current illusion
+// Responsive sizing for mobile
+const isMobile = ref(false)
+
+// Initialize focus to current illusion and set up resize listener
 onMounted(() => {
   const currentIndex = illusions.value.findIndex((i) => i.status === 'current')
   if (currentIndex !== -1) {
     focusedIndex.value = currentIndex
   }
+
+  // Check if mobile on mount
+  isMobile.value = window.innerWidth < 768
+
+  // Listen for resize
+  const handleResize = () => {
+    isMobile.value = window.innerWidth < 768
+  }
+  window.addEventListener('resize', handleResize)
+
+  // Cleanup
+  onUnmounted(() => {
+    window.removeEventListener('resize', handleResize)
+  })
 })
 
 // Computed
@@ -256,6 +273,15 @@ function navigateNext() {
 // Style functions matching the reference implementation
 function getCircleSizeConfig(index: number) {
   const distance = Math.abs(index - focusedIndex.value)
+
+  // Mobile sizes (smaller to fit more above the fold)
+  if (isMobile.value) {
+    if (distance === 0) return { size: 72, iconSize: 36, fontSize: '0.875rem' }
+    if (distance === 1) return { size: 48, iconSize: 24, fontSize: '0.75rem' }
+    return { size: 36, iconSize: 18, fontSize: '0.625rem' }
+  }
+
+  // Desktop sizes
   if (distance === 0) return { size: 96, iconSize: 48, fontSize: '1rem' }
   if (distance === 1) return { size: 64, iconSize: 32, fontSize: '0.875rem' }
   return { size: 48, iconSize: 24, fontSize: '0.75rem' }
@@ -273,7 +299,7 @@ function getIllusionContainerStyles(index: number): Record<string, string | numb
   return {
     opacity: getOpacity(index),
     transform: `scale(${isActive ? 1 : 0.85})`,
-    minWidth: '120px'
+    minWidth: isMobile.value ? '90px' : '120px'
   }
 }
 
