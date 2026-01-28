@@ -1155,17 +1155,17 @@ Stories are organized by implementation area. Each story is sized for one focuse
 **Description:** As a user finishing a reinforcement session, I want the session to end gracefully and assess my conviction so that my progress is tracked.
 
 **References:**
-- `docs/specs/reinforcement-sessions-spec.md`: [Technical Design > Session Ending](#session-ending), [FR-6: Conviction Assessment — Reinforcement](#fr-6-conviction-assessment--reinforcement), [Technical Design > Moment Capture in Reinforcement](#moment-capture-in-reinforcement)
+- `docs/specs/reinforcement-sessions-spec.md`: [Technical Design > Session Ending](#session-ending), [Technical Design > Session Completion Architecture](#session-completion-architecture), [FR-6: Conviction Assessment — Reinforcement](#fr-6-conviction-assessment--reinforcement)
 
 **Acceptance Criteria:**
 - [ ] Session detects `[SESSION_COMPLETE]` marker in AI response (same as core sessions)
-- [ ] For illusion-specific sessions: calls `POST /api/reinforcement/assess` with conversation_id and illusion_key
-- [ ] For boost sessions: calls assessment for each illusion substantively discussed (AI identifies in response)
-- [ ] Shows brief completion message/animation
-- [ ] Navigates back to dashboard after completion
+- [ ] Server-side `handleSessionComplete()` runs conviction assessment automatically (no client-side API call)
+- [ ] Client navigates back to dashboard after completion
 - [ ] New moments captured during session appear on dashboard
 - [ ] Typecheck/lint passes
 - [ ] Verify in browser using dev-browser skill
+
+**Note:** Assessment is handled server-side when `[SESSION_COMPLETE]` is detected. The client does NOT call `/api/reinforcement/assess`. See ADR-007.
 
 ---
 
@@ -1251,6 +1251,39 @@ This format makes it easy to identify session types when debugging or analyzing 
 **End Criteria:** AI uses judgment to determine when a reinforcement session is complete (reconnection feels achieved). This is more open-ended than core sessions which have curriculum milestones. Can be refined based on user testing.
 
 **Concurrent Sessions:** Multiple reinforcement sessions are allowed simultaneously. No blocking at API or UI level.
+
+### Session Completion Architecture
+
+**Design Principle:** Server-side authority with single assessment path.
+
+When `[SESSION_COMPLETE]` is detected in the AI response, the server-side `handleSessionComplete()` function in `chat.post.ts` is the **single authority** for:
+- Running conviction assessment (LLM call)
+- Storing assessment in `conviction_assessments` table
+- Updating `user_story` (conviction, triggers, stakes, key insight)
+- Generating origin story summary (if eligible)
+- Scheduling check-ins (core sessions only)
+
+**Why Server-Side Only:**
+
+1. **Reliability:** Assessment runs even if client disconnects mid-session
+2. **No duplicates:** Single code path = single assessment per session
+3. **Consistency:** Same pattern for core and reinforcement sessions
+
+**Client Behavior:**
+
+The client (reinforcement page) does NOT trigger assessment. When `sessionComplete: true` is received:
+1. Client navigates back to dashboard
+2. Assessment has already been handled server-side
+
+```typescript
+// reinforcement/[illusion].vue
+function handleSessionComplete() {
+  // Assessment already handled server-side by handleSessionComplete() in chat.post.ts
+  router.push('/dashboard')
+}
+```
+
+**Related:** See ADR-007 in `docs/decisions/architecture-decisions.md` for the full decision record.
 
 ### Routes
 
@@ -1350,23 +1383,9 @@ When the conversation reaches resolution, end with affirmation and output [SESSI
 // 403 Forbidden: generic_boost requested but user hasn't completed all 5 illusions
 ```
 
-#### `POST /api/reinforcement/assess`
+#### `POST /api/reinforcement/assess` *(Deprecated)*
 
-```typescript
-// Request
-{
-  conversation_id: string
-  illusion_key: string
-}
-
-// Response
-{
-  current_conviction: number  // 0-10
-  delta_from_previous: number
-  shift_quality: 'restored' | 'deepened' | 'still_struggling' | 'new_insight'
-  key_moment?: string  // If a notable new articulation emerged
-}
-```
+> **Note:** This endpoint is NOT called during normal session flow. Session assessment is handled server-side by `handleSessionComplete()` when `[SESSION_COMPLETE]` is detected. This endpoint is retained for debugging only. See ADR-007.
 
 ### Context Injection Strategy
 
@@ -1535,6 +1554,7 @@ None — all technical questions resolved.
 | 2.8     | 2026-01-27 | **Conversation title format.** Added documentation for database `title` field format: reinforcement sessions use `"Reinforcement: {Illusion Name}"`, boost sessions use `"Boost: Support"`. This distinguishes session types in the database for debugging and analytics. |
 | 2.9     | 2026-01-28 | **Unified session types: boost → reinforcement.** Removed separate `'boost'` session type. All reinforcement sessions now use `session_type: 'reinforcement'`. Generic support sessions are distinguished by `illusion_key: null`. Updated FR-5, FR-6, US-003, US-005, and API documentation. Title format for generic sessions changed from `"Boost: Support"` to `"Reinforcement: Support"`. |
 | 2.10    | 2026-01-27 | **Mobile-optimized carousel sizing and visual balance.** Added responsive circle sizes (72/48/36px mobile vs 96/64/48px desktop) to improve above-fold visibility of MomentCard. Added "Visual Balance" section documenting fixed-height circle zone and reserved badge area for consistent container heights. |
+| 2.11    | 2026-01-27 | **Session Completion Architecture (ADR-007).** Added "Session Completion Architecture" section documenting server-side authority pattern. Clarified that client does NOT call `/api/reinforcement/assess` — assessment is handled by `handleSessionComplete()` in `chat.post.ts`. Updated US-019 acceptance criteria. Deprecated assess endpoint. |
 
 ---
 

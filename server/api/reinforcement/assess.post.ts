@@ -1,9 +1,15 @@
 /**
  * POST /api/reinforcement/assess
- * Run conviction assessment after a reinforcement session
  *
- * Assesses the user's current conviction level and tracks changes over time.
- * Similar to core session assessment but adds shift_quality classification.
+ * DEPRECATED: This endpoint is not used in normal session flow.
+ *
+ * Session assessment is handled server-side by handleSessionComplete() in chat.post.ts
+ * when [SESSION_COMPLETE] is detected. This endpoint was originally designed to be
+ * called by the client, but that caused duplicate assessments.
+ *
+ * This endpoint is retained for debugging/manual testing only.
+ *
+ * See: ADR-007 in docs/decisions/architecture-decisions.md
  */
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { assessConviction } from '~/server/utils/llm/tasks/conviction-assessment'

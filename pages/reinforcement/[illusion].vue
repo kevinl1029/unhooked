@@ -168,25 +168,11 @@ onMounted(async () => {
   }
 })
 
-async function handleSessionComplete() {
-  // Call assessment API for reinforcement session
-  if (!conversationId.value) {
-    router.push('/dashboard')
-    return
-  }
-
-  try {
-    await $fetch('/api/reinforcement/assess', {
-      method: 'POST',
-      body: {
-        conversation_id: conversationId.value,
-        illusion_key: illusionKey.value,
-      },
-    })
-  } catch (err) {
-    // Gracefully handle assessment failure - session still completes
-    console.error('Assessment failed (session still complete):', err)
-  }
+function handleSessionComplete() {
+  // Session assessment (conviction scoring, user_story updates) is handled server-side
+  // by handleSessionComplete() in chat.post.ts when [SESSION_COMPLETE] is detected.
+  // No client-side assessment call needed - this avoids duplicate assessments.
+  // See: docs/specs/reinforcement-sessions-spec.md > Technical Design > Session Completion Architecture
 
   // Navigate back to dashboard
   router.push('/dashboard')

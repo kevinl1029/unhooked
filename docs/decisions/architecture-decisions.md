@@ -1,6 +1,6 @@
 # Unhooked: Decision Records
 
-**Version:** 1.5
+**Version:** 1.6
 **Created:** 2026-01-19
 **Last Updated:** 2026-01-27  
 **Document Type:** Architecture Decision Records (ADR)
@@ -485,6 +485,92 @@ The conversion functions (`illusionNumberToKey()`, `illusionKeyToNumber()`) exis
 
 ---
 
+### ADR-007: Session Completion — Server-Side Authority Pattern
+
+**Date:** 2026-01-27
+**Status:** Accepted
+**Decision Maker(s):** Kevin
+
+**Context:**
+
+During implementation review of reinforcement sessions, we discovered that session completion was triggering **two separate assessment paths**:
+
+1. **Server-side:** When `[SESSION_COMPLETE]` is detected in the AI response, `handleSessionComplete()` in `chat.post.ts` runs conviction assessment and updates `user_story`
+2. **Client-side:** The reinforcement page's `handleSessionComplete` callback called `POST /api/reinforcement/assess`, which also runs conviction assessment and updates `user_story`
+
+Both paths executed for the same session completion event, resulting in:
+- Two LLM calls for conviction assessment
+- Two records inserted into `conviction_assessments` table
+- Two updates to `user_story` (second potentially overwriting first)
+
+The spec (US-019) mentioned the client calling the assess endpoint, but `handleSessionComplete()` was already designed to handle both core and reinforcement sessions (it explicitly skips check-in scheduling for reinforcement).
+
+**Decision:**
+
+Establish **server-side authority** for session completion handling:
+
+1. `handleSessionComplete()` in `chat.post.ts` is the **single authority** for all post-session tasks
+2. The client does **NOT** call `/api/reinforcement/assess` — it simply navigates to dashboard
+3. The `/api/reinforcement/assess` endpoint is **retained but reserved** for potential future UI features (e.g., displaying `shift_quality` feedback)
+
+**Architecture:**
+
+```
+[SESSION_COMPLETE] detected in AI response
+              │
+              ▼
+    ┌─────────────────────────────────────────┐
+    │      handleSessionComplete()             │
+    │      (server/utils/session/)             │
+    │                                          │
+    │  • Run conviction assessment (LLM)       │
+    │  • Store in conviction_assessments       │
+    │  • Update user_story                     │
+    │  • Select key insight                    │
+    │  • Generate origin story (if eligible)   │
+    │  • Schedule check-ins (core only)        │
+    └─────────────────────────────────────────┘
+              │
+              ▼
+    sessionComplete: true returned to client
+              │
+              ▼
+    ┌─────────────────────────────────────────┐
+    │      Client (reinforcement page)         │
+    │                                          │
+    │  • Navigate to dashboard                 │
+    │  • (Assessment already complete)         │
+    └─────────────────────────────────────────┘
+```
+
+**Rationale:**
+
+1. **Reliability:** Server-side execution ensures assessment runs even if client disconnects mid-session
+2. **No duplicates:** Single code path = single assessment per session = single database record
+3. **Consistency:** Same pattern for core and reinforcement sessions
+4. **Simplicity:** Client doesn't need to know about assessment mechanics
+
+**Alternatives Considered:**
+
+| Alternative | Why Rejected |
+|-------------|--------------|
+| **Client-only assessment** | Unreliable if client disconnects; requires client to know assessment details |
+| **Run both, deduplicate in DB** | Wasteful (two LLM calls); complex deduplication logic |
+
+**Consequences:**
+
+- Removed `$fetch('/api/reinforcement/assess')` call from `pages/reinforcement/[illusion].vue`
+- `handleSessionComplete()` continues to run for both core and reinforcement sessions
+- `/api/reinforcement/assess.post.ts` deprecated (retained for debugging only)
+- Updated spec US-019 to reflect server-side assessment
+- Added "Session Completion Architecture" section to `reinforcement-sessions-spec.md`
+
+**Related Documents:**
+- `docs/specs/reinforcement-sessions-spec.md` — Session Completion Architecture section
+- `server/utils/session/session-complete.ts` — `handleSessionComplete()` implementation
+
+---
+
 ## Index
 
 | ADR | Title | Status | Date |
@@ -495,6 +581,7 @@ The conversion functions (`illusionNumberToKey()`, `illusionKeyToNumber()`) exis
 | 004 | Ceremony Artifacts Use INSERT, Not UPSERT | Accepted | 2026-01-26 |
 | 005 | Dashboard CTA Hierarchy — Single Primary Action Per State | Accepted | 2026-01-27 |
 | 006 | Deprecate `illusion_number` in Favor of `illusion_key` | Accepted | 2026-01-27 |
+| 007 | Session Completion — Server-Side Authority Pattern | Accepted | 2026-01-27 |
 
 ---
 
@@ -508,3 +595,4 @@ The conversion functions (`illusionNumberToKey()`, `illusionKeyToNumber()`) exis
 | 1.3 | 2026-01-26 | Added ADR-004 (Ceremony Artifacts Use INSERT, Not UPSERT) |
 | 1.4 | 2026-01-27 | Added ADR-005 (Dashboard CTA Hierarchy — Single Primary Action Per State) |
 | 1.5 | 2026-01-27 | Added ADR-006 (Deprecate `illusion_number` in Favor of `illusion_key`) |
+| 1.6 | 2026-01-27 | Added ADR-007 (Session Completion — Server-Side Authority Pattern) |
