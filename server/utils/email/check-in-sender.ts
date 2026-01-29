@@ -126,13 +126,13 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
   const appUrl = config.public.appUrl || 'https://getunhooked.app'
 
   const magicLink = `${appUrl}/check-in/open/${checkIn.magic_link_token}`
-  const subject = getEmailSubject(checkIn.check_in_type)
+  const subject = getEmailSubject()
 
   const { error } = await resend.emails.send({
     from: `${FROM_NAME} <${FROM_EMAIL}>`,
     to: checkIn.user.email,
     subject,
-    html: buildEmailHtml(magicLink, checkIn.check_in_type),
+    html: buildEmailHtml(magicLink),
     text: buildEmailText(magicLink),
   })
 
@@ -147,13 +147,7 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
  * Build HTML email content
  * Email contains link only, no prompt content (per spec)
  */
-function buildEmailHtml(magicLink: string, checkInType: string): string {
-  const greeting = checkInType === 'morning'
-    ? 'Good morning'
-    : checkInType === 'evening'
-      ? 'Evening'
-      : 'Hey there'
-
+function buildEmailHtml(magicLink: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -168,14 +162,19 @@ function buildEmailHtml(magicLink: string, checkInType: string): string {
       <td align="center">
         <table width="100%" max-width="480" cellpadding="0" cellspacing="0" style="background: linear-gradient(180deg, #104e54 0%, #0a3a3f 100%); border-radius: 16px; padding: 40px; max-width: 480px;">
           <tr>
+            <td align="center" style="padding-bottom: 8px;">
+              <p style="color: rgba(255, 255, 255, 0.65); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin: 0;">Unhooked</p>
+            </td>
+          </tr>
+          <tr>
             <td align="center" style="padding-bottom: 24px;">
-              <h1 style="color: #ffffff; font-size: 24px; font-weight: 600; margin: 0;">${greeting}</h1>
+              <h1 style="color: #ffffff; font-size: 24px; font-weight: 600; margin: 0;">Your check-in is ready</h1>
             </td>
           </tr>
           <tr>
             <td align="center" style="padding-bottom: 32px;">
               <p style="color: rgba(255, 255, 255, 0.85); font-size: 16px; line-height: 1.6; margin: 0;">
-                You have a check-in waiting.
+                Take a moment to reflect on how things are going.
               </p>
             </td>
           </tr>
@@ -206,11 +205,13 @@ function buildEmailHtml(magicLink: string, checkInType: string): string {
  * Build plain text email content
  */
 function buildEmailText(magicLink: string): string {
-  return `You have a check-in waiting.
+  return `UNHOOKED
+
+Your check-in is ready
+
+Take a moment to reflect on how things are going.
 
 Open Check-in: ${magicLink}
 
-This link expires in 24 hours.
-
-— Unhooked Coach`
+This link expires in 24 hours.`
 }

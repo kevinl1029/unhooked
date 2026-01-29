@@ -26,18 +26,14 @@ export function getResendClient(): Resend {
 }
 
 /**
- * Email templates for different check-in types
+ * Email subject for check-ins
+ * Using clear branded subject to avoid spam filters
  */
-export const EMAIL_SUBJECTS: Record<string, string> = {
-  morning: 'Good morning — quick check-in',
-  evening: "Day's winding down — how did it go?",
-  post_session: 'Quick thought from earlier...',
-  default: 'Checking in with you',
-}
+export const EMAIL_SUBJECT = 'Unhooked: Your check-in is ready'
 
 /**
- * Get the email subject for a check-in type
+ * Get the email subject for check-ins
  */
-export function getEmailSubject(checkInType: string): string {
-  return EMAIL_SUBJECTS[checkInType] || EMAIL_SUBJECTS.default
+export function getEmailSubject(): string {
+  return EMAIL_SUBJECT
 }
