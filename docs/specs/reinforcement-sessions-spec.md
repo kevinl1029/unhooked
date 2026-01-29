@@ -558,7 +558,7 @@ interface MomentCard {
 4. **Start generic support:**
    - `POST /api/reinforcement/start`
    - Body: `{ reason: 'generic_boost' }`
-   - Returns: `{ conversation_id, session_type: 'boost', context }`
+   - Returns: `{ conversation_id, session_type: 'reinforcement', context }`
 
 #### Component Structure
 
