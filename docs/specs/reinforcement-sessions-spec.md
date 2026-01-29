@@ -1,8 +1,8 @@
 # Unhooked: Reinforcement Sessions Specification
 
-**Version:** 2.10
+**Version:** 2.12
 **Created:** 2026-01-12
-**Updated:** 2026-01-27
+**Updated:** 2026-01-29
 **Status:** Ready for Implementation
 **Document Type:** Feature Specification (PRD + Technical Design)
 **Related Documents:**
@@ -1160,10 +1160,16 @@ Stories are organized by implementation area. Each story is sized for one focuse
 **Acceptance Criteria:**
 - [ ] Session detects `[SESSION_COMPLETE]` marker in AI response (same as core sessions)
 - [ ] Server-side `handleSessionComplete()` runs conviction assessment automatically (no client-side API call)
-- [ ] Client navigates back to dashboard after completion
+- [ ] Client displays `SessionCompleteCard` with reinforcement-specific copy (see below)
+- [ ] User clicks "Return to Dashboard" to navigate back
 - [ ] New moments captured during session appear on dashboard
 - [ ] Typecheck/lint passes
 - [ ] Verify in browser using dev-browser skill
+
+**Completion Card Copy (Reinforcement Sessions):**
+- Heading: "Session Complete"
+- Subtext: "You've strengthened what you already know."
+- CTA: "Return to Dashboard" (single button, no secondary CTA)
 
 **Note:** Assessment is handled server-side when `[SESSION_COMPLETE]` is detected. The client does NOT call `/api/reinforcement/assess`. See ADR-007.
 
@@ -1272,14 +1278,26 @@ When `[SESSION_COMPLETE]` is detected in the AI response, the server-side `handl
 **Client Behavior:**
 
 The client (reinforcement page) does NOT trigger assessment. When `sessionComplete: true` is received:
-1. Client navigates back to dashboard
-2. Assessment has already been handled server-side
+1. Client displays `SessionCompleteCard` with reinforcement-specific copy
+2. User clicks "Return to Dashboard" to navigate back
+3. Assessment has already been handled server-side
+
+**Completion Card Copy:**
+| Element | Core Sessions | Reinforcement Sessions |
+|---------|---------------|------------------------|
+| Heading | "Session Complete" | "Session Complete" |
+| Subtext | "Great work. Take a moment to let this settle." | "You've strengthened what you already know." |
+| Primary CTA | "Return to Dashboard" | "Return to Dashboard" |
+| Secondary CTA | "Continue to Next Session" / "Complete the Program" | None |
 
 ```typescript
 // reinforcement/[illusion].vue
+const sessionComplete = ref(false)
+
 function handleSessionComplete() {
   // Assessment already handled server-side by handleSessionComplete() in chat.post.ts
-  router.push('/dashboard')
+  // Show completion card instead of immediate redirect
+  sessionComplete.value = true
 }
 ```
 
@@ -1555,6 +1573,7 @@ None — all technical questions resolved.
 | 2.9     | 2026-01-28 | **Unified session types: boost → reinforcement.** Removed separate `'boost'` session type. All reinforcement sessions now use `session_type: 'reinforcement'`. Generic support sessions are distinguished by `illusion_key: null`. Updated FR-5, FR-6, US-003, US-005, and API documentation. Title format for generic sessions changed from `"Boost: Support"` to `"Reinforcement: Support"`. |
 | 2.10    | 2026-01-27 | **Mobile-optimized carousel sizing and visual balance.** Added responsive circle sizes (72/48/36px mobile vs 96/64/48px desktop) to improve above-fold visibility of MomentCard. Added "Visual Balance" section documenting fixed-height circle zone and reserved badge area for consistent container heights. |
 | 2.11    | 2026-01-27 | **Session Completion Architecture (ADR-007).** Added "Session Completion Architecture" section documenting server-side authority pattern. Clarified that client does NOT call `/api/reinforcement/assess` — assessment is handled by `handleSessionComplete()` in `chat.post.ts`. Updated US-019 acceptance criteria. Deprecated assess endpoint. |
+| 2.12    | 2026-01-29 | **Reinforcement session completion card.** Reinforcement sessions now display `SessionCompleteCard` with custom copy instead of immediately redirecting. Heading: "Session Complete", Subtext: "You've strengthened what you already know.", CTA: "Return to Dashboard" (no secondary CTA). Updated US-019 and Session Completion Architecture. |
 
 ---
 

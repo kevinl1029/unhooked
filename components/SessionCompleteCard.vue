@@ -7,9 +7,9 @@
       </svg>
     </div>
 
-    <h2 class="text-3xl font-bold text-white mb-3">Session Complete</h2>
+    <h2 class="text-3xl font-bold text-white mb-3">{{ heading }}</h2>
     <p class="text-white-85 text-lg mb-8">
-      Great work. Take a moment to let this settle.
+      {{ subtext }}
     </p>
 
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
@@ -43,9 +43,18 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  nextIllusion: number | null
-}>()
+withDefaults(
+  defineProps<{
+    nextIllusion?: number | null
+    heading?: string
+    subtext?: string
+  }>(),
+  {
+    nextIllusion: null,
+    heading: 'Session Complete',
+    subtext: 'Great work. Take a moment to let this settle.',
+  }
+)
 
 defineEmits<{
   continue: [illusionNumber: number]

@@ -19,8 +19,17 @@
     <!-- Session view -->
     <div class="flex-1 flex flex-col space-y-6 min-h-0">
       <div class="flex-1 min-h-0">
+        <!-- Session complete card -->
+        <div v-if="sessionComplete" class="flex items-center justify-center h-full px-4">
+          <SessionCompleteCard
+            heading="Session Complete"
+            subtext="You've strengthened what you already know."
+            @dashboard="router.push('/dashboard')"
+          />
+        </div>
+
         <VoiceSessionView
-          v-if="conversationId"
+          v-else-if="conversationId"
           :existing-conversation-id="conversationId"
           :illusion-number="0"
           :illusion-key="illusionKey"
@@ -86,6 +95,7 @@ const anchorMoment = ref<{ id: string; transcript: string } | null>(null)
 const errorMessage = ref<string | null>(null)
 const showErrorToast = ref(false)
 const toastMessage = ref('')
+const sessionComplete = ref(false)
 
 // Illusion display names
 const ILLUSION_NAMES: Record<string, string> = {
@@ -174,8 +184,8 @@ function handleSessionComplete() {
   // No client-side assessment call needed - this avoids duplicate assessments.
   // See: docs/specs/reinforcement-sessions-spec.md > Technical Design > Session Completion Architecture
 
-  // Navigate back to dashboard
-  router.push('/dashboard')
+  // Show completion card
+  sessionComplete.value = true
 }
 
 function handleError(err: any) {
