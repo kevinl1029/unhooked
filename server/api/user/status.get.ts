@@ -44,6 +44,28 @@ export default defineEventHandler(async (event) => {
   // For post-ceremony users, fetch artifacts and follow-ups
   let artifacts = null
   let pendingFollowUps = null
+  let illusionLastSessions: Record<string, string> | null = null
+
+  // For post-ceremony or ceremony-ready users, fetch last session dates per illusion
+  if (phase === 'post_ceremony' || phase === 'ceremony_ready') {
+    const { data: lastSessions } = await supabase
+      .from('conversations')
+      .select('illusion_key, completed_at')
+      .eq('user_id', user.sub)
+      .in('session_type', ['core', 'reinforcement'])
+      .not('illusion_key', 'is', null)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+
+    if (lastSessions && lastSessions.length > 0) {
+      illusionLastSessions = {}
+      for (const session of lastSessions) {
+        if (session.illusion_key && !illusionLastSessions[session.illusion_key]) {
+          illusionLastSessions[session.illusion_key] = session.completed_at
+        }
+      }
+    }
+  }
 
   if (phase === 'post_ceremony') {
     // Fetch artifacts
@@ -106,5 +128,6 @@ export default defineEventHandler(async (event) => {
     artifacts,
     pending_follow_ups: pendingFollowUps,
     next_session: nextSession,
+    illusion_last_sessions: illusionLastSessions,
   }
 })

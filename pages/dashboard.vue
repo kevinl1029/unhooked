@@ -455,12 +455,26 @@ const journeyIllusions = computed(() => {
   }
 
   const illusionOrder = status.value?.progress?.illusion_order || [1, 2, 3, 4, 5]
+  const lastSessions = status.value?.illusion_last_sessions || {}
 
-  return illusionOrder.map(num => ({
-    key: illusionData[num].key,
-    name: illusionData[num].name,
-    daysSince: 0, // TODO: calculate from completion dates if needed
-  }))
+  return illusionOrder.map(num => {
+    const key = illusionData[num].key
+    const lastSessionDate = lastSessions[key]
+    let daysSince = 0
+
+    if (lastSessionDate) {
+      const lastDate = new Date(lastSessionDate)
+      const now = new Date()
+      const diffTime = now.getTime() - lastDate.getTime()
+      daysSince = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    }
+
+    return {
+      key,
+      name: illusionData[num].name,
+      daysSince,
+    }
+  })
 })
 
 // Methods
