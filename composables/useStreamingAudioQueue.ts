@@ -120,9 +120,10 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
    * Call from a user gesture handler (click/touch) to ensure iOS Safari
    * allows audio playback. If called outside a gesture, the context will
    * start suspended and auto-resume on the user's next interaction.
+   * Reuses existing AudioContext when one already exists and is not closed.
    */
   const initialize = async () => {
-    if (!audioContext) {
+    if (!audioContext || audioContext.state === 'closed') {
       audioContext = new AudioContext()
 
       // On iOS Safari, AudioContext created outside a user gesture starts suspended.
@@ -356,11 +357,12 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   }
 
   /**
-   * Stop playback and clear queue
+   * Reset all playback state WITHOUT closing the AudioContext.
+   * Preserves the AudioContext for the next streaming session to avoid
+   * recreating it outside a user gesture context (critical for iOS Safari).
    */
-  const stop = (triggerComplete = false) => {
-    const wasPlaying = isPlaying.value
-
+  const resetPlaybackState = () => {
+    // Stop and disconnect all active source nodes
     for (const source of activeSourceNodes) {
       try {
         source.stop()
@@ -371,17 +373,10 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     }
     activeSourceNodes = []
 
-    if (autoResumeCleanup) {
-      autoResumeCleanup()
-    }
-
-    if (audioContext) {
-      audioContext.close()
-      audioContext = null
-    }
-
+    // Clear word timing tracking
     stopWordTracking()
 
+    // Reset all playback state
     isPlaying.value = false
     isWaitingForChunks.value = false
     currentChunkIndex.value = -1
@@ -397,6 +392,28 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     error.value = null
     pendingCompletion = false
     chunksFinishedPlaying = 0
+  }
+
+  /**
+   * Stop playback and clear queue.
+   * Closes the AudioContext - a new one will be created on next initialize().
+   */
+  const stop = (triggerComplete = false) => {
+    const wasPlaying = isPlaying.value
+
+    // Reset all playback state first
+    resetPlaybackState()
+
+    // Clean up auto-resume listeners
+    if (autoResumeCleanup) {
+      autoResumeCleanup()
+    }
+
+    // Close and nullify the AudioContext
+    if (audioContext) {
+      audioContext.close()
+      audioContext = null
+    }
 
     if (triggerComplete && wasPlaying) {
       options.onComplete?.()
@@ -449,6 +466,7 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
     stop,
     pause,
     resume,
-    reset
+    reset,
+    resetPlaybackState
   }
 }

@@ -64,15 +64,16 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
     const decoder = new TextDecoder()
     let buffer = ''
 
-    // Reset state from any previous stream before starting new one
-    // This clears allWordTimings so ttsWords/ttsText don't accumulate across messages
-    audioQueue.reset()
+    // Reset playback state from any previous stream WITHOUT closing the AudioContext.
+    // This preserves the AudioContext created by preInitAudio() so we don't recreate
+    // it outside the user gesture context (critical for iOS Safari).
+    audioQueue.resetPlaybackState()
 
     isStreaming.value = true
     fullText.value = ''
     error.value = null
 
-    // Initialize audio context (requires user gesture context)
+    // Initialize audio context (reuses existing context if available)
     await audioQueue.initialize()
 
     try {
