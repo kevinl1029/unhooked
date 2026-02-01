@@ -3,6 +3,9 @@
  * Journey Player Component
  * Displays the reflective journey with sequential audio playback
  * and word-by-word transcript sync
+ *
+ * Uses Web Audio API for iOS Safari compatibility - all segments are
+ * scheduled from the initial user gesture to avoid autoplay restrictions.
  */
 
 interface WordTiming {
@@ -42,10 +45,16 @@ const currentSegmentIndex = ref(0)
 const isPlaying = ref(false)
 const isLoading = ref(false)
 const currentWordIndex = ref(-1)
-const audioElement = ref<HTMLAudioElement | null>(null)
 const preloadedSegments = ref<Map<string, JourneySegment>>(new Map())
 const hasPreloaded = ref(false)
 const playbackError = ref<string | null>(null)
+
+// Web Audio API state
+let audioContext: AudioContext | null = null
+let scheduledNodes: AudioBufferSourceNode[] = []
+let playbackStartTime = 0
+let wordTrackingInterval: ReturnType<typeof setInterval> | null = null
+let segmentStartTimes: number[] = [] // Cumulative start times for each segment in seconds
 
 // Computed
 const currentSegment = computed(() => props.segments[currentSegmentIndex.value])
@@ -110,23 +119,134 @@ function getSegmentData(segment: JourneySegment): JourneySegment {
   return preloadedSegments.value.get(segment.id) || segment
 }
 
-// Play current segment
-async function playCurrentSegment() {
-  const segment = getSegmentData(currentSegment.value)
-
-  if (segment.audio_unavailable || !segment.audio_url) {
-    // Text-only fallback - show for a calculated duration then advance
-    const textDuration = Math.max(segment.text.split(' ').length * 300, 3000)
-    await new Promise(resolve => setTimeout(resolve, textDuration))
-    advanceToNextSegment()
-    return
+// Fetch and decode audio buffer for a segment
+async function fetchAndDecodeAudio(audioUrl: string): Promise<AudioBuffer> {
+  if (!audioContext) {
+    throw new Error('AudioContext not initialized')
   }
 
-  // Play audio
-  if (audioElement.value) {
-    audioElement.value.src = segment.audio_url
-    audioElement.value.play()
+  const response = await fetch(audioUrl)
+  const arrayBuffer = await response.arrayBuffer()
+  return audioContext.decodeAudioData(arrayBuffer)
+}
+
+// Start word timing tracking
+function startWordTracking() {
+  if (wordTrackingInterval) return
+
+  wordTrackingInterval = setInterval(() => {
+    if (!audioContext || !isPlaying.value) return
+
+    const elapsedSec = audioContext.currentTime - playbackStartTime
+
+    // Find which segment we're in
+    let segmentIdx = 0
+    for (let i = 0; i < segmentStartTimes.length; i++) {
+      if (elapsedSec >= segmentStartTimes[i]) {
+        segmentIdx = i
+      } else {
+        break
+      }
+    }
+
+    // Update current segment if changed
+    if (segmentIdx !== currentSegmentIndex.value) {
+      currentSegmentIndex.value = segmentIdx
+      currentWordIndex.value = -1
+    }
+
+    // Track word highlighting within current segment
+    const segment = getSegmentData(props.segments[segmentIdx])
+    if (!segment.word_timings || segment.word_timings.length === 0) return
+
+    const segmentElapsedMs = (elapsedSec - segmentStartTimes[segmentIdx]) * 1000
+
+    // Find current word
+    let foundIndex = -1
+    for (let i = 0; i < segment.word_timings.length; i++) {
+      const timing = segment.word_timings[i]
+      if (segmentElapsedMs >= timing.start) {
+        foundIndex = i
+      } else {
+        break
+      }
+    }
+
+    if (foundIndex >= 0 && foundIndex !== currentWordIndex.value) {
+      currentWordIndex.value = foundIndex
+    }
+  }, 50)
+}
+
+// Stop word timing tracking
+function stopWordTracking() {
+  if (wordTrackingInterval) {
+    clearInterval(wordTrackingInterval)
+    wordTrackingInterval = null
   }
+}
+
+// Schedule all segments for playback from user gesture
+async function scheduleAllSegments() {
+  if (!audioContext) {
+    audioContext = new AudioContext()
+  }
+
+  // Resume context if suspended (iOS Safari)
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume()
+  }
+
+  let scheduleTime = audioContext.currentTime
+  segmentStartTimes = []
+  const GAP_DURATION_SEC = 0.75 // 750ms gap between segments
+
+  for (let i = 0; i < props.segments.length; i++) {
+    const segment = getSegmentData(props.segments[i])
+
+    // Record segment start time
+    segmentStartTimes.push(scheduleTime)
+
+    if (segment.audio_unavailable || !segment.audio_url) {
+      // Text-only fallback - calculate duration and advance
+      const textDuration = Math.max(segment.text.split(' ').length * 300, 3000)
+      scheduleTime += textDuration / 1000 + GAP_DURATION_SEC
+      continue
+    }
+
+    try {
+      // Fetch and decode audio
+      const audioBuffer = await fetchAndDecodeAudio(segment.audio_url)
+
+      // Create and schedule source node
+      const source = audioContext.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioContext.destination)
+      source.start(scheduleTime)
+
+      scheduledNodes.push(source)
+
+      // Handle completion
+      if (i === props.segments.length - 1) {
+        // Last segment - emit complete when done
+        source.onended = () => {
+          isPlaying.value = false
+          stopWordTracking()
+          currentSegmentIndex.value = props.segments.length - 1
+          emit('complete')
+        }
+      }
+
+      // Advance schedule time (add gap between segments)
+      scheduleTime += audioBuffer.duration + GAP_DURATION_SEC
+    } catch (error) {
+      console.error(`[JourneyPlayer] Failed to schedule segment ${segment.id}:`, error)
+      // Continue with next segment on error
+      scheduleTime += GAP_DURATION_SEC
+    }
+  }
+
+  playbackStartTime = audioContext.currentTime
 }
 
 // Start playback
@@ -137,71 +257,51 @@ async function play() {
 
   if (!canPlay.value) return
 
-  isPlaying.value = true
-  playCurrentSegment()
+  try {
+    // Schedule all segments from this user gesture
+    await scheduleAllSegments()
+
+    isPlaying.value = true
+    startWordTracking()
+  } catch (error) {
+    console.error('[JourneyPlayer] Playback failed:', error)
+    playbackError.value = 'Failed to start playback'
+    emit('error', playbackError.value)
+  }
 }
 
 // Pause playback
-function pause() {
+async function pause() {
   isPlaying.value = false
-  if (audioElement.value) {
-    audioElement.value.pause()
+  stopWordTracking()
+
+  if (audioContext && audioContext.state === 'running') {
+    await audioContext.suspend()
+  }
+}
+
+// Resume playback
+async function resume() {
+  if (!audioContext) return
+
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume()
+    isPlaying.value = true
+    startWordTracking()
   }
 }
 
 // Toggle play/pause
-function togglePlay() {
+async function togglePlay() {
   if (isPlaying.value) {
-    pause()
+    await pause()
+  } else if (audioContext && scheduledNodes.length > 0) {
+    // Resume if already scheduled
+    await resume()
   } else {
-    play()
+    // Start fresh
+    await play()
   }
-}
-
-// Advance to next segment
-function advanceToNextSegment() {
-  if (currentSegmentIndex.value < totalSegments.value - 1) {
-    currentSegmentIndex.value++
-    currentWordIndex.value = -1
-
-    // Brief silence between segments (0.5-1s)
-    setTimeout(() => {
-      if (isPlaying.value) {
-        playCurrentSegment()
-      }
-    }, 750)
-  } else {
-    // Journey complete
-    isPlaying.value = false
-    emit('complete')
-  }
-}
-
-// Handle audio time update for word-by-word sync
-function onTimeUpdate() {
-  if (!audioElement.value) return
-
-  const segment = getSegmentData(currentSegment.value)
-  if (!segment.word_timings || segment.word_timings.length === 0) return
-
-  const currentTime = audioElement.value.currentTime * 1000 // Convert to ms
-
-  // Find current word
-  const wordIndex = segment.word_timings.findIndex(
-    (timing, index) => {
-      const nextTiming = segment.word_timings![index + 1]
-      return currentTime >= timing.start && (!nextTiming || currentTime < nextTiming.start)
-    }
-  )
-
-  if (wordIndex !== -1) {
-    currentWordIndex.value = wordIndex
-  }
-}
-
-// Handle audio ended
-function onAudioEnded() {
-  advanceToNextSegment()
 }
 
 // Reset to beginning
@@ -209,11 +309,32 @@ function reset() {
   currentSegmentIndex.value = 0
   currentWordIndex.value = -1
   isPlaying.value = false
-  if (audioElement.value) {
-    audioElement.value.pause()
-    audioElement.value.currentTime = 0
+  stopWordTracking()
+
+  // Stop all scheduled nodes
+  for (const node of scheduledNodes) {
+    try {
+      node.stop()
+      node.disconnect()
+    } catch {
+      // Ignore errors if already stopped
+    }
   }
+  scheduledNodes = []
+
+  // Close and reset audio context
+  if (audioContext) {
+    audioContext.close()
+    audioContext = null
+  }
+
+  segmentStartTimes = []
 }
+
+// Cleanup on unmount
+onUnmounted(() => {
+  reset()
+})
 
 // Auto-preload on mount
 onMounted(() => {
@@ -234,13 +355,6 @@ defineExpose({
 
 <template>
   <div class="journey-player">
-    <!-- Hidden audio element -->
-    <audio
-      ref="audioElement"
-      @timeupdate="onTimeUpdate"
-      @ended="onAudioEnded"
-    />
-
     <!-- Loading state -->
     <div v-if="isLoading" class="text-center py-8">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-brand-accent border-t-transparent" />
