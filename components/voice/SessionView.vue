@@ -282,6 +282,7 @@ const {
   getAudioLevel,
   checkPermission,
   requestPermission,
+  preInitAudio,
   reset
 } = useVoiceChat({
   illusionNumber: props.illusionNumber,
@@ -478,6 +479,10 @@ const scrollToBottom = () => {
 }
 
 const handleRequestPermission = async () => {
+  // Pre-initialize AudioContext while still in user gesture context.
+  // iOS Safari requires this to allow audio playback.
+  await preInitAudio()
+
   const granted = await requestPermission()
   showPermissionOverlay.value = false
 
@@ -490,16 +495,23 @@ const handleRequestPermission = async () => {
 }
 
 const handleUseTextOnly = async () => {
+  // Pre-initialize AudioContext while still in user gesture context.
+  await preInitAudio()
+
   showPermissionOverlay.value = false
   textMode.value = true
   await startConversation()
 }
 
 const handleStartRecording = async () => {
+  // Ensure AudioContext is ready for upcoming TTS playback (user gesture context)
+  await preInitAudio()
   await recordAndSend()
 }
 
 const handleStopRecording = async () => {
+  // Ensure AudioContext is ready for upcoming TTS playback (user gesture context)
+  await preInitAudio()
   await stopRecordingAndSend()
 }
 
@@ -517,6 +529,9 @@ const handleSkipAudio = () => {
 
 const handleSendText = async () => {
   if (!textInput.value.trim() || isProcessing.value) return
+
+  // Ensure AudioContext is ready for upcoming TTS playback (user gesture context)
+  await preInitAudio()
 
   const text = textInput.value
   textInput.value = ''

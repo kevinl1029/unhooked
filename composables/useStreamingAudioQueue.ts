@@ -66,6 +66,38 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   // Serialize chunk processing to maintain order during async decode
   let processingQueue: Promise<void> = Promise.resolve()
 
+  // Auto-resume listener cleanup for iOS Safari
+  let autoResumeCleanup: (() => void) | null = null
+
+  /**
+   * Register document-level listeners to auto-resume a suspended AudioContext
+   * on the user's first interaction. Required for iOS Safari which suspends
+   * AudioContext created outside a user gesture.
+   */
+  const registerAutoResume = () => {
+    if (typeof document === 'undefined') return
+
+    const handler = () => {
+      if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume()
+      }
+      cleanupAutoResume()
+    }
+
+    const cleanupAutoResume = () => {
+      document.removeEventListener('touchstart', handler)
+      document.removeEventListener('touchend', handler)
+      document.removeEventListener('click', handler)
+      autoResumeCleanup = null
+    }
+
+    document.addEventListener('touchstart', handler, { once: true, passive: true })
+    document.addEventListener('touchend', handler, { once: true, passive: true })
+    document.addEventListener('click', handler, { once: true })
+
+    autoResumeCleanup = cleanupAutoResume
+  }
+
   /**
    * Decode base64 WAV to AudioBuffer
    */
@@ -84,23 +116,30 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
   }
 
   /**
-   * Initialize the audio context (must be called from user gesture)
+   * Initialize the audio context.
+   * Call from a user gesture handler (click/touch) to ensure iOS Safari
+   * allows audio playback. If called outside a gesture, the context will
+   * start suspended and auto-resume on the user's next interaction.
    */
   const initialize = async () => {
     if (!audioContext) {
       audioContext = new AudioContext()
+
+      // On iOS Safari, AudioContext created outside a user gesture starts suspended.
+      // Register document-level listeners so the first user interaction resumes it.
+      if (audioContext.state === 'suspended') {
+        registerAutoResume()
+      }
     }
 
+    // Attempt to resume — succeeds immediately when called from a user gesture,
+    // otherwise the auto-resume listener will handle it on next interaction.
+    // IMPORTANT: Do NOT await this — on iOS without a gesture the promise
+    // never resolves, which would block the entire SSE processing pipeline.
     if (audioContext.state === 'suspended') {
-      try {
-        const resumePromise = audioContext.resume()
-        const timeoutPromise = new Promise<void>((_, reject) => {
-          setTimeout(() => reject(new Error('AudioContext resume timed out')), 5000)
-        })
-        await Promise.race([resumePromise, timeoutPromise])
-      } catch (e) {
-        console.warn('[streaming-audio] Failed to resume AudioContext:', e)
-      }
+      audioContext.resume().catch(() => {
+        // Expected on iOS without user gesture — auto-resume listener will handle it
+      })
     }
 
     return audioContext
@@ -256,8 +295,11 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
           await initialize()
         }
 
+        // Non-blocking resume: on iOS Safari without a gesture this promise
+        // would hang forever, blocking the entire SSE processing pipeline.
+        // Chunks scheduled on a suspended context will play once it resumes.
         if (audioContext!.state === 'suspended') {
-          await audioContext!.resume()
+          audioContext!.resume().catch(() => {})
         }
 
         const audioBuffer = await decodeWavToAudioBuffer(chunk.audioBase64)
@@ -328,6 +370,10 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       }
     }
     activeSourceNodes = []
+
+    if (autoResumeCleanup) {
+      autoResumeCleanup()
+    }
 
     if (audioContext) {
       audioContext.close()

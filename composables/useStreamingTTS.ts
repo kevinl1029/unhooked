@@ -204,6 +204,7 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
     stop,
     pause,
     resume,
-    reset
+    reset,
+    preInitAudio: audioQueue.initialize
   }
 }
