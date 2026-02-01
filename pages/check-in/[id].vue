@@ -26,6 +26,7 @@ const showToast = ref(false)
 
 // Voice chat - will be initialized in onMounted
 let voiceChat: ReturnType<typeof useVoiceChat> | null = null
+let preInitAudio: (() => Promise<void>) | null = null
 
 // Audio level for waveform
 const audioLevel = ref(0)
@@ -60,6 +61,9 @@ onMounted(async () => {
     checkInId: checkInId,
     checkInPrompt: prompt.value,
   })
+
+  // Destructure preInitAudio for use in gesture handlers
+  preInitAudio = voiceChat.preInitAudio
 
   // Set up watchers now that voiceChat is initialized
   // Watch recording state
@@ -128,15 +132,19 @@ async function handleComplete() {
 
 // Handle mic tap
 async function handleMicTap() {
-  if (!voiceChat) return
+  if (!voiceChat || !preInitAudio) return
 
   if (voiceChat.isRecording.value) {
+    // Pre-initialize audio in user gesture context before stopping recording
+    await preInitAudio()
     // Stop recording and send - wait for full completion including AI response
     const success = await voiceChat.stopRecordingAndSend()
     if (success) {
       await handleComplete()
     }
   } else {
+    // Pre-initialize audio in user gesture context before starting recording
+    await preInitAudio()
     // Start recording
     await voiceChat.recordAndSend()
   }

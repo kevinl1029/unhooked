@@ -352,6 +352,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     stopAudio: voiceSession.stopAudio,
     getAudioLevel: voiceSession.getAudioLevel,
     checkPermission: voiceSession.checkPermission,
-    requestPermission: voiceSession.requestPermission
+    requestPermission: voiceSession.requestPermission,
+    preInitAudio: voiceSession.preInitAudio
   }
 }

@@ -511,6 +511,7 @@ export const useVoiceSession = () => {
     getAudioLevel,
     checkPermission: recorder.checkPermission,
     requestPermission: recorder.requestPermission,
+    preInitAudio: streamingTTS.preInitAudio,
     cleanup
   }
 }

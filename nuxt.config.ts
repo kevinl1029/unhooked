@@ -73,6 +73,8 @@ export default defineNuxtConfig({
       exclude: ['/', '/login', '/test-login', '/checkout/*', '/privacy', '/terms', '/listen', '/site.webmanifest'],
     },
     cookieOptions: {
+      maxAge: 60 * 60 * 8,
+      sameSite: 'lax' as const,
       // Safari won't set Secure cookies on http://localhost, causing auth to fail.
       // Only require Secure in production (HTTPS).
       secure: process.env.NODE_ENV === 'production',

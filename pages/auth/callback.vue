@@ -1,22 +1,24 @@
 <script setup lang="ts">
-// The magic link redirects here with auth tokens in the URL hash/query.
-// We need to wait for the Supabase client to process them and establish
-// the session before redirecting. Safari is especially strict about timing.
+// The @nuxtjs/supabase module disables SSR for this route so the PKCE
+// code exchange can happen client-side via createBrowserClient.
+// We watch for the session to appear, then redirect.
+
 const user = useSupabaseUser()
 
-// If user is already resolved (fast path), redirect immediately
+// If the user is already authenticated (exchange completed during plugin init),
+// redirect immediately.
 if (user.value) {
   await navigateTo('/dashboard', { replace: true })
 }
 
-// Otherwise wait for the auth state to resolve
+// Otherwise wait for the auth state to update after the PKCE exchange.
 watch(user, (newUser) => {
   if (newUser) {
     navigateTo('/dashboard', { replace: true })
   }
 })
 
-// Safety timeout — if auth doesn't resolve, send to login
+// Safety timeout: if the exchange never completes, send back to login.
 const timeout = setTimeout(() => {
   if (!user.value) {
     navigateTo('/login', { replace: true })
@@ -27,7 +29,7 @@ onBeforeUnmount(() => clearTimeout(timeout))
 </script>
 
 <template>
-  <div class="flex items-center justify-center min-h-[50vh]">
-    <p class="text-white-65">Signing you in...</p>
+  <div class="flex items-center justify-center min-h-screen">
+    <p class="text-white-85">Signing you in...</p>
   </div>
 </template>

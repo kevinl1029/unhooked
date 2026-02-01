@@ -1,362 +1,112 @@
-# Ralph Progress Log
-Started: Tue Jan 27 14:17:25 EST 2026
-
 ## Codebase Patterns
-- **Illusion Keys:** Database uses 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity' (NOT 'stress', etc.)
-- **API Patterns:** Use `serverSupabaseUser()` for auth check, `serverSupabaseServiceRole()` for queries
-- **Conviction Scores:** Stored in user_story table as {illusionKey}_conviction (e.g., stress_relief_conviction)
-- **Testing:** Run `npm run build` for typecheck (no separate typecheck script), `npm run test:unit` for tests
-- **Reinforcement Sessions:** Two types - 'reinforcement' (illusion-specific) and 'boost' (generic post-ceremony support)
-- **Session Context:** buildSessionContext in context-builder.ts returns string (prompt overlay) for reinforcement/boost, PersonalizationContext for core sessions
-- **Assessment Reuse:** Existing conviction assessment logic in server/utils/llm/tasks/conviction-assessment.ts works for both core and reinforcement sessions
-- **Prompt Overlays:** Reinforcement prompts stored in server/utils/prompts/reinforcement-prompts.ts with buildReinforcementPrompt/buildBoostPrompt helpers
-- **Frontend Components:** Existing components in components/ use .glass, .btn-primary, .rounded-card, .shadow-card from assets/css/main.css
-- **Dashboard Structure:** pages/dashboard.vue has multiple states: post-ceremony, ceremony-ready, in-progress, not-started
+- AudioContext preservation: Use `resetPlaybackState()` to clear playback state between streaming messages WITHOUT closing the AudioContext. Only use `stop()` when completely done with audio playback (it closes the AudioContext).
+- iOS Safari audio fix: `initialize()` reuses existing AudioContext when available and not closed. This prevents recreating AudioContext outside user gesture context.
+- Testing: The project has no `typecheck` script - Nuxt 3's default TypeScript setup is used without a custom tsconfig.json. Use `npm run test:unit` to verify changes.
+- SSE streaming: `processStream()` in useStreamingTTS coordinates text tokens and audio chunks from server-sent events.
+- Web Audio API pattern: For sequential audio playback on iOS Safari, schedule ALL buffers upfront from the initial user gesture using `AudioBufferSourceNode.start(scheduleTime)`. Do NOT call `play()` on `<audio>` elements in setTimeout/callbacks outside the gesture context.
 
+# Ralph Progress Log
+Started: Sat Jan 31 23:44:47 EST 2026
 ---
 
-## Tue Jan 27 14:21:00 EST 2026 - US-001
-- Implemented GET /api/dashboard/moments endpoint
-- Files changed:
-  - server/api/dashboard/moments.get.ts (new)
-- **Learnings for future iterations:**
-  - Illusion keys in database: 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity'
-  - Conviction scores stored in user_story table with pattern: {illusionKey}_conviction (e.g., stress_relief_conviction)
-  - Completed illusions tracked in user_progress.illusions_completed as array of integers (1-5)
-  - Completion timestamps found in conversations table with session_type='core' and session_completed=true
-  - Used weighted random selection: confidence_score * recencyMultiplier where recencyMultiplier exponentially increases over 14 days since last_used_at
-  - Build passes with `npm run build` (no separate typecheck script)
-  - Pre-existing test failures in ceremony/journey-contract.test.ts are unrelated to reinforcement sessions
----
+## [2026-01-31 23:46] - US-001
+- Implemented `resetPlaybackState()` method in useStreamingAudioQueue that clears all playback state WITHOUT closing the AudioContext
+- Refactored `stop()` to call `resetPlaybackState()` internally, then close the AudioContext and clean up listeners - eliminated code duplication
+- Updated `initialize()` to check for closed AudioContext state and reuse existing contexts when not closed
+- Modified `useStreamingTTS.processStream()` to call `audioQueue.resetPlaybackState()` instead of `audioQueue.reset()` so the AudioContext created by `preInitAudio()` survives between streaming messages
+- Exposed `resetPlaybackState` in useStreamingAudioQueue return object
 
-## Tue Jan 27 14:45:00 EST 2026 - US-002
-- Implemented POST /api/reinforcement/start endpoint
-- Files changed:
-  - server/api/reinforcement/start.post.ts (new)
-  - scripts/ralph/prd.json (updated passes: true for US-002)
-- **Learnings for future iterations:**
-  - Endpoint handles two distinct session types: 'reinforcement' (illusion-specific) and 'boost' (generic, post-ceremony only)
-  - Illusion keys in database are: 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity' (NOT 'stress')
-  - The PRD acceptance criteria specified 'stress' but database uses 'stress_relief' - implementation uses database keys
-  - Boost sessions require ceremony_completed_at to be non-null (user completed all 5 illusions)
-  - Weighted moment selection reuses same algorithm from US-001: confidence_score * recencyMultiplier
-  - When moment_id is provided for anchored sessions, update last_used_at timestamp for that moment
-  - Context building varies by session type: reinforcement gets illusion-specific data, boost gets all conviction scores + top 3 moments per illusion (15 max)
-  - Days since last session calculated from most recent completed_at for the illusion
-  - Build passes with `npm run build` (same pre-existing warnings as before)
----
+**Files changed:**
+- composables/useStreamingAudioQueue.ts: Added resetPlaybackState(), refactored stop(), updated initialize()
+- composables/useStreamingTTS.ts: Changed processStream() to use resetPlaybackState()
 
-## Tue Jan 27 15:00:00 EST 2026 - US-003
-- No implementation needed - functionality already exists in server/api/reinforcement/start.post.ts
-- Files changed:
-  - scripts/ralph/prd.json (updated passes: true for US-003)
-  - scripts/ralph/progress.txt (this file)
-- **Learnings for future iterations:**
-  - US-003 was actually completed as part of US-002 implementation
-  - The generic boost session handling (lines 62-151 in start.post.ts) fulfills all US-003 acceptance criteria
-  - When reviewing PRD stories, check if functionality already exists before starting implementation
-  - All US-003 acceptance criteria verified: handles { reason: 'generic_boost' }, returns 403 if ceremony not complete, creates 'boost' session type, includes all conviction scores and top 3 moments per illusion
-  - Build passes with `npm run build` (verified typecheck passes)
+**Learnings for future iterations:**
+- The root cause: iOS Safari requires AudioContext to be created within a user gesture context. Previously, `processStream()` called `reset()` which closed the AudioContext, then `initialize()` created a NEW context outside the gesture - causing it to start suspended with resume() hanging forever.
+- The fix: Separate "reset playback state" from "close AudioContext". `resetPlaybackState()` clears queues/timings/nodes but keeps the context alive. `preInitAudio()` creates the context in gesture context, and it survives across all subsequent streaming messages.
+- Test coverage: All 16 useStreamingAudioQueue tests pass. Two unrelated journey-contract tests failed (pre-existing issues).
+- Key pattern: When working with Web Audio API on iOS Safari, always create AudioContext once in a user gesture handler and reuse it throughout the session.
 ---
+## [2026-01-31 23:49] - US-002
+- Added `preInitAudio()` calls to check-in page gesture handlers in `pages/check-in/[id].vue`
+- Destructured `preInitAudio` from `useVoiceChat()` return value and stored it in a module-level variable for use in `handleMicTap()`
+- In `handleMicTap()`, added `await preInitAudio()` calls at the top of BOTH branches (start recording and stop recording) before any other awaits, ensuring the AudioContext is created within the user gesture context
+- The AudioContext created by `preInitAudio()` now survives through the streaming pipeline thanks to US-001's `resetPlaybackState()` implementation
 
-## Tue Jan 27 15:15:00 EST 2026 - US-004
-- Implemented POST /api/reinforcement/assess endpoint
-- Files changed:
-  - server/api/reinforcement/assess.post.ts (new)
-  - scripts/ralph/prd.json (updated passes: true for US-004)
-- **Learnings for future iterations:**
-  - Reused existing conviction assessment logic from server/utils/llm/tasks/conviction-assessment.ts
-  - Assessment process mirrors core sessions: fetch conversation transcript, run LLM assessment, store results
-  - Added shift_quality classification: 'new_insight' (new moments captured), 'deepened' (conviction increased), 'restored' (maintained high level), 'still_struggling' (conviction dropped/low)
-  - Key insight update logic: only update if new insights emerged in this session (check captured_moments for session)
-  - User_story fields updated: {illusionKey}_conviction, {illusionKey}_resistance_notes, {illusionKey}_key_insight_id (if better insight)
-  - Conviction assessments stored in conviction_assessments table with illusion_layer=null for reinforcement sessions
-  - Delta calculation: assessment.newConviction - previousConviction (from user_story)
-  - Build passes with `npm run build`
----
+**Files changed:**
+- pages/check-in/[id].vue: Added preInitAudio destructuring in onMounted(), added preInitAudio() calls in handleMicTap()
 
-## Tue Jan 27 15:30:00 EST 2026 - US-005
-- Implemented reinforcement system prompts and extended context builder
-- Files changed:
-  - server/utils/prompts/reinforcement-prompts.ts (new)
-  - server/utils/personalization/context-builder.ts (extended)
-  - scripts/ralph/prd.json (updated passes: true for US-005)
-- **Learnings for future iterations:**
-  - Created REINFORCEMENT_MODE_OVERLAY and BOOST_MODE_OVERLAY constants with detailed AI instructions
-  - Reinforcement overlay focuses on reconnection (not re-teaching): open with anchor moment, explore current triggers, use user's own previous insights
-  - Boost overlay is open-ended support: listen first, identify relevant illusion naturally, apply existing knowledge to current situation
-  - Added buildReinforcementPrompt and buildBoostPrompt helper functions for dynamic placeholder replacement
-  - Extended buildSessionContext to detect session_type and return string (prompt overlay) for reinforcement/boost instead of PersonalizationContext
-  - Context builder now accepts optional sessionData parameter for anchor moments and conviction scores
-  - Used dynamic import for reinforcement-prompts to avoid circular dependencies
-  - Prompt structure mirrors existing illusion prompts: clear sections, conversation guidelines, completion signals
-  - Build passes with `npm run build`
+**Learnings for future iterations:**
+- The check-in page has its own UI flow separate from SessionView.vue, so it needed its own preInitAudio() integration
+- Pattern confirmed: preInitAudio() must be called at the TOP of any user gesture handler BEFORE other awaits to preserve the gesture context
+- Both recording branches (start and stop) need preInitAudio() because the stop-recording branch triggers the AI response with TTS
+- Testing: All 342 unit tests pass (2 pre-existing journey-contract test failures unrelated to this change)
+- TypeScript: Nuxt 3 default TypeScript setup used (no typecheck script per codebase patterns)
 ---
+## [2026-01-31 23:52] - US-003
+- Verified that US-003 acceptance criteria were ALREADY satisfied by previous implementations (US-001 and existing code)
+- No code changes required - the implementation was already complete
 
-## Iteration Summary - Backend Complete
-- **Completed:** US-001 through US-005 (all backend API work)
-- **Remaining:** US-006 through US-021 (all frontend UI components)
-- **Status:** Backend foundation is complete and ready for frontend development
-- **Next Steps:**
-  - US-006: Create ProgressCarousel.vue component (complex carousel with navigation, touch support)
-  - Remaining stories are all Vue components and page integrations
-  - All API endpoints tested with typecheck (npm run build passes)
-- **Key Deliverables:**
-  - GET /api/dashboard/moments - moment selection for dashboard cards
-  - POST /api/reinforcement/start - starts reinforcement or boost sessions
-  - POST /api/reinforcement/assess - conviction assessment after reinforcement sessions
-  - Reinforcement prompt overlays in server/utils/prompts/reinforcement-prompts.ts
-  - Extended buildSessionContext to handle all session types
----
+**How it works:**
+- SessionView.vue onMounted() (lines 379-381): When `permissionState.value === 'granted'`, calls `startConversation()` directly without a user gesture
+- useStreamingAudioQueue.ts initialize() (lines 125-147): Creates AudioContext, detects if it starts in suspended state, and calls `registerAutoResume()` 
+- registerAutoResume() (lines 77-99): Registers document-level touchstart/touchend/click listeners that fire on first user interaction to resume the suspended context
+- Non-blocking resume strategy (lines 139-143, 302-304): Code explicitly avoids awaiting resume() to prevent blocking the SSE pipeline - text tokens and audio chunks stream and decode regardless of context state
+- Auto-resume listener (lines 80-85): First user interaction (tap mic, type in input, tap anywhere) fires handler that calls `audioContext.resume()` and cleans up listeners
+- AudioContext preservation via US-001: `resetPlaybackState()` keeps the context alive across messages, so after auto-resume fires once, all subsequent messages play immediately
 
-## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-006
-- Implemented ProgressCarousel.vue component with full carousel functionality
-- Files changed:
-  - components/dashboard/ProgressCarousel.vue (new)
-- **Learnings for future iterations:**
-  - Component follows existing design patterns: .glass, .btn-primary, .rounded-card, .shadow-card from assets/css/main.css
-  - Uses lucide-vue-next icons (Check, Lock, RefreshCw) consistently with other components
-  - Carousel uses CSS transform scale for size differences: focused (scale-100), adjacent (scale-75), far (scale-50)
-  - Transition duration: 300ms ease-out for carousel movement, 200ms for hover effects
-  - Illusion data structure includes: number, name, key, description, status ('completed'|'current'|'locked')
-  - Status determined from props: illusionOrder, illusionsCompleted (array), currentIllusion (number)
-  - Revisit badge only shows for completed illusions when focused
-  - Action section uses Vue Transition with fade mode for smooth content changes
-  - Desktop arrow buttons positioned absolutely with translate transforms, hidden on mobile with md: responsive classes
-  - Progress dots use width animation (w-2 to w-6) to indicate focus
-  - Build passes with `npm run build`
----
+**Acceptance criteria verification:**
+✅ AudioContext created in suspended state with auto-resume listeners registered when startConversation() called without gesture
+✅ Text tokens stream and display correctly while AudioContext suspended (non-blocking resume)
+✅ Audio chunks decode and schedule on suspended context without errors (Web Audio API allows scheduling on suspended contexts)
+✅ First user interaction fires auto-resume listener, transitions context to running, queued audio begins playing
+✅ Subsequent messages play immediately (context stays running and is preserved via US-001)
+✅ Tests pass: 342 unit tests pass (2 pre-existing journey-contract failures unrelated)
 
-## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-007, US-008, US-009
-- Added touch/swipe support to ProgressCarousel.vue
-- US-008 (Revisit Badge) and US-009 (Action Section) were already implemented in US-006
-- Files changed:
-  - components/dashboard/ProgressCarousel.vue (updated)
-  - scripts/ralph/prd.json (updated passes for US-007, US-008, US-009)
-- **Learnings for future iterations:**
-  - Touch handlers: touchstart stores clientX, touchmove prevents scroll if horizontal swipe detected (>10px), touchend checks if delta exceeds 50px threshold
-  - Swipe left (negative delta) navigates next, swipe right (positive delta) navigates previous
-  - Touch prevention strategy: only preventDefault in touchmove if horizontal swipe is detected to preserve vertical scrolling
-  - Arrow buttons already used `hidden md:flex` responsive classes to hide on mobile
-  - Realized US-008 and US-009 were completed as part of US-006 - component already had revisit badge and action section
-  - Build passes with `npm run build`
----
+**Files verified (no changes made):**
+- components/voice/SessionView.vue: Confirmed onMounted() flow for already-granted permissions
+- composables/useStreamingAudioQueue.ts: Confirmed initialize() and registerAutoResume() implementation
 
-## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-010, US-011
-- Implemented MomentCard.vue component
-- Files changed:
-  - components/dashboard/MomentCard.vue (new)
-  - scripts/ralph/prd.json (updated passes for US-010, US-011)
-- **Learnings for future iterations:**
-  - Component uses existing design patterns: .glass, .rounded-card, .shadow-card, .btn-primary from assets/css/main.css
-  - Eyebrow text uses .eyebrow class with brand-accent color
-  - Quote truncation: substring(0, 240) + '...' for quotes longer than 240 chars
-  - Relative time formatting: 'Today' (0 days), 'Yesterday' (1 day), 'X days ago' (2-30), 'Over a month ago' (31+)
-  - Card emits click event with { momentId, illusionKey } for parent component to handle navigation
-  - Hover effect: hover:scale-[1.02] for subtle card growth
-  - US-011 navigation logic will be implemented in parent component when integrating into dashboard
-  - Build passes with `npm run build`
+**Learnings for future iterations:**
+- Web Audio API allows decoding and scheduling audio on a suspended AudioContext - the scheduled nodes will play once the context resumes
+- The auto-resume pattern is robust: register listeners on context creation, fire on first interaction, clean up after firing (once: true)
+- This pattern handles the edge case where users return to the app and permissions are already granted - the first session message works seamlessly after any user interaction
+- Key insight: Don't block on resume() when AudioContext is suspended outside gesture context - the promise may never resolve on iOS Safari, which would hang the entire SSE processing pipeline
 ---
+## [2026-01-31 23:55] - US-004
+- Refactored JourneyPlayer component to use Web Audio API instead of <audio> element for iOS Safari autoplay compatibility
+- Replaced direct audio playback with AudioContext + AudioBufferSourceNode scheduling pattern
+- All segments are now scheduled upfront from the initial user gesture using `source.start(scheduleTime)` to avoid iOS Safari autoplay restrictions
+- Word tracking refactored to poll `audioContext.currentTime` and track both current segment and current word within segment
+- Pause/resume now uses `AudioContext.suspend()/resume()` instead of `<audio>.pause()`
+- Text-only fallback for unavailable audio preserved by calculating duration and advancing schedule time
 
-## $(date '+%a %b %d %H:%M:%S %Z %Y') - US-012
-- Implemented NoMomentsCard.vue component
-- Files changed:
-  - components/dashboard/NoMomentsCard.vue (new)
-  - scripts/ralph/prd.json (updated passes for US-012)
-- **Learnings for future iterations:**
-  - Component mirrors MomentCard styling exactly: .glass, .rounded-card, .shadow-card, .btn-primary, hover:scale-[1.02]
-  - Uses "NEEDS ATTENTION" eyebrow text instead of "BREAKTHROUGH MOMENT"
-  - Warning message customized to illusion name dynamically
-  - Clicking navigates to /reinforcement/{illusionKey} without moment_id parameter
-  - Build passes with `npm run build`
----
+**Files changed:**
+- components/JourneyPlayer.vue: Complete refactor from <audio> element to Web Audio API
 
-## Iteration Summary - Frontend Components Complete
-- **Completed:** US-006 through US-012 (carousel, cards, touch support)
-- **Remaining:** US-013 through US-021 (dashboard integration, session pages, error handling)
-- **Status:** All core UI components built and passing typecheck
-- **Next Steps:**
-  - US-013: Integrate ProgressCarousel and MomentCard into dashboard for in-progress users
-  - Remaining stories involve dashboard/page integration and session page creation
-  - All components follow design system and pass build checks
-- **Key Deliverables:**
-  - components/dashboard/ProgressCarousel.vue - Full carousel with touch, nav, action section
-  - components/dashboard/MomentCard.vue - Breakthrough moment display card  
-  - components/dashboard/NoMomentsCard.vue - Warning card for illusions without moments
+**Learnings for future iterations:**
+- iOS Safari autoplay restrictions: `play()` calls on `<audio>` elements OUTSIDE a user gesture are blocked, even if the initial playback was user-initiated. The `setTimeout` used for segment gaps moved the play() call outside the gesture context.
+- Web Audio API solution: Schedule ALL audio buffers upfront from the initial gesture using `AudioBufferSourceNode.start(scheduleTime)`. The browser honors these scheduled starts even though they play later, because the scheduling happened within the gesture.
+- Silence gaps with Web Audio: Simply advance `scheduleTime` by `audioBuffer.duration + gapDuration` between segments - no need for separate silence buffers.
+- Word tracking with Web Audio: Poll `audioContext.currentTime - playbackStartTime` to get elapsed seconds, use cumulative segment start times to find current segment, then offset within segment to find current word.
+- Pattern consistency: This matches the same Web Audio pattern used in `useStreamingAudioQueue` for streaming TTS, reinforcing the codebase standard for iOS Safari audio.
+- Testing: All 342 unit tests pass. 2 pre-existing journey-contract test failures are unrelated to this change.
 ---
-## Mon Jan 27 14:46:00 EST 2026 - US-013
-- Implemented in-progress dashboard layout with ProgressCarousel and MomentCard integration
-- Files changed:
-  - pages/dashboard.vue (updated)
-  - scripts/ralph/prd.json (updated passes for US-013)
-- **Learnings for future iterations:**
-  - In-progress dashboard now shows ProgressCarousel instead of old ProgressIndicator
-  - Added moment data fetching from GET /api/dashboard/moments on mount for in-progress users
-  - Moment card section only shows if moments exist (gracefully degrades if API fails)
-  - MomentCard component emits click event that parent handles for navigation to /reinforcement/{illusionKey}?moment_id={momentId}
-  - NoMomentsCard shows when API returns { no_moments: true, illusion_key, illusion_name }
-  - Loading state managed separately (isMomentLoading) to avoid blocking dashboard render
-  - Dashboard layout structure: ProgressCarousel first, then moment cards section below
-  - Build passes with `npm run build` (same pre-existing warnings)
----
+## [2026-01-31 23:58] - US-005
+- Added 7 new unit tests to verify AudioContext preservation across streaming message resets
+- Tests verify resetPlaybackState() clears state without closing AudioContext
+- Tests verify stop() closes AudioContext after calling resetPlaybackState() internally
+- Tests verify initialize() reuses existing AudioContext after resetPlaybackState()
+- Tests verify enqueueChunk works after resetPlaybackState() on the same AudioContext
+- Tests verify multi-message flow simulation (3 messages with resets in between, single AudioContext throughout)
 
-## Mon Jan 27 14:50:00 EST 2026 - US-014
-- Implemented SupportSection.vue component for post-ceremony users
-- Files changed:
-  - components/dashboard/SupportSection.vue (new)
-  - scripts/ralph/prd.json (updated passes for US-014)
-- **Learnings for future iterations:**
-  - Component follows existing design patterns: .glass, .rounded-card, .shadow-card, .btn-primary
-  - Uses MessageCircle icon from lucide-vue-next
-  - Centered layout with text-center on container
-  - Button navigates to /support using navigateTo()
-  - Clean, minimal design matching overall app aesthetic
-  - Build passes with `npm run build`
----
+**Files changed:**
+- tests/unit/composables/useStreamingAudioQueue.test.ts: Added "resetPlaybackState() - AudioContext preservation" test suite with 7 tests
 
-## Mon Jan 27 14:53:00 EST 2026 - US-015
-- Implemented YourJourneySection.vue component for post-ceremony users
-- Files changed:
-  - components/dashboard/YourJourneySection.vue (new)
-  - scripts/ralph/prd.json (updated passes for US-015)
-- **Learnings for future iterations:**
-  - Component displays all 5 completed illusions as chips in a flex-wrap row
-  - Each chip includes: checkmark circle with gradient (btn-primary), illusion name, refresh icon
-  - Uses glass-input background (from tailwind brand tokens) and rounded-full for pill shape
-  - Hover effect: scale-105 and text color change from white-85 to white
-  - Clicking any chip navigates to /reinforcement/{illusionKey}
-  - Props accept illusions array with { key, name, daysSince } - daysSince currently unused but available for future enhancement
-  - Compact design to avoid excessive height
-  - Build passes with `npm run build`
+**Learnings for future iterations:**
+- Test suite organization: Group related tests in describe blocks with clear names (e.g., "resetPlaybackState() - AudioContext preservation")
+- MockAudioContext pattern: The existing mock simulates iOS Safari suspended state behavior, making it easy to test gesture-context issues
+- Testing stateful composables: Verify state is cleared (word timings, queues) AND that the underlying resource (AudioContext) is preserved or closed as expected
+- Multi-message flow tests: Simulate realistic usage patterns (initialize → enqueue → reset → repeat) to catch integration issues
+- Test coverage increased from 342 to 349 passing tests (7 new tests)
+- The 2 pre-existing journey-contract test failures are unrelated to AudioContext work
 ---
-
-## Mon Jan 27 15:00:00 EST 2026 - US-016
-- Implemented post-ceremony dashboard layout with new component integration
-- Files changed:
-  - pages/dashboard.vue (updated)
-  - scripts/ralph/prd.json (updated passes for US-016)
-- **Learnings for future iterations:**
-  - Post-ceremony dashboard layout order: SupportSection (primary CTA), MomentCard section, YourJourneySection (chip row), Artifacts (existing), Follow-ups (existing)
-  - Progress carousel NOT shown for post-ceremony users (replaced by compact chip row in YourJourneySection)
-  - Moment data fetched for both in-progress AND post-ceremony users (updated fetchMomentData condition)
-  - Added journeyIllusions computed property to build illusion data for YourJourneySection component
-  - Illusion data maps illusion numbers to { key, name, daysSince } - daysSince currently hardcoded to 0
-  - Dashboard sections conditionally shown: moment cards only if data exists, artifacts only if any exist
-  - Build passes with `npm run build`
----
-
-## Mon Jan 27 15:07:00 EST 2026 - US-017
-- Implemented reinforcement session page at pages/reinforcement/[illusion].vue
-- Files changed:
-  - pages/reinforcement/[illusion].vue (new)
-  - scripts/ralph/prd.json (updated passes for US-017)
-- **Learnings for future iterations:**
-  - Page follows existing session page pattern: layout: false, mobile-safe-container, VoiceSessionView component
-  - Route param illusion accepts illusion keys: 'stress_relief', 'pleasure', 'willpower', 'focus', 'identity'
-  - Query param moment_id (optional UUID string) for moment-anchored sessions
-  - On mount, calls POST /api/reinforcement/start with { illusion_key, moment_id? }
-  - Session header shows abridged moment quote (truncated ~60 chars) if moment_id provided, otherwise shows illusion display name
-  - Error handling: 400 (not completed), 401 (not auth), 403 (ceremony not complete) - redirects to dashboard with 2-second delay
-  - Reuses VoiceSessionView component with existing-conversation-id prop
-  - Session complete handler navigates back to dashboard
-  - Build passes with `npm run build`
----
-
-## Mon Jan 27 15:12:00 EST 2026 - US-018
-- Implemented support session page at pages/support.vue (replaced old implementation)
-- Files changed:
-  - pages/support.vue (updated - replaced chat implementation with voice session)
-  - scripts/ralph/prd.json (updated passes for US-018)
-- **Learnings for future iterations:**
-  - Replaced old /api/support/chat endpoint with new POST /api/reinforcement/start endpoint
-  - Support page now uses VoiceSessionView component like other sessions
-  - Calls API with { reason: 'generic_boost' } to start boost session type
-  - Session header shows static label "Reinforcement"
-  - Error handling: 401 (not auth), 403 (ceremony not complete) - redirects to dashboard with 2-second delay
-  - Same layout and patterns as reinforcement session page
-  - Build passes with `npm run build`
----
-
-## Iteration Summary - UI Integration Complete
-- **Completed:** US-013 through US-018 (dashboard integration, session pages)
-- **Remaining:** US-019 through US-021 (session completion logic, state management, error handling)
-- **Status:** All UI components integrated into dashboard layouts and session pages created
-- **Next Steps:**
-  - US-019: Implement reinforcement session completion logic (detect [SESSION_COMPLETE], call assessment API)
-  - US-020: Implement reactive dashboard state transition when ceremony completes
-  - US-021: Add error handling, retry logic, and graceful degradation
-  - These remaining stories require deeper integration with VoiceSessionView and existing session patterns
-- **Key Deliverables:**
-  - pages/dashboard.vue - Integrated in-progress and post-ceremony layouts
-  - components/dashboard/SupportSection.vue - Post-ceremony support CTA
-  - components/dashboard/YourJourneySection.vue - Compact illusion chip row
-  - pages/reinforcement/[illusion].vue - Illusion-specific reinforcement sessions
-  - pages/support.vue - Generic boost session page
-  - All new pages and components use VoiceSessionView for consistency
-  - All builds passing with `npm run build`
----
-
-## Mon Jan 27 15:57:00 EST 2026 - US-019
-- Implemented reinforcement session completion with conviction assessment
-- Files changed:
-  - pages/reinforcement/[illusion].vue (updated)
-  - pages/support.vue (updated)
-  - scripts/ralph/prd.json (updated passes for US-019)
-- **Learnings for future iterations:**
-  - VoiceSessionView already handles [SESSION_COMPLETE] detection and emits @session-complete event
-  - No need to implement token detection in page components - it's built into VoiceSessionView
-  - Reinforcement sessions call /api/reinforcement/assess with { conversation_id, illusion_key }
-  - Assessment should be called asynchronously (don't block session completion on assessment)
-  - Graceful error handling: log assessment errors but still complete session and navigate to dashboard
-  - Boost sessions currently skip assessment because BOOST_MODE_OVERLAY doesn't include structured illusion markers
-  - To enable boost session assessment: need to update BOOST_MODE_OVERLAY to include format like [ILLUSION_IDENTIFIED: stress_relief] in AI response
-  - handleSessionComplete is async to allow await on assessment call
-  - Build passes with `npm run build`
----
-
-## Mon Jan 27 16:10:00 EST 2026 - US-020
-- Verified dashboard state transition already works correctly
-- Files changed:
-  - pages/dashboard.vue (comment clarification only)
-  - scripts/ralph/prd.json (updated passes for US-020)
-- **Learnings for future iterations:**
-  - Nuxt pages are destroyed and recreated on navigation by default (no keep-alive)
-  - onMounted hook fires every time user navigates to a page
-  - This means dashboard automatically refetches status and moments when returning from sessions
-  - Vue reactivity handles layout switching: isPostCeremony/isInProgress are computed from status.value.phase
-  - When fetchStatus() updates status.value, all dependent computed properties re-evaluate
-  - Template uses v-if/v-else-if on these computed properties, so UI reactively switches layouts
-  - No additional code needed for "reactive state transition" - it's built into Vue + Nuxt
-  - Build passes with `npm run build`
----
-
-## Mon Jan 27 16:30:00 EST 2026 - US-021
-- Implemented error handling and graceful degradation across reinforcement features
-- Files changed:
-  - pages/dashboard.vue (added retry mechanism to fetchMomentData)
-  - pages/reinforcement/[illusion].vue (added toast notifications, enhanced error UI)
-  - pages/support.vue (added toast notifications, enhanced error UI)
-  - scripts/ralph/prd.json (updated passes for US-021)
-- **Learnings for future iterations:**
-  - Toast notification pattern: use Teleport to body, Transition with custom CSS animations
-  - Toast UI: glass background, pill shape, icon + message, positioned at top center
-  - Error state enhancement: conditional text color (red for errors), optional "Return to Dashboard" button
-  - Retry pattern: pass retry count as parameter, retry once with 2-second delay, graceful degradation after retry fails
-  - User-friendly error messages: map status codes (400, 401, 403) to readable messages
-  - Error handling hierarchy: (1) show error in UI, (2) show toast notification, (3) log to console, (4) redirect after delay
-  - Graceful degradation: moment loading failure doesn't block dashboard - carousel/chip row still shows
-  - Assessment failure handling: already implemented in US-019 - session completes even if assessment fails
-  - Build passes with `npm run build`
----
-
-## Final Iteration Summary
-- **Completed:** US-019 through US-021 (all remaining stories)
-- **Status:** All 21 user stories complete and passing typecheck
-- **Next Steps:** All stories done - ready for testing and QA
-- **Key Deliverables:**
-  - Reinforcement session completion with conviction assessment
-  - Reactive dashboard state transitions on ceremony completion
-  - Comprehensive error handling with toast notifications and retry logic
-  - All acceptance criteria met for graceful degradation
----
-
