@@ -91,3 +91,22 @@ Started: Sat Jan 31 23:44:47 EST 2026
 - Pattern consistency: This matches the same Web Audio pattern used in `useStreamingAudioQueue` for streaming TTS, reinforcing the codebase standard for iOS Safari audio.
 - Testing: All 342 unit tests pass. 2 pre-existing journey-contract test failures are unrelated to this change.
 ---
+## [2026-01-31 23:58] - US-005
+- Added 7 new unit tests to verify AudioContext preservation across streaming message resets
+- Tests verify resetPlaybackState() clears state without closing AudioContext
+- Tests verify stop() closes AudioContext after calling resetPlaybackState() internally
+- Tests verify initialize() reuses existing AudioContext after resetPlaybackState()
+- Tests verify enqueueChunk works after resetPlaybackState() on the same AudioContext
+- Tests verify multi-message flow simulation (3 messages with resets in between, single AudioContext throughout)
+
+**Files changed:**
+- tests/unit/composables/useStreamingAudioQueue.test.ts: Added "resetPlaybackState() - AudioContext preservation" test suite with 7 tests
+
+**Learnings for future iterations:**
+- Test suite organization: Group related tests in describe blocks with clear names (e.g., "resetPlaybackState() - AudioContext preservation")
+- MockAudioContext pattern: The existing mock simulates iOS Safari suspended state behavior, making it easy to test gesture-context issues
+- Testing stateful composables: Verify state is cleared (word timings, queues) AND that the underlying resource (AudioContext) is preserved or closed as expected
+- Multi-message flow tests: Simulate realistic usage patterns (initialize → enqueue → reset → repeat) to catch integration issues
+- Test coverage increased from 342 to 349 passing tests (7 new tests)
+- The 2 pre-existing journey-contract test failures are unrelated to AudioContext work
+---

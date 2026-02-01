@@ -87,7 +87,7 @@
         "All existing tests in useStreamingAudioQueue.test.ts continue to pass"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "The existing test file already has a MockAudioContext setup that can be extended for these tests."
     }
   ]
