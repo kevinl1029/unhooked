@@ -1,0 +1,94 @@
+{
+  "project": "Unhooked",
+  "branchName": "fix/ios-safari-tts-autoplay",
+  "description": "iOS Safari TTS AudioContext Fixes - Fix audio playback failures caused by AudioContext being created or recreated outside user gesture context across all session types",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Preserve AudioContext across streaming messages",
+      "description": "As a user on iOS Safari, I want TTS audio to play on the second and subsequent AI messages so that the conversation does not hang after the first response.",
+      "acceptanceCriteria": [
+        "Add a resetPlaybackState() method to useStreamingAudioQueue that clears all playback state (activeSourceNodes, queuedChunks, allWordTimings, playbackStartTime, playbackStarted, nextScheduleTime, actualCumulativeMs, inworldSentenceBaseMs, processingQueue, chunksFinishedPlaying, pendingCompletion, isPlaying, isWaitingForChunks, currentChunkIndex, currentWordIndex, error) WITHOUT closing the AudioContext",
+        "resetPlaybackState() stops and disconnects all active AudioBufferSourceNodes before clearing them",
+        "resetPlaybackState() calls stopWordTracking() to clear the word timing interval",
+        "Refactor stop() to call resetPlaybackState() internally, then additionally close the AudioContext and clean up autoResumeCleanup — no duplicated logic",
+        "Expose resetPlaybackState from useStreamingAudioQueue return object",
+        "In useStreamingTTS.processStream(), replace the audioQueue.reset() call with audioQueue.resetPlaybackState() so the AudioContext created by preInitAudio() survives into the streaming pipeline",
+        "The subsequent audioQueue.initialize() call in processStream() reuses the existing AudioContext when one already exists and is not closed",
+        "Existing unit tests in tests/unit/composables/useStreamingAudioQueue.test.ts continue to pass",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Foundational fix. processStream() currently calls audioQueue.reset() which closes the AudioContext. Then audioQueue.initialize() creates a NEW AudioContext outside the gesture context. On iOS Safari the new context starts suspended and resume() never resolves."
+    },
+    {
+      "id": "US-002",
+      "title": "Add preInitAudio to check-in session gesture handlers",
+      "description": "As a user on iOS Safari doing a check-in session, I want TTS audio to play after I respond so I can hear the AI's acknowledgment.",
+      "acceptanceCriteria": [
+        "Destructure preInitAudio from the useVoiceChat() return value in pages/check-in/[id].vue",
+        "In handleMicTap(), call await preInitAudio() before voiceChat.recordAndSend() in the start-recording branch",
+        "In handleMicTap(), call await preInitAudio() before voiceChat.stopRecordingAndSend() in the stop-recording branch",
+        "The preInitAudio() call occurs at the top of the handler before any other await so it executes within the user gesture context",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The check-in page has its own UI and does not use SessionView.vue. It is missing preInitAudio() calls entirely. With US-001 in place, the context created by preInitAudio() will survive through processStream()."
+    },
+    {
+      "id": "US-003",
+      "title": "Handle auto-started conversations without gesture context",
+      "description": "As a user on iOS Safari who has previously granted microphone permission, I want the first AI message audio to play when I interact with the session so that auto-started conversations are not silently broken.",
+      "acceptanceCriteria": [
+        "When SessionView.vue onMounted() calls startConversation() without a gesture (permission already granted), the AudioContext is created in suspended state and registerAutoResume() registers touchstart/touchend/click listeners on the document",
+        "Text tokens stream and display correctly even while the AudioContext is suspended",
+        "Audio chunks are decoded and scheduled on the suspended context without errors or hanging",
+        "When the user first interacts with the page (taps mic button, types in text input, or taps anywhere), the auto-resume listener fires and the AudioContext transitions to running so queued audio begins playing",
+        "After the auto-resume fires, subsequent messages play audio immediately because the context stays running and is preserved via US-001",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "When mic permission is already granted, startConversation() fires from onMounted() with no user gesture. The AudioContext will start suspended. The auto-resume listener registered by initialize() will resume it on the user's first tap. With US-001, this context survives across messages."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix JourneyPlayer segment auto-advance on iOS Safari",
+      "description": "As a user on iOS Safari doing the ceremony, I want all journey segments to play sequentially so that playback does not stop after the first segment.",
+      "acceptanceCriteria": [
+        "The first segment starts playing when the user clicks the play button (gesture context)",
+        "Subsequent segments auto-advance and play without requiring additional user interaction on iOS Safari",
+        "The 750ms silence gap between segments is preserved",
+        "Word-by-word highlighting continues to work with accurate timing",
+        "Progress bar and segment counter update correctly as segments advance",
+        "Pause/resume via the toggle button works correctly including on iOS Safari",
+        "Text-only fallback for segments with audio_unavailable: true still works",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "JourneyPlayer currently changes the <audio> element src between segments and calls play() inside a setTimeout outside the original gesture context. iOS Safari blocks this. Options: (A) Switch to Web Audio API and schedule all buffers from the initial gesture, (B) Keep <audio> and test if play() on same element works after initial user-initiated playback, (C) Catch NotAllowedError and show a tap-to-continue fallback."
+    },
+    {
+      "id": "US-005",
+      "title": "Unit tests for AudioContext preservation across resets",
+      "description": "As a developer, I want unit tests verifying AudioContext survives between streaming messages so we catch regressions in the Safari fix.",
+      "acceptanceCriteria": [
+        "Test: resetPlaybackState() clears playback state without closing AudioContext — verify AudioContext is not null and not closed after resetPlaybackState()",
+        "Test: resetPlaybackState() stops all active source nodes — verify source.stop() and source.disconnect() are called",
+        "Test: resetPlaybackState() resets word timings and queue — verify allWordTimings, ttsWords, ttsText are empty after reset",
+        "Test: stop() closes AudioContext after calling resetPlaybackState() internally — verify AudioContext is null after stop()",
+        "Test: initialize() reuses existing running AudioContext — call initialize() twice and verify the same instance is returned",
+        "Test: enqueueChunk works after resetPlaybackState() on the same AudioContext — verify chunks can be enqueued and scheduled without errors",
+        "Test: simulated multi-message flow (initialize, enqueueChunk, resetPlaybackState, enqueueChunk) — verify the second batch schedules correctly on the preserved context",
+        "All new tests pass with npm run test:unit",
+        "All existing tests in useStreamingAudioQueue.test.ts continue to pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "The existing test file already has a MockAudioContext setup that can be extended for these tests."
+    }
+  ]
+}

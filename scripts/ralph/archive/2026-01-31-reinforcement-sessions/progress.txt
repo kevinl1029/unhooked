@@ -1,0 +1,13 @@
+# Ralph Progress Log
+Started: Fri Jan 31 2026
+
+## Codebase Patterns
+- **AudioContext lifecycle:** useStreamingAudioQueue.ts manages the Web Audio API AudioContext for TTS playback
+- **preInitAudio chain:** SessionView → useVoiceChat.preInitAudio → useVoiceSession.preInitAudio → useStreamingTTS.preInitAudio → audioQueue.initialize()
+- **Streaming TTS flow:** processStream() in useStreamingTTS.ts reads SSE events, decodes audio chunks, schedules playback via audioQueue
+- **iOS Safari constraint:** AudioContext.resume() only works within a user gesture handler; calling it outside returns a promise that never resolves
+- **Testing:** Run `npm run test:unit` for unit tests, `npm run build` for typecheck
+- **Session types:** core, check_in, ceremony, reinforcement, boost — all use useVoiceChat except ceremony (uses useAudioRecorder for recording, JourneyPlayer for playback)
+- **Check-in page:** pages/check-in/[id].vue has its own UI, does NOT use SessionView.vue
+
+---
