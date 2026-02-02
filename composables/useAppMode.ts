@@ -13,5 +13,6 @@ export function useAppMode() {
     checkoutEnabled: mode === 'validation' || mode === 'enabled',
     // App access is only available in enabled mode
     appAccessEnabled: mode === 'enabled',
+    isStaging: config.public.isStaging as boolean,
   }
 }
