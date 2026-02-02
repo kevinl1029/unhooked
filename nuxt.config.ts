@@ -33,7 +33,7 @@ export default defineNuxtConfig({
       meta: [
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
-{ name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'theme-color', content: '#104e54' },
         { name: 'author', content: 'Unhooked' },
         { name: 'robots', content: 'index, follow' },
@@ -50,12 +50,12 @@ export default defineNuxtConfig({
       ],
       script: analyticsDomain
         ? [
-            {
-              src: 'https://plausible.io/js/script.js',
-              defer: true,
-              'data-domain': analyticsDomain,
-            },
-          ]
+          {
+            src: 'https://plausible.io/js/script.js',
+            defer: true,
+            'data-domain': analyticsDomain,
+          },
+        ]
         : []
     }
   },
@@ -155,6 +155,7 @@ export default defineNuxtConfig({
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
       // App mode: 'disabled' (waitlist only), 'validation' (checkout but no app), 'enabled' (full access)
       appMode: process.env.NUXT_PUBLIC_APP_MODE || 'enabled',
+      isStaging: process.env.VERCEL_ENV === 'preview',
     }
   },
 
