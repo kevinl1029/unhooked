@@ -369,8 +369,10 @@ export default defineEventHandler(async (event) => {
                 // This ensures all audio chunks are sent before closing the stream
                 await ttsProcessor.flush()
 
-                // If no remaining text but we had chunks, send a completion marker
-                if (!remaining && ttsProcessor.getEnqueuedCount() > 0) {
+                // Send a completion marker if the last enqueued sentence didn't
+                // already have isLast=true (i.e., remaining was empty so sentences
+                // were detected via onToken, not the flush path)
+                if (!remaining) {
                   await ttsProcessor.sendCompletionMarker()
                 }
               }
@@ -434,7 +436,7 @@ export default defineEventHandler(async (event) => {
                 done: true,
                 conversationId: convId,
                 sessionComplete,
-                streamingTTS: useStreamingTTS
+                streamingTTS: ttsProcessor ? ttsProcessor.getSentCount() > 0 : false
               })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               controller.close()

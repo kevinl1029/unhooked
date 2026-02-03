@@ -19,6 +19,7 @@ export class SequentialTTSProcessor {
   private chunkIndex = 0
   private cumulativeOffsetMs = 0
   private hasError = false
+  private sentCount = 0 // Tracks actually-emitted audio chunks (not completion markers)
 
   constructor(
     private provider: TTSProvider,
@@ -84,6 +85,7 @@ export class SequentialTTSProcessor {
 
             // Emit the chunk immediately - streaming provides progressive audio
             this.onChunk(chunk)
+            this.sentCount++
           }
 
           // If this was the last sentence and we emitted chunks, send a completion marker
@@ -138,11 +140,17 @@ export class SequentialTTSProcessor {
 
           // Emit the chunk - this happens in strict order because we're in a chain
           this.onChunk(chunk)
+          this.sentCount++
         }
       } catch (err) {
         console.error('[sequential-tts] Failed to synthesize sentence:', sanitizedText.slice(0, 50), err)
         // Don't set hasError for individual chunk failures - let the stream continue
         // The chunk simply won't be sent, but subsequent chunks can still work
+        // But if this was the last sentence, send a completion marker so the client
+        // doesn't hang waiting for audio that will never arrive
+        if (isLast) {
+          this.sendCompletionMarker()
+        }
       }
     })
   }
@@ -184,6 +192,15 @@ export class SequentialTTSProcessor {
    */
   getEnqueuedCount(): number {
     return this.chunkIndex
+  }
+
+  /**
+   * Get the number of audio chunks actually emitted via onChunk.
+   * Does not count completion markers (empty audio).
+   * Used by the server to accurately report whether TTS was used in the done event.
+   */
+  getSentCount(): number {
+    return this.sentCount
   }
 
   /**
