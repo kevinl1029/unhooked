@@ -9,7 +9,7 @@
         <p class="emphasis">It's a conversation to change your belief.</p>
       </div>
 
-      <p class="section-text">Over about two weeks, you'll talk through the beliefs that keep nicotine in control—personalized to your life, your triggers, the specific moments when you reach for it.</p>
+      <p class="section-text">Not a one-size-fits-all script. The program learns your life—your stress points, your routines, the lies nicotine tells <em>you</em>—and adapts as you go.</p>
 
       <div class="stacked-lines observations">
         <p class="stacked-line intro">You'll start to notice things.</p>
@@ -23,8 +23,8 @@
       <p class="pull-quote">You won't quit nicotine.<br>You'll stop wanting it.</p>
 
       <div class="whats-included">
-        <p class="included-item">Voice conversations hyper-personalized to you, over ~2 weeks</p>
-        <p class="included-item">Brief daily check-ins between sessions</p>
+        <p class="included-item">Guided voice sessions over ~2 weeks that evolve with your story</p>
+        <p class="included-item">Quick daily reflections—voice or text, under 3 minutes</p>
         <p class="included-item">A final session that marks the moment you're free</p>
         <p class="included-item">Follow-up support at 30, 60, and 90 days</p>
       </div>
