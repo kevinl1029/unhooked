@@ -67,6 +67,33 @@ test.describe('Check-In System', () => {
       )
     })
 
+    test('check-in API server error shows error state', async ({ page }) => {
+      // Mock the check-in API to return 500
+      await page.route('**/api/check-ins/server-error-123', async (route) => {
+        if (route.request().method() !== 'GET') {
+          await route.continue()
+          return
+        }
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Internal server error' }),
+        })
+      })
+
+      await page.goto('/check-in/server-error-123')
+
+      // Error state should display
+      await expect(page.getByRole('heading', { name: 'Check-in Not Found' })).toBeVisible({ timeout: 10000 })
+
+      // Should offer navigation back to dashboard
+      await expect(page.getByRole('link', { name: /Return to Dashboard/i })).toBeVisible()
+      await expect(page.getByRole('link', { name: /Return to Dashboard/i })).toHaveAttribute(
+        'href',
+        '/dashboard',
+      )
+    })
+
     test('skip button navigates to dashboard', async ({ page }) => {
       await mockCheckInSkip(page, 'skip-test-123')
 
