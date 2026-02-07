@@ -65,7 +65,7 @@ Test plans and QA documentation.
 
 | Document | Description |
 |----------|-------------|
-| [core-program-test-plan.md](testing/core-program-test-plan.md) | Smoke testing plan for core program epic |
+| [core-program-test-plan.md](testing/core-program-test-plan.md) | Manual smoke testing plan for core program epic |
 
 ---
 

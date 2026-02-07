@@ -2,3 +2,6 @@
 export * from './mock-auth'
 export * from './mock-progress'
 export * from './mock-ceremony'
+export * from './mock-session'
+export * from './mock-check-in'
+export * from './mock-audio'

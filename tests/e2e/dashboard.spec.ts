@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test'
 import { mockUserInProgress, mockProgressAPI, mockIntakeAPI } from './utils'
+import { mockUserStatusAPI } from './utils/mock-session'
+import {
+  mockCheckInInterstitial,
+  mockDashboardMoments,
+  mockTimezoneAPI,
+} from './utils/mock-check-in'
 
 test.describe('Dashboard', () => {
   test.describe('Progress Display', () => {
@@ -86,6 +92,70 @@ test.describe('Dashboard', () => {
 
       // Completed state shows "all 5 illusions" in the description
       await expect(page.getByText(/all 5 illusions/i)).toBeVisible()
+    })
+  })
+
+  test.describe('Mobile Layout', () => {
+    test.beforeEach(({ page }) => {
+      const viewport = page.viewportSize()
+      test.skip(!viewport || viewport.width >= 768, 'Mobile viewport only')
+    })
+
+    test('dashboard layout works on mobile without horizontal scroll', async ({ page }) => {
+      await mockUserStatusAPI(page, {
+        phase: 'in_progress',
+        currentIllusion: 2,
+        illusionsCompleted: [1],
+        totalSessions: 1,
+      })
+      await mockIntakeAPI(page)
+      await mockCheckInInterstitial(page, { hasPending: false })
+      await mockDashboardMoments(page)
+      await mockTimezoneAPI(page)
+
+      await page.goto('/dashboard')
+
+      // Progress indicator should be visible
+      await expect(page.getByText(/1.*(of|\/)\s*5/i)).toBeVisible({ timeout: 10000 })
+
+      // Continue/next session CTA should be visible (button with navigateTo)
+      const continueButton = page.getByRole('button', { name: /continue/i })
+      await expect(continueButton).toBeVisible()
+
+      // No horizontal page scroll (carousel items are allowed to overflow within their container)
+      const hasHorizontalScroll = await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(hasHorizontalScroll).toBe(false)
+    })
+  })
+
+  test.describe('Error Handling', () => {
+    test('progress API failure shows error with retry button', async ({ page }) => {
+      // Mock /api/user/status to return 500
+      await page.route('**/api/user/status', async (route) => {
+        if (route.request().method() === 'GET') {
+          await route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: JSON.stringify({ message: 'Internal server error' }),
+          })
+        } else {
+          await route.continue()
+        }
+      })
+      await mockIntakeAPI(page)
+      await mockCheckInInterstitial(page, { hasPending: false })
+      await mockDashboardMoments(page)
+      await mockTimezoneAPI(page)
+
+      await page.goto('/dashboard')
+
+      // Should show error state with red text
+      await expect(page.locator('.text-red-400')).toBeVisible({ timeout: 10000 })
+
+      // Should show "Try Again" button
+      await expect(page.getByRole('button', { name: /try again/i })).toBeVisible()
     })
   })
 })

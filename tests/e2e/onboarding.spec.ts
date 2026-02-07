@@ -114,6 +114,57 @@ test.describe('Onboarding', () => {
     })
   })
 
+  test.describe('Mobile Layout', () => {
+    test.beforeEach(({ page }) => {
+      const viewport = page.viewportSize()
+      test.skip(!viewport || viewport.width >= 768, 'Mobile viewport only')
+    })
+
+    test('onboarding steps fit mobile viewport without overflow', async ({ page }) => {
+      await mockNewUser(page)
+      await mockIntakeAPI(page)
+
+      await page.goto('/onboarding')
+
+      // Welcome screen should fit mobile
+      await expect(page.getByText('Welcome to Unhooked')).toBeVisible()
+      await expect(page.getByRole('button', { name: /let's go/i })).toBeVisible()
+
+      // No horizontal scroll on welcome screen
+      let hasHorizontalScroll = await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(hasHorizontalScroll).toBe(false)
+
+      // Start the intake form
+      await page.getByRole('button', { name: /let's go/i }).click()
+
+      // Step 1: product type — should fit without overflow
+      await expect(page.getByText(/what nicotine products/i)).toBeVisible()
+      hasHorizontalScroll = await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(hasHorizontalScroll).toBe(false)
+
+      // Options should be visible and tappable
+      const vapeOption = page.getByText(/vape|vaping/i).first()
+      await expect(vapeOption).toBeVisible()
+      await vapeOption.click()
+
+      // Continue button should be visible
+      const continueButton = page.getByRole('button', { name: /continue|next/i })
+      await expect(continueButton).toBeVisible()
+      await continueButton.click()
+
+      // Step 2: frequency — should fit without overflow
+      await expect(page.getByText(/how often|frequency|usage/i).first()).toBeVisible()
+      hasHorizontalScroll = await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(hasHorizontalScroll).toBe(false)
+    })
+  })
+
   test.describe('Form Submission', () => {
     test('completing all steps redirects to dashboard', async ({ page }) => {
       await mockNewUser(page)
