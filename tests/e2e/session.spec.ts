@@ -168,4 +168,53 @@ test.describe('Session Conversation Flow', () => {
       ).toBeVisible({ timeout: 15000 })
     })
   })
+
+  test.describe('Mobile Layout', () => {
+    test.beforeEach(({ page }) => {
+      const viewport = page.viewportSize()
+      test.skip(!viewport || viewport.width >= 768, 'Mobile viewport only')
+    })
+
+    test('session UI elements are visible and usable on mobile viewport', async ({ page }) => {
+      await mockUserInProgress(page, { currentIllusion: 1, illusionsCompleted: [] })
+      await mockConversationsAPI(page, [])
+      await mockChatAPI(page, [
+        {
+          responseText: 'Welcome to your first session.',
+          conversationId: 'mock-conv-1',
+        },
+        {
+          responseText: 'Great insight about stress!',
+          conversationId: 'mock-conv-1',
+        },
+      ])
+
+      await page.goto('/session/1?mode=text')
+
+      // Title should be visible
+      await expect(page.getByText('The Stress Illusion')).toBeVisible({ timeout: 10000 })
+
+      // Opening message should appear
+      await expect(page.getByText(/Welcome to your first session/)).toBeVisible({ timeout: 15000 })
+
+      // Text input and send button should be visible
+      const textarea = page.getByPlaceholder('Type your message...')
+      await expect(textarea).toBeVisible()
+
+      const sendButton = page.getByRole('button', { name: 'Send message' })
+      await expect(sendButton).toBeVisible()
+
+      // No horizontal scroll
+      const hasHorizontalScroll = await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(hasHorizontalScroll).toBe(false)
+
+      // Verify interaction works on mobile
+      await textarea.fill('Testing on mobile')
+      await sendButton.click()
+      await expect(page.getByText('Testing on mobile')).toBeVisible()
+      await expect(page.getByText(/Great insight about stress/i)).toBeVisible({ timeout: 15000 })
+    })
+  })
 })
