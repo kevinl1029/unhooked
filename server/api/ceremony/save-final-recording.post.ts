@@ -38,6 +38,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Audio file required' })
   }
 
+  // Validate MIME type - only accept audio/webm and audio/ogg
+  const allowedMimeTypes = ['audio/webm', 'audio/ogg']
+  const isValidMimeType = allowedMimeTypes.some(type => audioContentType.includes(type))
+
+  if (!isValidMimeType) {
+    throw createError({
+      statusCode: 400,
+      message: `Invalid audio format. Only audio/webm and audio/ogg are supported. Received: ${audioContentType}`
+    })
+  }
+
+  // Validate file size - max 10MB
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
+  if (audioBlob.length > MAX_FILE_SIZE) {
+    throw createError({
+      statusCode: 400,
+      message: `File too large. Maximum size is 10MB. Received: ${(audioBlob.length / 1024 / 1024).toFixed(1)}MB`
+    })
+  }
+
   const supabase = serverSupabaseServiceRole(event)
 
   // Check if ceremony already completed (via user_progress table)

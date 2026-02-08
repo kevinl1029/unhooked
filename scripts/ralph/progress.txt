@@ -135,3 +135,25 @@ Files changed:
 - The 5 illusion keys match database column prefixes: stress_relief, pleasure, willpower, focus, identity
 - User insights are optional per illusion - only included if user_story has a key_insight_id and the moment exists
 ---
+## 2026-02-08 - US-007
+- Implemented SessionView ceremony token detection and pause/resume functionality
+- Added @recording-prompt event emission when [RECORDING_PROMPT] token is detected in AI messages (same pattern as [SESSION_COMPLETE])
+- Exposed pause() and resume() methods via defineExpose for ceremony orchestration
+- Created isPausedByCeremony ref that disables mic button and text input when true
+- Stripped [RECORDING_PROMPT] and [JOURNEY_GENERATE] tokens from displayed message text (added to existing [SESSION_COMPLETE] stripping)
+- Updated server/utils/tts/sanitize.ts to add ceremony tokens to SYSTEM_TOKENS array (prevents them from being spoken)
+- All input controls (mic button, text input, send button) respect isPausedByCeremony state via conditional rendering and disabled attributes
+- Existing [SESSION_COMPLETE] detection and handling unchanged (preserves backward compatibility)
+
+Files changed:
+- components/voice/SessionView.vue (added recordingPrompt emit, pause/resume methods, ceremony token stripping, pause state management)
+- server/utils/tts/sanitize.ts (added [RECORDING_PROMPT] and [JOURNEY_GENERATE] to SYSTEM_TOKENS)
+
+**Learnings for future iterations:**
+- Token detection pattern: Watch messages array with deep:true, check last message content.includes('[TOKEN]'), emit event on detection
+- defineExpose pattern: Define methods as const arrow functions, then call defineExpose({ method1, method2 }) at end of <script setup>
+- Ceremony pause state: Use a separate isPausedByCeremony ref distinct from isProcessing to control input availability during ceremony recording
+- Token stripping: Apply .replace() chains in computed displayMessages for display AND add to SYSTEM_TOKENS in sanitize.ts for TTS
+- Conditional rendering for paused state: Add v-if="!isPausedByCeremony" to voice controls, :disabled="isPausedByCeremony" to input elements
+- The message watcher fires when content changes, so detecting tokens immediately as they arrive from SSE stream
+---

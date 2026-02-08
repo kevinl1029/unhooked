@@ -130,7 +130,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "File: `components/voice/SessionView.vue`. Look for the existing [SESSION_COMPLETE] detection — it's likely a watch on messages or the SSE stream handler. Add [RECORDING_PROMPT] detection using the same pattern. For pause/resume: add `isPaused` ref, bind it to MicButton's disabled prop and the text input's disabled attribute. Token stripping in display: find where [SESSION_COMPLETE] is stripped from message text and add the new tokens. TTS sanitize: `server/utils/tts/sanitize.ts` — add to the regex or string replacement list."
     },
     {
