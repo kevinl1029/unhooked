@@ -244,7 +244,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the exact pattern in `server/utils/email/check-in-sender.ts` for: Resend client usage, inline HTML email template, error handling, return type. The cron endpoint at `server/api/cron/check-ins.get.ts` already runs every 5 min via GitHub Actions. Just add the ceremony email call after check-in processing. Note: ceremony_ready_at is set when program_status transitions to ceremony_ready (see US-013 for that logic)."
     },
     {
@@ -262,7 +262,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Files to modify: system prompt for identity illusion layer 3 (add ceremony tease instruction), `components/SessionCompleteCard.vue` (add ceremonyTease prop with conditional rendering), the session page that renders SessionCompleteCard (detect identity layer 3), and the session completion server logic (set ceremony_ready_at). Identity Layer 3 is illusion='identity', layer=3. The ceremony_ready_at timestamp is critical for the 24h email nudge (US-012)."
     },
     {

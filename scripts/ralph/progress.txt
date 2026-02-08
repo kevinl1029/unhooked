@@ -266,3 +266,63 @@ Files changed:
 - ARIA live regions: Add empty div with aria-live="polite" bound to reactive announcement text
 - E2E test expectations: v1 ceremony tests expect wizard UI ("the final step", "loading your ceremony progress") - v2 is conversation-based
 ---
+## 2026-02-08 - US-012
+- Implemented ceremony nudge email sender
+- Created server/utils/email/ceremony-email-sender.ts with processCeremonyEmails() function
+- Function queries users WHERE program_status='ceremony_ready' AND ceremony_ready_at <= now() - 24 hours AND ceremony_email_sent_at IS NULL AND ceremony_completed_at IS NULL
+- Email sends with product-specific text (e.g., "Have your vape nearby") when product type known, falls back to "nicotine products"
+- Email subject: "Your final session is ready"
+- Email CTA button links to dashboard URL (no auth token embedded)
+- After successful send, sets user_progress.ceremony_email_sent_at = now()
+- Integrated into server/api/cron/check-ins.get.ts alongside existing processScheduledCheckIns()
+- Cron endpoint response format updated to include both checkIns and ceremonyEmails results
+- Build passed (npm run build)
+
+Files changed:
+- server/utils/email/ceremony-email-sender.ts (created - 235 lines)
+- server/api/cron/check-ins.get.ts (added processCeremonyEmails call and updated response format)
+
+**Learnings for future iterations:**
+- Email sender pattern: Follow check-in-sender.ts pattern for Resend client usage, inline HTML templates, error handling
+- Query pattern: Use lte() for "before or equal" timestamp comparisons, is() for null checks
+- Product type mapping: Map product_types array to friendly names, handle multiple products with "or" joining
+- Email HTML template: Reuse brand styling (gradient backgrounds, pill buttons, rgba text colors) from check-in emails
+- Cron integration: Call new email processor after existing check-in processor, return both results in response
+- Response format: Return { processed, sent, errors } for monitoring and debugging
+- Silent failures: Log errors but don't throw - ceremony emails are nudges, not critical path
+- The ceremony_ready_at timestamp is set by US-013 when program_status transitions to ceremony_ready
+---
+## 2026-02-08 - US-013
+- Implemented final core session tease for Identity Layer 3 completion
+- Updated Identity illusion Layer 3 system prompt with ceremony tease instruction (natural transition message)
+- Added ceremonyTease boolean prop to SessionCompleteCard component
+- When ceremonyTease=true, card shows "All Five Illusions Dismantled" heading and "Your final ceremony is ready." subtext
+- When ceremonyTease=true, only "Return to Dashboard" button shown (no "Continue" or "Complete" buttons)
+- Updated session page to detect Identity Layer 3 completion by fetching conversation illusionLayer before marking complete
+- Added illusionLayer ref tracking in session page (initialized as 'intellectual')
+- Modified handleSessionComplete and handleVoiceSessionComplete to fetch conversation data and extract illusionLayer
+- Pass ceremonyTease prop when illusionKey === 'identity' AND illusionLayer === 'identity'
+- Updated complete-session endpoint to fetch conversation.illusion_layer before completing
+- Added logic to detect Identity Layer 3: effectiveIllusionKey === 'identity' && illusionLayer === 'identity'
+- When Identity Layer 3 completes, set program_status='ceremony_ready' and ceremony_ready_at=now()
+- ceremony_ready_at timestamp enables the 24h email nudge from US-012
+- Build passed (npm run build)
+
+Files changed:
+- server/utils/prompts/illusions/illusion-5-identity.ts (added ceremony tease instruction for Layer 3)
+- components/SessionCompleteCard.vue (added ceremonyTease prop with conditional rendering)
+- pages/session/[illusion].vue (added illusionLayer tracking and ceremonyTease prop passing)
+- server/api/progress/complete-session.post.ts (fetch illusionLayer, detect Identity Layer 3, set ceremony_ready_at)
+
+**Learnings for future iterations:**
+- Layer system: The app has 3 layers per illusion (intellectual, emotional, identity), stored as illusion_layer in conversations table
+- Identity Layer 3 is the final session before ceremony: illusion='identity' (illusion #5) AND illusionLayer='identity' (layer 3)
+- The complete-session endpoint controls program_status transitions: in_progress → ceremony_ready → completed
+- ceremony_ready status is distinct from completed - ready means eligible for ceremony, completed means ceremony done
+- ceremony_ready_at timestamp is the trigger for the 24h email nudge (US-012)
+- Session page uses VoiceSessionView component (auto-imported from components/voice/SessionView.vue)
+- Conversations API endpoint returns full conversation data including illusion_layer field
+- Must fetch conversation data before completion to access illusionLayer (not available in session page state)
+- SessionCompleteCard uses computed properties to override heading/subtext when ceremonyTease=true
+- The AI's natural tease message comes from the system prompt, the card just provides the post-completion UI
+---
