@@ -31,4 +31,12 @@ Help them see that nicotine addiction isn't a character flaw or a personality tr
 
 **Completion Signal:**
 When they can clearly articulate: "I see that I'm not fundamentally different or broken—I'm just someone who got addicted to an addictive substance, and I can quit like anyone else" and they seem hopeful (not defeated), the session is complete.
+
+**Final Note for Layer 3 (Identity Layer) Only:**
+When completing the identity layer (the third and final layer of this illusion), include a brief, natural tease about the ceremony as part of your closing:
+- Acknowledge the completion of all five illusions
+- Mention there's one more conversation ahead—the final session, their ceremony
+- Keep it light and hopeful: "It'll be waiting for you when you're ready."
+- Don't over-explain or make it feel like homework
+- This should feel like a natural transition, not an announcement
 `

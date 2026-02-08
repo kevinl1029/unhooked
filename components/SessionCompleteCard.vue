@@ -7,9 +7,9 @@
       </svg>
     </div>
 
-    <h2 class="text-3xl font-bold text-white mb-3">{{ heading }}</h2>
+    <h2 class="text-3xl font-bold text-white mb-3">{{ displayHeading }}</h2>
     <p class="text-white-85 text-lg mb-8">
-      {{ subtext }}
+      {{ displaySubtext }}
     </p>
 
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
@@ -21,9 +21,9 @@
       >
         Return to Dashboard
       </button>
-      <!-- Secondary CTA: Continue or Complete -->
+      <!-- Secondary CTA: Continue or Complete (hidden when ceremony tease) -->
       <button
-        v-if="nextIllusion"
+        v-if="nextIllusion && !ceremonyTease"
         type="button"
         class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
         @click="$emit('continue', nextIllusion)"
@@ -31,7 +31,7 @@
         Continue to Next Session
       </button>
       <button
-        v-else
+        v-else-if="!ceremonyTease"
         type="button"
         class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
         @click="$emit('finish')"
@@ -43,17 +43,27 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(
+const props = withDefaults(
   defineProps<{
     nextIllusion?: number | null
     heading?: string
     subtext?: string
+    ceremonyTease?: boolean
   }>(),
   {
     nextIllusion: null,
     heading: 'Session Complete',
     subtext: 'Great work. Take a moment to let this settle.',
+    ceremonyTease: false,
   }
+)
+
+// Override heading and subtext when ceremonyTease is true
+const displayHeading = computed(() =>
+  props.ceremonyTease ? 'All Five Illusions Dismantled' : props.heading
+)
+const displaySubtext = computed(() =>
+  props.ceremonyTease ? 'Your final ceremony is ready.' : props.subtext
 )
 
 defineEmits<{

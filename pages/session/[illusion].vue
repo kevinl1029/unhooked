@@ -42,6 +42,7 @@
         v-if="sessionComplete"
         class="flex-shrink-0"
         :next-illusion="nextIllusion"
+        :ceremony-tease="illusionKey === 'identity' && illusionLayer === 'identity'"
         @continue="handleContinue"
         @dashboard="handleDashboard"
         @finish="handleFinish"
@@ -79,6 +80,7 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const sessionComplete = ref(false)
 const nextIllusion = ref<number | null>(null)
+const illusionLayer = ref<IllusionLayer>('intellectual')
 
 // For voice session view
 const existingConversationId = ref<string | null>(null)
@@ -355,6 +357,12 @@ async function handleSessionComplete() {
   if (!conversationId.value) return
 
   try {
+    // First, fetch conversation to get illusionLayer before completing
+    const { data: conversationData } = await useFetch(`/api/conversations/${conversationId.value}`)
+    if (conversationData.value && conversationData.value.illusion_layer) {
+      illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
+    }
+
     const result = await completeSession(conversationId.value, illusionKey.value)
     nextIllusion.value = result.nextIllusion ?? null
     sessionComplete.value = true
@@ -366,6 +374,18 @@ async function handleSessionComplete() {
 
 // Voice session handlers
 async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
+  // Fetch the conversation layer before marking complete
+  if (existingConversationId.value) {
+    try {
+      const { data: conversationData } = await useFetch(`/api/conversations/${existingConversationId.value}`)
+      if (conversationData.value && conversationData.value.illusion_layer) {
+        illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
+      }
+    } catch (err) {
+      console.error('Error fetching conversation layer:', err)
+    }
+  }
+
   nextIllusion.value = nextIllusionNum
   sessionComplete.value = true
   await fetchProgress()

@@ -39,6 +39,20 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
+  // Get conversation to check illusion_layer
+  const { data: conversation, error: conversationFetchError } = await supabase
+    .from('conversations')
+    .select('illusion_layer')
+    .eq('id', body.conversationId)
+    .eq('user_id', user.sub)
+    .single()
+
+  if (conversationFetchError) {
+    throw createError({ statusCode: 404, message: 'Conversation not found' })
+  }
+
+  const illusionLayer = conversation?.illusion_layer
+
   // Mark conversation as completed
   const { error: convError } = await supabase
     .from('conversations')
@@ -75,18 +89,38 @@ export default defineEventHandler(async (event) => {
   // Check if program is complete
   const isComplete = updatedIllusionsCompleted.length >= 5
 
+  // Check if this is Identity Layer 3 (final session before ceremony)
+  const isIdentityLayer3 = effectiveIllusionKey === 'identity' && illusionLayer === 'identity'
+
+  // Determine program status
+  let programStatus: string
+  if (isComplete && isIdentityLayer3) {
+    programStatus = 'ceremony_ready'
+  } else if (isComplete) {
+    programStatus = 'completed'
+  } else {
+    programStatus = 'in_progress'
+  }
+
   // Update progress
+  const updateData: any = {
+    current_illusion: nextIllusion || currentProgress.current_illusion,
+    illusions_completed: updatedIllusionsCompleted,
+    program_status: programStatus,
+    completed_at: isComplete ? new Date().toISOString() : null,
+    last_session_at: new Date().toISOString(),
+    total_sessions: (currentProgress.total_sessions || 0) + 1,
+    updated_at: new Date().toISOString()
+  }
+
+  // Set ceremony_ready_at when transitioning to ceremony_ready
+  if (isIdentityLayer3) {
+    updateData.ceremony_ready_at = new Date().toISOString()
+  }
+
   const { data: updatedProgress, error: updateError } = await supabase
     .from('user_progress')
-    .update({
-      current_illusion: nextIllusion || currentProgress.current_illusion,
-      illusions_completed: updatedIllusionsCompleted,
-      program_status: isComplete ? 'completed' : 'in_progress',
-      completed_at: isComplete ? new Date().toISOString() : null,
-      last_session_at: new Date().toISOString(),
-      total_sessions: (currentProgress.total_sessions || 0) + 1,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('user_id', user.sub)
     .select()
     .single()
