@@ -10,6 +10,7 @@
  */
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { processScheduledCheckIns } from '~/server/utils/email/check-in-sender'
+import { processCeremonyEmails } from '~/server/utils/email/ceremony-email-sender'
 
 export default defineEventHandler(async (event) => {
   // Verify the request is from Vercel Cron (or in development)
@@ -28,15 +29,28 @@ export default defineEventHandler(async (event) => {
 
   console.log('[cron/check-ins] Processing scheduled check-ins...')
 
-  const result = await processScheduledCheckIns(supabase)
+  const checkInsResult = await processScheduledCheckIns(supabase)
 
-  console.log(`[cron/check-ins] Processed ${result.processed}, sent ${result.sent}, errors: ${result.errors.length}`)
+  console.log(`[cron/check-ins] Processed ${checkInsResult.processed}, sent ${checkInsResult.sent}, errors: ${checkInsResult.errors.length}`)
+
+  console.log('[cron/check-ins] Processing ceremony nudge emails...')
+
+  const ceremonyResult = await processCeremonyEmails(supabase)
+
+  console.log(`[cron/check-ins] Ceremony emails: processed ${ceremonyResult.processed}, sent ${ceremonyResult.sent}, errors: ${ceremonyResult.errors.length}`)
 
   return {
     success: true,
-    processed: result.processed,
-    sent: result.sent,
-    errors: result.errors,
+    checkIns: {
+      processed: checkInsResult.processed,
+      sent: checkInsResult.sent,
+      errors: checkInsResult.errors,
+    },
+    ceremonyEmails: {
+      processed: ceremonyResult.processed,
+      sent: ceremonyResult.sent,
+      errors: ceremonyResult.errors,
+    },
     timestamp: new Date().toISOString(),
   }
 })
