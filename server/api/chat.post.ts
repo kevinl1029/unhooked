@@ -3,6 +3,8 @@ import type { Message, ModelType } from '../utils/llm'
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { buildSystemPrompt, buildCheckInSystemPrompt, ILLUSION_NAMES } from '../utils/prompts'
 import { BASE_SYSTEM_PROMPT } from '../utils/prompts/base-system'
+import { buildCeremonySystemPrompt } from '../utils/prompts/ceremony-prompt'
+import { generateJourneyArtifact } from '../utils/ceremony/generate-journey'
 import {
   detectMoment,
   shouldAttemptDetection,
@@ -195,6 +197,52 @@ export default defineEventHandler(async (event) => {
       { role: 'system', content: checkInSystemPrompt },
       ...messages
     ]
+  } else if (sessionType === 'ceremony') {
+    // Fetch ceremony context data
+    const { data: userStoryData } = await supabase
+      .from('user_story')
+      .select('origin_summary, personal_stakes, primary_triggers')
+      .eq('user_id', user.sub)
+      .single()
+
+    const { data: capturedMoments } = await supabase
+      .from('captured_moments')
+      .select('*')
+      .eq('user_id', user.sub)
+      .order('created_at', { ascending: false })
+
+    const { data: userIntake } = await supabase
+      .from('user_intake')
+      .select('product_types')
+      .eq('user_id', user.sub)
+      .single()
+
+    // Group moments by type
+    const momentsByType = {
+      rationalizations: capturedMoments?.filter(m => m.moment_type === 'rationalization') || [],
+      insights: capturedMoments?.filter(m => m.moment_type === 'insight') || [],
+      breakthroughs: capturedMoments?.filter(m => m.moment_type === 'breakthrough') || [],
+      observations: capturedMoments?.filter(m => m.moment_type === 'observation') || [],
+    }
+
+    // Get illusions completed (all 5 illusions at ceremony_ready status)
+    const illusionsCompleted = ['stress', 'pleasure', 'willpower', 'focus', 'identity']
+
+    // Extract first product type or null
+    const productType = userIntake?.product_types?.[0] || null
+
+    // Build ceremony system prompt
+    const ceremonySystemPrompt = buildCeremonySystemPrompt({
+      userStory: userStoryData || null,
+      momentsByType,
+      illusionsCompleted,
+      productType,
+    })
+
+    processedMessages = [
+      { role: 'system', content: ceremonySystemPrompt },
+      ...messages
+    ]
   }
 
   // Get or create conversation
@@ -380,6 +428,16 @@ export default defineEventHandler(async (event) => {
                 }
               }
 
+              // Check for ceremony-specific tokens
+              const journeyGenerateToken = response.includes('[JOURNEY_GENERATE]')
+
+              // Trigger background journey generation (fire-and-forget)
+              if (journeyGenerateToken && sessionType === 'ceremony') {
+                generateJourneyArtifact(user.sub, supabase).catch(err => {
+                  console.error('[chat] Journey generation failed:', err)
+                })
+              }
+
               // Check for session complete token
               const sessionComplete = response.includes('[SESSION_COMPLETE]')
 
@@ -468,6 +526,16 @@ export default defineEventHandler(async (event) => {
     // Non-streaming response
     try {
       const response = await router.chat({ messages: processedMessages, model })
+
+      // Check for ceremony-specific tokens
+      const journeyGenerateToken = response.content.includes('[JOURNEY_GENERATE]')
+
+      // Trigger background journey generation (fire-and-forget)
+      if (journeyGenerateToken && sessionType === 'ceremony') {
+        generateJourneyArtifact(user.sub, supabase).catch(err => {
+          console.error('[chat] Journey generation failed:', err)
+        })
+      }
 
       // Check for session complete token
       const sessionComplete = response.content.includes('[SESSION_COMPLETE]')
