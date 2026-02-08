@@ -326,3 +326,27 @@ Files changed:
 - SessionCompleteCard uses computed properties to override heading/subtext when ceremonyTease=true
 - The AI's natural tease message comes from the system prompt, the card just provides the post-completion UI
 ---
+## 2026-02-08 - US-014
+- Implemented post-ceremony dashboard with ceremony CTA and artifact cards
+- Updated ceremony-ready CTA text: "You've seen through all five illusions. You're ready. Your final session—the ceremony—is available now." with "Begin Ceremony Now" button
+- Refactored post-ceremony layout with "YOU'RE FREE" heading and ceremony completion date display
+- Updated artifact cards (Journey, Message, Cheat Sheet) with v2 styling and proper routing
+- Added "Your Message" card with dual mode: audio player when audio_path exists, text display when typed message
+- Added "Need a boost? Talk to me" CTA linking to /support for reinforcement support
+- Created 5 illusion reinforcement items section with "Reinforce" buttons linking to /reinforcement/[illusionKey]
+- All cards use glass card styling with brand design tokens (rounded-lg/rounded-card, shadow-card, border-brand-border)
+- Build passed (npm run build)
+
+Files changed:
+- pages/dashboard.vue (refactored post-ceremony and ceremony-ready sections, added reinforcement items)
+
+**Learnings for future iterations:**
+- Dashboard state-driven UI: v-else-if chain based on status.value?.phase (not_started, in_progress, ceremony_ready, post_ceremony)
+- Ceremony-ready vs post-ceremony: ceremony_ready shows CTA to begin, post_ceremony shows artifacts and reinforcement
+- Artifact display conditional: Check hasJourneyArtifact, hasFinalRecording, hasCheatSheet computed properties from useUserStatus
+- Message card dual mode: Check finalRecordingAudioPath computed for audio, otherwise show finalRecordingText for typed message
+- Reinforcement pattern: All 5 illusions available for reinforcement after ceremony, link to /reinforcement/[illusionKey]
+- Completion date display: ceremonyDate computed from useUserStatus returns Date object, format with formatDate(ceremonyDate)
+- Grid layout: md:grid-cols-2 for artifact cards, with md:col-span-2 for cheat sheet when other artifacts missing
+- The cheat sheet route is /cheat-sheet (not /toolkit as in v1)
+---

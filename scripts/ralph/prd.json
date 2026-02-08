@@ -285,7 +285,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "File: `pages/dashboard.vue`. The dashboard already has some post-ceremony rendering from v1 — update to match v2 layout. Ceremony CTA only appears for ceremony_ready state. Post-ceremony fully replaces the progress/session view. For 'Your Message': check if artifact has audio_path (show audio player) or content_text (show text). The journey, final-recording, and cheat sheet data come from their respective API endpoints."
     },
     {
