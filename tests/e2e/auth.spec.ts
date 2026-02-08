@@ -1,12 +1,26 @@
 import { test, expect } from '@playwright/test'
 import { getMockUser } from './utils'
-import { mockUserInProgress, mockNewUser, mockIntakeAPI } from './utils'
+import { mockNewUser, mockIntakeAPI } from './utils'
 import { mockUserStatusAPI } from './utils/mock-session'
 import {
   mockCheckInInterstitial,
   mockDashboardMoments,
   mockTimezoneAPI,
 } from './utils/mock-check-in'
+
+/**
+ * Set up all mocks needed for the dashboard to render in a given state.
+ */
+async function setupDashboard(
+  page: import('@playwright/test').Page,
+  statusOptions: Parameters<typeof mockUserStatusAPI>[1] = {},
+) {
+  await mockUserStatusAPI(page, statusOptions)
+  await mockIntakeAPI(page)
+  await mockCheckInInterstitial(page, { hasPending: false })
+  await mockDashboardMoments(page)
+  await mockTimezoneAPI(page)
+}
 
 test.describe('Authentication', () => {
   test.describe('Protected Routes', () => {
@@ -24,25 +38,27 @@ test.describe('Authentication', () => {
     })
 
     test('unauthenticated user is redirected from session page to login', async ({ page }) => {
-      await page.goto('/session/1')
+      await page.goto('/session/stress_relief')
       await expect(page).toHaveURL('/login')
     })
   })
 
   test.describe('Authenticated Access', () => {
     // These tests use the storageState auth from setup
-    test('authenticated user visiting home is redirected to dashboard', async ({ page }) => {
-      await mockUserInProgress(page)
-
+    test('authenticated user can still access home page', async ({ page }) => {
       await page.goto('/')
 
-      // Authenticated users should be redirected away from marketing page
-      await expect(page).toHaveURL('/dashboard')
+      // Home page (/) is in Supabase redirect exclude list —
+      // authenticated users are NOT redirected, they see the landing page
+      await expect(page).toHaveURL('/')
     })
 
     test('authenticated user can access dashboard', async ({ page }) => {
-      // Mock API responses for a user in progress
-      await mockUserInProgress(page)
+      await setupDashboard(page, {
+        phase: 'in_progress',
+        currentIllusion: 1,
+        illusionsCompleted: [],
+      })
 
       await page.goto('/dashboard')
 
@@ -51,7 +67,11 @@ test.describe('Authentication', () => {
     })
 
     test('authenticated user sees their email in header', async ({ page }) => {
-      await mockUserInProgress(page)
+      await setupDashboard(page, {
+        phase: 'in_progress',
+        currentIllusion: 1,
+        illusionsCompleted: [],
+      })
 
       await page.goto('/dashboard')
 
@@ -60,7 +80,11 @@ test.describe('Authentication', () => {
     })
 
     test('authenticated user can see sign out button', async ({ page }) => {
-      await mockUserInProgress(page)
+      await setupDashboard(page, {
+        phase: 'in_progress',
+        currentIllusion: 1,
+        illusionsCompleted: [],
+      })
 
       await page.goto('/dashboard')
 

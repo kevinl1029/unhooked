@@ -1,16 +1,35 @@
 import { test, expect } from '@playwright/test'
-import { mockUserInProgress, mockProgressAPI, mockIntakeAPI } from './utils'
-import { mockUserStatusAPI } from './utils/mock-session'
+import { mockIntakeAPI, mockUserInProgress } from './utils'
+import { mockUserStatusAPI, mockConversationsAPI, mockChatAPI } from './utils/mock-session'
 import {
   mockCheckInInterstitial,
   mockDashboardMoments,
   mockTimezoneAPI,
 } from './utils/mock-check-in'
 
+/**
+ * Set up all mocks needed for the dashboard to render in a given state.
+ * The dashboard uses useUserStatus() which calls /api/user/status.
+ */
+async function setupDashboard(
+  page: import('@playwright/test').Page,
+  statusOptions: Parameters<typeof mockUserStatusAPI>[1] = {},
+) {
+  await mockUserStatusAPI(page, statusOptions)
+  await mockIntakeAPI(page)
+  await mockCheckInInterstitial(page, { hasPending: false })
+  await mockDashboardMoments(page)
+  await mockTimezoneAPI(page)
+}
+
 test.describe('Dashboard', () => {
   test.describe('Progress Display', () => {
     test('shows progress indicator with 5 illusion circles', async ({ page }) => {
-      await mockUserInProgress(page, { currentIllusion: 1, illusionsCompleted: [] })
+      await setupDashboard(page, {
+        phase: 'in_progress',
+        currentIllusion: 1,
+        illusionsCompleted: [],
+      })
 
       await page.goto('/dashboard')
 
@@ -20,7 +39,8 @@ test.describe('Dashboard', () => {
     })
 
     test('shows 0 of 5 sessions completed for new user', async ({ page }) => {
-      await mockUserInProgress(page, {
+      await setupDashboard(page, {
+        phase: 'in_progress',
         currentIllusion: 1,
         illusionsCompleted: [],
         totalSessions: 0,
@@ -32,7 +52,8 @@ test.describe('Dashboard', () => {
     })
 
     test('shows correct progress for user with 2 completed illusions', async ({ page }) => {
-      await mockUserInProgress(page, {
+      await setupDashboard(page, {
+        phase: 'in_progress',
         currentIllusion: 3,
         illusionsCompleted: [1, 2],
         totalSessions: 2,
@@ -46,52 +67,69 @@ test.describe('Dashboard', () => {
 
   test.describe('Next Session Card', () => {
     test('shows continue button for user in progress', async ({ page }) => {
-      await mockUserInProgress(page, { currentIllusion: 2, illusionsCompleted: [1] })
+      await setupDashboard(page, {
+        phase: 'in_progress',
+        currentIllusion: 2,
+        illusionsCompleted: [1],
+      })
 
       await page.goto('/dashboard')
 
-      const continueButton = page.getByRole('link', { name: /continue|start|next/i })
+      // ProgressCarousel renders a <button> (not a link) for the Continue action
+      const continueButton = page.getByRole('button', { name: /continue/i })
       await expect(continueButton).toBeVisible()
     })
 
-    test('continue button links to current illusion session', async ({ page }) => {
+    test('continue button navigates to current illusion session using string key', async ({ page }) => {
+      await setupDashboard(page, {
+        phase: 'in_progress',
+        currentIllusion: 3,
+        illusionsCompleted: [1, 2],
+      })
+
+      // Also mock session page dependencies so navigation completes
       await mockUserInProgress(page, { currentIllusion: 3, illusionsCompleted: [1, 2] })
+      await mockConversationsAPI(page, [])
+      await mockChatAPI(page, { responseText: 'Welcome back.', conversationId: 'mock-conv-1' })
 
       await page.goto('/dashboard')
 
-      const continueButton = page.getByRole('link', { name: /continue|start|next/i })
-      await expect(continueButton).toHaveAttribute('href', /\/session\/3/)
+      // ProgressCarousel focuses on current illusion and shows its title
+      await expect(page.getByText(/Continue.*Willpower/i)).toBeVisible()
+
+      // Click Continue and verify navigation uses string key URL (not numeric)
+      await page.getByRole('button', { name: /continue/i }).click()
+      await page.waitForURL(/\/session\/willpower/, { timeout: 10000 })
     })
   })
 
   test.describe('Completed Program', () => {
-    test('shows completion message when all illusions done', async ({ page }) => {
-      await mockProgressAPI(page, {
-        programStatus: 'completed',
+    test('shows ceremony-ready state when all illusions done', async ({ page }) => {
+      await setupDashboard(page, {
+        phase: 'ceremony_ready',
         currentIllusion: 5,
         illusionsCompleted: [1, 2, 3, 4, 5],
         totalSessions: 5,
       })
-      await mockIntakeAPI(page)
 
       await page.goto('/dashboard')
 
-      // Should show completion state
-      await expect(page.getByText(/complete|unhooked|finished|congratulations/i)).toBeVisible()
+      // Should show ceremony-ready CTA
+      await expect(page.getByText(/you're ready for the final step/i)).toBeVisible()
     })
 
-    test('shows all 5 illusions completed in journey summary', async ({ page }) => {
-      await mockProgressAPI(page, {
-        programStatus: 'completed',
+    test('shows all 5 illusions completed in progress carousel', async ({ page }) => {
+      await setupDashboard(page, {
+        phase: 'ceremony_ready',
+        currentIllusion: 5,
         illusionsCompleted: [1, 2, 3, 4, 5],
         totalSessions: 5,
       })
-      await mockIntakeAPI(page)
 
       await page.goto('/dashboard')
 
-      // Completed state shows "all 5 illusions" in the description
-      await expect(page.getByText(/all 5 illusions/i)).toBeVisible()
+      // ProgressCarousel shows "5 of 5 illusions explored"
+      await expect(page.getByText(/5 of 5/i)).toBeVisible()
     })
   })
 
