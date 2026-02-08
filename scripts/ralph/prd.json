@@ -1,94 +1,350 @@
 {
   "project": "Unhooked",
-  "branchName": "fix/ios-safari-tts-autoplay",
-  "description": "iOS Safari TTS AudioContext Fixes - Fix audio playback failures caused by AudioContext being created or recreated outside user gesture context across all session types",
+  "branchName": "feature/final-ceremony",
+  "description": "Final Ceremony v2 — Voice-first 7-part conversation that marks the user's transition from 'working on quitting' to 'free', with journey artifacts, final recording, illusions cheat sheet, and post-ceremony dashboard",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Preserve AudioContext across streaming messages",
-      "description": "As a user on iOS Safari, I want TTS audio to play on the second and subsequent AI messages so that the conversation does not hang after the first response.",
+      "title": "Database migration for ceremony v2",
+      "description": "As a developer, I need the ceremony v2 schema changes deployed so that v2 endpoints and features have the fields they need.",
       "acceptanceCriteria": [
-        "Add a resetPlaybackState() method to useStreamingAudioQueue that clears all playback state (activeSourceNodes, queuedChunks, allWordTimings, playbackStartTime, playbackStarted, nextScheduleTime, actualCumulativeMs, inworldSentenceBaseMs, processingQueue, chunksFinishedPlaying, pendingCompletion, isPlaying, isWaitingForChunks, currentChunkIndex, currentWordIndex, error) WITHOUT closing the AudioContext",
-        "resetPlaybackState() stops and disconnects all active AudioBufferSourceNodes before clearing them",
-        "resetPlaybackState() calls stopWordTracking() to clear the word timing interval",
-        "Refactor stop() to call resetPlaybackState() internally, then additionally close the AudioContext and clean up autoResumeCleanup — no duplicated logic",
-        "Expose resetPlaybackState from useStreamingAudioQueue return object",
-        "In useStreamingTTS.processStream(), replace the audioQueue.reset() call with audioQueue.resetPlaybackState() so the AudioContext created by preInitAudio() survives into the streaming pipeline",
-        "The subsequent audioQueue.initialize() call in processStream() reuses the existing AudioContext when one already exists and is not closed",
-        "Existing unit tests in tests/unit/composables/useStreamingAudioQueue.test.ts continue to pass",
+        "Create migration file `supabase/migrations/20260208_ceremony_v2.sql`",
+        "Migration adds `ceremony_ready_at TIMESTAMP WITH TIME ZONE` column to `user_progress` table (nullable, no default) using `ADD COLUMN IF NOT EXISTS`",
+        "Migration adds `ceremony_email_sent_at TIMESTAMP WITH TIME ZONE` column to `user_progress` table (nullable, no default) using `ADD COLUMN IF NOT EXISTS`",
+        "Migration adds `generation_status TEXT DEFAULT 'ready'` column to `ceremony_artifacts` table with CHECK constraint: `generation_status IN ('pending', 'generating', 'ready', 'failed')` using `ADD COLUMN IF NOT EXISTS`",
+        "Update `types/database.types.ts` to include `ceremony_ready_at`, `ceremony_email_sent_at` in UserProgress type and `generation_status` in CeremonyArtifact type",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Foundational fix. processStream() currently calls audioQueue.reset() which closes the AudioContext. Then audioQueue.initialize() creates a NEW AudioContext outside the gesture context. On iOS Safari the new context starts suspended and resume() never resolves."
+      "notes": "Existing tables: user_progress has program_status, ceremony_completed_at, ceremony_skipped_final_dose. ceremony_artifacts has id, user_id, artifact_type, content_text, content_json, audio_path, audio_duration_ms, included_moment_ids, ceremony_completed_at, created_at, updated_at. All new columns are nullable with defaults so existing data is unaffected. Check existing types file for the exact type naming pattern."
     },
     {
       "id": "US-002",
-      "title": "Add preInitAudio to check-in session gesture handlers",
-      "description": "As a user on iOS Safari doing a check-in session, I want TTS audio to play after I respond so I can hear the AI's acknowledgment.",
+      "title": "Ceremony layout (immersive mode) and exit dialog",
+      "description": "As a user, I want the ceremony to be immersive with no header or navigation so that I stay focused on the experience.",
       "acceptanceCriteria": [
-        "Destructure preInitAudio from the useVoiceChat() return value in pages/check-in/[id].vue",
-        "In handleMicTap(), call await preInitAudio() before voiceChat.recordAndSend() in the start-recording branch",
-        "In handleMicTap(), call await preInitAudio() before voiceChat.stopRecordingAndSend() in the stop-recording branch",
-        "The preInitAudio() call occurs at the top of the handler before any other await so it executes within the user gesture context",
-        "Typecheck passes"
+        "Create `layouts/ceremony.vue` — minimal layout that renders only `<main><slot /></main>` with full-viewport styling and no AppHeader or navigation",
+        "Create `components/CeremonyExitDialog.vue` — dialog with message 'Leave ceremony? Your progress won't be saved.' and two buttons: 'Leave' and 'Stay'",
+        "CeremonyExitDialog accepts `open` boolean prop controlling visibility",
+        "CeremonyExitDialog emits `@leave` when Leave button clicked and `@stay` when Stay button clicked",
+        "CeremonyExitDialog uses `role='alertdialog'`, `aria-modal='true'`, and descriptive `aria-labelledby`",
+        "Stay button receives default focus when dialog opens",
+        "Dialog is focus-trapped when open (Tab/Shift+Tab cycle within dialog buttons only)",
+        "In `pages/ceremony.vue`, add `definePageMeta({ layout: 'ceremony' })` and a document-level Escape keydown listener that shows the exit dialog",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "The check-in page has its own UI and does not use SessionView.vue. It is missing preInitAudio() calls entirely. With US-001 in place, the context created by preInitAudio() will survive through processStream()."
+      "passes": false,
+      "notes": "Existing layout: layouts/default.vue includes AppHeader. The ceremony layout deliberately omits it. For focus trap, use onKeydown to intercept Tab and cycle between the two buttons. The ceremony page already exists at pages/ceremony.vue — update it in-place. Use glass card styling and brand tokens for the dialog."
     },
     {
       "id": "US-003",
-      "title": "Handle auto-started conversations without gesture context",
-      "description": "As a user on iOS Safari who has previously granted microphone permission, I want the first AI message audio to play when I interact with the session so that auto-started conversations are not silently broken.",
+      "title": "Ceremony system prompt builder",
+      "description": "As a developer, I need a ceremony-specific system prompt that defines the 7-part structure, token protocol, and user context injection so that the AI can guide the ceremony conversation.",
       "acceptanceCriteria": [
-        "When SessionView.vue onMounted() calls startConversation() without a gesture (permission already granted), the AudioContext is created in suspended state and registerAutoResume() registers touchstart/touchend/click listeners on the document",
-        "Text tokens stream and display correctly even while the AudioContext is suspended",
-        "Audio chunks are decoded and scheduled on the suspended context without errors or hanging",
-        "When the user first interacts with the page (taps mic button, types in text input, or taps anywhere), the auto-resume listener fires and the AudioContext transitions to running so queued audio begins playing",
-        "After the auto-resume fires, subsequent messages play audio immediately because the context stays running and is preserved via US-001",
+        "Create `server/utils/prompts/ceremony-prompt.ts` with a `buildCeremonySystemPrompt(context)` export function",
+        "Function accepts context object with: userStory (origin, triggers, stakes), momentsByType (rationalizations, insights, breakthroughs, observations as CapturedMoment arrays), illusionsCompleted (string array of 5 keys), productType (string or null)",
+        "Prompt defines all 7 ceremony parts (Reflective Journey, Illusions Recap, Why Check, Are You Ready, Final Dose/Disposal, Final Recording, Celebration) with each part's objective, emotional arc, example dialogue, and exit criteria for when to advance",
+        "Prompt includes Pre-Part 5 quit check: AI asks if user already stopped using nicotine, routes to Part 5A (symbolic disposal) if yes, Part 5B (final dose) if no",
+        "Prompt includes token protocol: emit `[JOURNEY_GENERATE]` when entering Part 6 before recording invitation, emit `[RECORDING_PROMPT]` at end of recording invitation message, emit `[SESSION_COMPLETE]` at end of Part 7 closing",
+        "Prompt instructs AI to weave user's captured moments into Part 1 narrative and use rationalization moments for Part 5 contrast (with fallback to general framing if none available)",
+        "Prompt uses specific product type when provided, falls back to 'nicotine products' when null",
+        "Prompt instructs Part 3 external motivation handling: validate but gently redirect to internal motivation",
+        "Prompt instructs Part 4 'not ready' handling: explore hesitation, offer graceful exit if unresolved (AI says ceremony will be waiting)",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "When mic permission is already granted, startConversation() fires from onMounted() with no user gesture. The AudioContext will start suspended. The auto-resume listener registered by initialize() will resume it on the user's first tap. With US-001, this context survives across messages."
+      "passes": false,
+      "notes": "Look at existing prompt builders in `server/utils/prompts/` for the pattern (function signature, how they're imported). The ceremony prompt is the longest prompt in the app. Reference ceremony-spec.md §The 7-Part Ceremony Flow for exact script text and emotional arcs for each part. The LLM decides when to advance between parts based on conversational cues — no server-side state machine. The prompt should instruct the AI to be guided but flexible: follow the user's energy within each part but steer back when the beat is complete."
     },
     {
       "id": "US-004",
-      "title": "Fix JourneyPlayer segment auto-advance on iOS Safari",
-      "description": "As a user on iOS Safari doing the ceremony, I want all journey segments to play sequentially so that playback does not stop after the first segment.",
+      "title": "/api/chat ceremony integration with token detection",
+      "description": "As a developer, I want /api/chat to handle ceremony-specific behavior so that the ceremony conversation uses the right system prompt and triggers journey generation.",
       "acceptanceCriteria": [
-        "The first segment starts playing when the user clicks the play button (gesture context)",
-        "Subsequent segments auto-advance and play without requiring additional user interaction on iOS Safari",
-        "The 750ms silence gap between segments is preserved",
-        "Word-by-word highlighting continues to work with accurate timing",
-        "Progress bar and segment counter update correctly as segments advance",
-        "Pause/resume via the toggle button works correctly including on iOS Safari",
-        "Text-only fallback for segments with audio_unavailable: true still works",
+        "When `/api/chat` receives `sessionType='ceremony'`, it calls `buildCeremonySystemPrompt()` to generate the system prompt instead of the default session prompt",
+        "Ceremony system prompt is populated with user context: user_story data, captured_moments grouped by type, illusions completed list, and product_type from user_intake",
+        "When the AI response SSE stream contains `[JOURNEY_GENERATE]`, the server triggers background journey artifact generation (fire-and-forget Promise that does not block the SSE response)",
+        "Tokens `[RECORDING_PROMPT]`, `[JOURNEY_GENERATE]`, and `[SESSION_COMPLETE]` are passed through in the SSE stream for client-side detection",
+        "Ceremony conversations are stored with `session_type='ceremony'` in the conversations table (consistent with existing session type storage)",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "JourneyPlayer currently changes the <audio> element src between segments and calls play() inside a setTimeout outside the original gesture context. iOS Safari blocks this. Options: (A) Switch to Web Audio API and schedule all buffers from the initial gesture, (B) Keep <audio> and test if play() on same element works after initial user-initiated playback, (C) Catch NotAllowedError and show a tap-to-continue fallback."
+      "passes": false,
+      "notes": "File: `server/api/chat.post.ts`. Add a ceremony-specific branch alongside existing session type handling. Look for where sessionType is checked and system prompts are selected. For journey generation trigger: scan the accumulated response text for [JOURNEY_GENERATE] and call the generation function (from US-005). If the generation function doesn't exist yet, create the ceremony_artifacts row with status='pending' as a placeholder. User context data can be fetched inline or received from the client (check how core session prompts get their context)."
     },
     {
       "id": "US-005",
-      "title": "Unit tests for AudioContext preservation across resets",
-      "description": "As a developer, I want unit tests verifying AudioContext survives between streaming messages so we catch regressions in the Safari fix.",
+      "title": "Background journey artifact generation",
+      "description": "As a developer, I want journey artifacts generated in background during Parts 6-7 so that they're ready when the user reaches the post-ceremony dashboard.",
       "acceptanceCriteria": [
-        "Test: resetPlaybackState() clears playback state without closing AudioContext — verify AudioContext is not null and not closed after resetPlaybackState()",
-        "Test: resetPlaybackState() stops all active source nodes — verify source.stop() and source.disconnect() are called",
-        "Test: resetPlaybackState() resets word timings and queue — verify allWordTimings, ttsWords, ttsText are empty after reset",
-        "Test: stop() closes AudioContext after calling resetPlaybackState() internally — verify AudioContext is null after stop()",
-        "Test: initialize() reuses existing running AudioContext — call initialize() twice and verify the same instance is returned",
-        "Test: enqueueChunk works after resetPlaybackState() on the same AudioContext — verify chunks can be enqueued and scheduled without errors",
-        "Test: simulated multi-message flow (initialize, enqueueChunk, resetPlaybackState, enqueueChunk) — verify the second batch schedules correctly on the preserved context",
-        "All new tests pass with npm run test:unit",
-        "All existing tests in useStreamingAudioQueue.test.ts continue to pass"
+        "Create or refactor a reusable `generateJourneyArtifact(userId, supabase)` function in `server/utils/ceremony/generate-journey.ts`",
+        "Function creates a `ceremony_artifacts` row with `artifact_type='reflective_journey'` and `generation_status='pending'`",
+        "Function queries the user's captured moments and user story to build journey narrative context",
+        "Function calls the LLM to generate personalized narrative with segments (narration segments and user_moment segments with moment references)",
+        "On LLM success, populates `content_json` with JourneyArtifactData structure: `{ segments: [{ id, type: 'narration'|'user_moment', text, transcript, duration_ms?, moment_id?, audio_generated: false }] }` and sets `generation_status='ready'`",
+        "On LLM failure, sets `generation_status='failed'` and logs error with userId and error message",
+        "TTS audio generation per segment runs in background AFTER metadata is saved (does not block 'ready' status); each segment's `audio_generated` flag updated to true as TTS completes",
+        "Create `GET /api/ceremony/journey` endpoint that returns `{ journey, status }` for the authenticated user (status is the generation_status value)",
+        "Journey endpoint returns 404 if no reflective_journey artifact exists for the user",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "The existing test file already has a MockAudioContext setup that can be extended for these tests."
+      "passes": false,
+      "notes": "Existing file: `server/api/ceremony/generate-journey.post.ts` — extract generation logic into a reusable function callable from both the endpoint (retry from dashboard) and the /api/chat trigger (background during Parts 6-7). TTS uses existing `server/utils/tts/` infrastructure. Look at the existing generate-journey implementation for the LLM call pattern and moment selection logic."
+    },
+    {
+      "id": "US-006",
+      "title": "Ceremony complete endpoint v2 with cheat sheet generation",
+      "description": "As a developer, I want the ceremony/complete endpoint updated for v2 and cheat sheet generated at completion so that the conversation-based ceremony can finalize properly.",
+      "acceptanceCriteria": [
+        "`POST /api/ceremony/complete` requires `conversation_id` string in request body",
+        "`final_recording_path` is optional in request body (ceremony can complete without a recording)",
+        "On success, sets `user_progress.program_status` to `'completed'` and `user_progress.ceremony_completed_at` to current timestamp",
+        "Response format: `{ status: 'completed', ceremony_completed_at: string, journey_artifact_status: 'ready' | 'generating' | 'pending' }` where journey_artifact_status reflects the reflective_journey artifact's generation_status",
+        "Returns 400 error if ceremony is already completed (program_status already 'completed')",
+        "Generates illusions cheat sheet: creates `ceremony_artifacts` row with `artifact_type='illusions_cheat_sheet'`, `generation_status='ready'`",
+        "Cheat sheet `content_json` contains all 5 illusions (stress, pleasure, willpower, focus, identity) each with `illusionKey`, `name`, `illusion` (what they believed), `truth` (the reframe)",
+        "For each illusion, if user has a captured insight moment (from `user_story.{illusionKey}_key_insight_id`), include `userInsight` text and `insightMomentId`; otherwise omit the `userInsight` field entirely",
+        "Cheat sheet generation failure is logged but does NOT block ceremony completion",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "File: `server/api/ceremony/complete.post.ts` — modify in-place. Remove `already_quit` parameter (AI handles via Pre-Part 5). Remove requirement for artifacts to exist before completion. Add conversation_id as required. The 5 illusion keys and their names/truths are static content — hardcode or reference a config. Query `user_story` table for `{illusionKey}_key_insight_id` fields, then query `captured_moments` by those IDs for insight text. CheatSheetData interface: { entries: Array<{ illusionKey, name, illusion, truth, userInsight?, insightMomentId? }>, generatedAt: string }."
+    },
+    {
+      "id": "US-007",
+      "title": "SessionView ceremony token detection and pause/resume",
+      "description": "As a developer, I want SessionView to detect ceremony tokens and support pause/resume so that the ceremony page can orchestrate the recording and completion flows.",
+      "acceptanceCriteria": [
+        "SessionView emits new `@recording-prompt` event when `[RECORDING_PROMPT]` is detected in an AI response message (same detection pattern as existing `[SESSION_COMPLETE]`)",
+        "SessionView exposes `pause()` method via `defineExpose` that sets an internal `isPaused` ref to true, disabling the mic button and text input",
+        "SessionView exposes `resume()` method via `defineExpose` that sets `isPaused` to false, re-enabling mic button and text input",
+        "When paused, mic tap and text submit are no-ops (user cannot send messages)",
+        "`[RECORDING_PROMPT]` and `[JOURNEY_GENERATE]` are stripped from displayed message text in the transcript (same stripping pattern as `[SESSION_COMPLETE]`)",
+        "Update `server/utils/tts/sanitize.ts` to strip `[RECORDING_PROMPT]` and `[JOURNEY_GENERATE]` tokens from TTS input text",
+        "Existing `[SESSION_COMPLETE]` detection, stripping, and event emission is unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "File: `components/voice/SessionView.vue`. Look for the existing [SESSION_COMPLETE] detection — it's likely a watch on messages or the SSE stream handler. Add [RECORDING_PROMPT] detection using the same pattern. For pause/resume: add `isPaused` ref, bind it to MicButton's disabled prop and the text input's disabled attribute. Token stripping in display: find where [SESSION_COMPLETE] is stripped from message text and add the new tokens. TTS sanitize: `server/utils/tts/sanitize.ts` — add to the regex or string replacement list."
+    },
+    {
+      "id": "US-008",
+      "title": "CeremonyRecordingInline component",
+      "description": "As a user, I want to record a message to my future self inline within the ceremony conversation so that the emotional flow isn't broken.",
+      "acceptanceCriteria": [
+        "Create `components/CeremonyRecordingInline.vue` with recording UI extracted from v1 ceremony recording code",
+        "Component has 5 visual states: idle (mic button + 'Tap when you're ready'), recording (pulsing mic + elapsed time counter), preview (playback controls + 'Keep this recording' + 'Try again'), saving (upload indicator), saved (confirmation message)",
+        "Tapping mic in idle starts recording; tapping in recording stops and transitions to preview",
+        "'Try again' in preview discards recording and returns to idle (unlimited re-records)",
+        "'Keep this recording' triggers upload to `/api/ceremony/save-final-recording` and emits `@audio-saved(path)` on success",
+        "'or type your message' link switches to a text input; submitting emits `@text-saved(text)`",
+        "Component emits `@error(msg)` on unrecoverable errors",
+        "Recording auto-stops at 5 minutes (300s) — timer visible during recording",
+        "Client-side blob size check: if > 10MB, show error prompting shorter re-record",
+        "Upload retries up to 3 times on failure; after 3 failures, saves blob as base64 to localStorage key `'unhooked:pending-ceremony-upload'` (schema: { userId, blobDataUrl, timestamp, retryCount: 3 }) and emits `@audio-saved` so ceremony continues",
+        "If MediaRecorder throws (e.g., device storage full), catch and switch to text input mode automatically",
+        "Slide-in/out animation on appear/disappear (respects `prefers-reduced-motion`)",
+        "ARIA labels: 'Ready to record' (idle), 'Recording in progress' (recording), 'Recording saved' (saved)",
+        "Update `server/api/ceremony/save-final-recording.post.ts` to validate MIME type: accept only `audio/webm` and `audio/ogg`, reject others with 400",
+        "Update save-final-recording to validate file size server-side: reject uploads larger than 10MB with 400",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Extract recording logic from v1 `pages/ceremony.vue` — look for existing MediaRecorder usage, audio recording state machine, upload to save-final-recording. The existing `useAudioRecorder` composable may be reusable. Lazy-load this component via `defineAsyncComponent` when used in ceremony.vue. For the localStorage pending upload, the schema must match what US-017 (upload retry) expects. Use glass card styling and brand tokens."
+    },
+    {
+      "id": "US-009",
+      "title": "useCeremony() orchestrator composable",
+      "description": "As a developer, I want a composable that orchestrates the full ceremony lifecycle so that ceremony.vue stays manageable and the logic is testable.",
+      "acceptanceCriteria": [
+        "Create `composables/useCeremony.ts` exporting the `useCeremony()` composable",
+        "Exposes reactive `ceremonyPhase` ref: 'pre-ceremony' | 'conversation' | 'recording' | 'completing' | 'transitioning' | 'error'",
+        "Exposes refs: `conversationId`, `isRecording`, `isCompleting`, `isTransitioning`, `showExitDialog`, `error` (string|null), `ariaAnnouncement` (string)",
+        "`startCeremony()` calls `GET /api/ceremony/prepare`, validates `ready===true`, stores conversationId (or active_conversation_id from response), and transitions to 'conversation' phase; transitions to 'error' if prepare fails or ready is false",
+        "`handleRecordingPrompt()` transitions to 'recording' phase and sets `isRecording=true`",
+        "`handleRecordingSaved(path?)` and `handleTextSaved(text)` transition back to 'conversation' phase with `isRecording=false`",
+        "`handleSessionComplete()` transitions to 'completing', calls `POST /api/ceremony/complete` with conversationId and optional finalRecordingPath, retries up to 3 times with exponential backoff (1s, 2s, 4s)",
+        "On completion success, transitions to 'transitioning', sets `ariaAnnouncement` to 'Transitioning to your dashboard in a moment.'",
+        "After 5 seconds in 'transitioning' phase, calls `navigateTo('/dashboard')`; if `prefers-reduced-motion` is active, navigates immediately (no delay)",
+        "On completion failure after all retries, transitions to 'error' with error message",
+        "`handleEscapeKey()` toggles `showExitDialog`",
+        "`handleLeave()` navigates to `/dashboard`; `handleStay()` sets `showExitDialog=false`",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "This composable orchestrates — it does NOT own conversation state (SessionView does) or recording state (CeremonyRecordingInline does). It manages the ceremony lifecycle and coordinates between them. Use `$fetch` for API calls. Use `navigateTo` for navigation. For prefers-reduced-motion: `window.matchMedia('(prefers-reduced-motion: reduce)').matches`. The prepare endpoint returns ceremony context + optional active_conversation_id for concurrent tab handling."
+    },
+    {
+      "id": "US-010",
+      "title": "Ceremony page — pre-ceremony screen and route guards",
+      "description": "As a user, I want to see a pre-ceremony screen before starting and be redirected if I'm not eligible or already completed so that the ceremony entry feels intentional.",
+      "acceptanceCriteria": [
+        "Ceremony page uses `layout: 'ceremony'` (immersive, no header) via definePageMeta",
+        "On page load, fetch user progress to check `program_status`",
+        "If `program_status` is `'completed'`, redirect to `/dashboard` immediately with no flash of ceremony content",
+        "If `program_status` is NOT `'ceremony_ready'`, redirect to `/dashboard` immediately",
+        "If `program_status` is `'ceremony_ready'`, show the pre-ceremony screen",
+        "Pre-ceremony screen shows: 'YOUR FINAL SESSION' eyebrow heading, 'Set aside 15 minutes.' and 'Find a quiet space.' instructions, product-specific text 'If you still have your [product] around, have it nearby' (falls back to 'nicotine products' when product type unknown), 'This is a moment worth being present for.' closing, and a 'Begin Ceremony' primary CTA button",
+        "Pre-ceremony screen uses glass card styling with `animate-fade-in-up` entrance animation",
+        "Remove v1 ceremony step wizard code (intro toggle, generating step, journey player step, cheatsheet step, complete step) — this page will be rebuilt around the voice conversation in the next story",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "File: `pages/ceremony.vue` — refactor in-place. The v1 page has a multi-step wizard with steps like 'intro', 'generating', 'journey', 'recording', 'cheatsheet', 'complete'. Strip those out and replace with the pre-ceremony screen for now. Product type can be fetched from user intake data or the ceremony/prepare response. For redirects, use `navigateTo('/dashboard', { replace: true })` in an onMounted guard or equivalent."
+    },
+    {
+      "id": "US-011",
+      "title": "Ceremony page — voice conversation, recording, and completion wiring",
+      "description": "As a user, I want the ceremony to be a continuous voice conversation with inline recording and auto-transition so that it feels like a natural coaching session.",
+      "acceptanceCriteria": [
+        "Clicking 'Begin Ceremony' calls `useCeremony().startCeremony()` and transitions to voice conversation mode showing SessionView with `sessionType='ceremony'`",
+        "When SessionView emits `@recording-prompt`, the conversation pauses (SessionView.pause()), and CeremonyRecordingInline slides in inline within the conversation view",
+        "CeremonyRecordingInline is lazy-loaded via `defineAsyncComponent` (only loaded when Part 6 is reached)",
+        "When CeremonyRecordingInline emits `@audio-saved` or `@text-saved`, it slides away and SessionView resumes via SessionView.resume()",
+        "When SessionView emits `@session-complete`, calls `useCeremony().handleSessionComplete()` triggering the completion + auto-transition flow",
+        "During 'transitioning' phase, ceremony container fades out before dashboard navigation (respects `prefers-reduced-motion` — skip fade if set)",
+        "An inline `aria-live='polite'` region is present and displays the `ariaAnnouncement` from useCeremony()",
+        "CeremonyExitDialog wired to `showExitDialog` from useCeremony() — Leave navigates to dashboard, Stay dismisses dialog",
+        "Error phase shows message 'Something went wrong. Your ceremony will be ready when you come back.' with 'Return to Dashboard' button",
+        "If user exits mid-ceremony and returns, they see the pre-ceremony screen fresh (no persisted ceremony state)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "File: `pages/ceremony.vue` — builds on US-010. The page is state-driven by useCeremony().ceremonyPhase: 'pre-ceremony' shows the screen from US-010, 'conversation' shows SessionView, 'recording' shows SessionView (paused) + CeremonyRecordingInline overlay, 'completing'/'transitioning' shows fade-out, 'error' shows error message. Use template ref on SessionView to call pause()/resume(). The @session-complete event fires when [SESSION_COMPLETE] token is detected in SessionView."
+    },
+    {
+      "id": "US-012",
+      "title": "Ceremony nudge email",
+      "description": "As a user who reached ceremony eligibility but hasn't started within 24 hours, I want to receive a gentle nudge email reminding me to complete my ceremony.",
+      "acceptanceCriteria": [
+        "Create `server/utils/email/ceremony-email-sender.ts` with exported `processCeremonyEmails(supabase)` function",
+        "Function queries users WHERE `program_status='ceremony_ready'` AND `ceremony_ready_at <= now() - 24 hours` AND `ceremony_email_sent_at IS NULL` AND `ceremony_completed_at IS NULL`",
+        "For each eligible user, fetches product type from `user_intake.products_used`",
+        "Email subject: 'Your final session is ready'",
+        "Email body references user's specific product (e.g., 'Have your vape nearby') when known; falls back to 'nicotine products'",
+        "Email CTA button links to dashboard URL with no embedded auth token",
+        "After successful send, sets `user_progress.ceremony_email_sent_at = now()`",
+        "Skips users who already have `ceremony_email_sent_at` set (no duplicates)",
+        "Skips users who have already completed ceremony",
+        "Email sent via Resend (same pattern as existing check-in-sender.ts)",
+        "Integrate into `server/api/cron/check-ins.get.ts` — call `processCeremonyEmails()` alongside existing `processScheduledCheckIns()`",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Follow the exact pattern in `server/utils/email/check-in-sender.ts` for: Resend client usage, inline HTML email template, error handling, return type. The cron endpoint at `server/api/cron/check-ins.get.ts` already runs every 5 min via GitHub Actions. Just add the ceremony email call after check-in processing. Note: ceremony_ready_at is set when program_status transitions to ceremony_ready (see US-013 for that logic)."
+    },
+    {
+      "id": "US-013",
+      "title": "Final core session tease",
+      "description": "As a user completing Identity Layer 3 (the final core session), I want a natural tease about the ceremony so that I feel excited about the next step.",
+      "acceptanceCriteria": [
+        "When Identity Layer 3 session completes, the AI's closing message includes a ceremony tease instruction in its system prompt (e.g., instruct AI to say 'There's one more conversation ahead. Your final session. It'll be waiting for you when you're ready.')",
+        "SessionCompleteCard component accepts an optional `ceremonyTease` boolean prop",
+        "When `ceremonyTease` is true, card shows 'All five illusions dismantled. Your final ceremony is ready.' instead of normal completion text",
+        "When `ceremonyTease` is true, only 'Return to Dashboard' CTA is shown (no other CTAs like 'Next Session')",
+        "In the session page, detect when the completing session is Identity Layer 3 and pass `ceremonyTease=true` to SessionCompleteCard",
+        "When Identity Layer 3 session completes on the server, set `user_progress.ceremony_ready_at = now()` alongside the `program_status = 'ceremony_ready'` transition",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Files to modify: system prompt for identity illusion layer 3 (add ceremony tease instruction), `components/SessionCompleteCard.vue` (add ceremonyTease prop with conditional rendering), the session page that renders SessionCompleteCard (detect identity layer 3), and the session completion server logic (set ceremony_ready_at). Identity Layer 3 is illusion='identity', layer=3. The ceremony_ready_at timestamp is critical for the 24h email nudge (US-012)."
+    },
+    {
+      "id": "US-014",
+      "title": "Post-ceremony dashboard — ceremony CTA and artifact cards",
+      "description": "As a user, I want the dashboard to show a ceremony CTA when eligible and my artifacts after completion so that I can start or revisit my ceremony experience.",
+      "acceptanceCriteria": [
+        "When `program_status === 'ceremony_ready'`, dashboard shows ceremony CTA card with text: 'You've seen through all five illusions. You're ready. Your final session—the ceremony—is available now.' and a 'Begin Ceremony Now' button linking to `/ceremony`",
+        "Ceremony CTA card is the primary focus of the dashboard when in ceremony_ready state (no other session CTAs competing)",
+        "When `program_status === 'completed'`, the pre-ceremony progress view is fully replaced with post-ceremony layout",
+        "Post-ceremony layout shows 'YOU'RE FREE' heading with completion date formatted nicely",
+        "Post-ceremony shows 'YOUR JOURNEY' card with play button that links to journey playback page",
+        "Post-ceremony shows 'YOUR MESSAGE' card — audio player if voice recording exists, or displayed text if typed message",
+        "Post-ceremony shows 'ILLUSIONS CHEAT SHEET' card linking to cheat sheet page",
+        "Post-ceremony shows 'Need a boost? [Talk to me]' CTA for reinforcement support",
+        "Post-ceremony shows the 5 illusion reinforcement items with '[Reinforce]' buttons",
+        "Artifact data fetched from ceremony API endpoints (journey, final-recording)",
+        "All cards use glass card styling with brand design tokens",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "File: `pages/dashboard.vue`. The dashboard already has some post-ceremony rendering from v1 — update to match v2 layout. Ceremony CTA only appears for ceremony_ready state. Post-ceremony fully replaces the progress/session view. For 'Your Message': check if artifact has audio_path (show audio player) or content_text (show text). The journey, final-recording, and cheat sheet data come from their respective API endpoints."
+    },
+    {
+      "id": "US-015",
+      "title": "Post-ceremony dashboard — journey loading states and polling",
+      "description": "As a user who just completed the ceremony, I want to see loading progress for my journey artifact so that I know it's being prepared.",
+      "acceptanceCriteria": [
+        "When journey artifact status is 'pending' or 'generating', show a skeleton card with 'Preparing your journey...' text instead of the playable journey card",
+        "Skeleton card uses glass card styling with a shimmer/loading animation",
+        "Dashboard polls `GET /api/ceremony/journey` every 3 seconds while status is 'pending' or 'generating'",
+        "Polling stops automatically when status changes to 'ready' or 'failed'",
+        "Polling stops on component unmount (cleanup interval)",
+        "When status becomes 'ready', skeleton transitions to the playable journey card",
+        "When status is 'failed', show an error state with 'Retry' button",
+        "Clicking 'Retry' calls `POST /api/ceremony/generate-journey` to restart generation, then resumes polling with skeleton",
+        "Other dashboard cards (Message, Cheat Sheet, Reinforcement) render normally regardless of journey status",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "File: `pages/dashboard.vue` — extends US-014's post-ceremony section. Use setInterval for polling with cleanup in onUnmounted. The skeleton card should match journey card dimensions to prevent layout shift. Poll the GET /api/ceremony/journey endpoint (created in US-005). For retry, POST to generate-journey endpoint to reset status and re-run generation."
+    },
+    {
+      "id": "US-016",
+      "title": "Cheat sheet page — conditional user insights display",
+      "description": "As a user who completed the ceremony, I want the illusions cheat sheet to show my personal insights alongside each illusion so I have a meaningful quick reference.",
+      "acceptanceCriteria": [
+        "Cheat sheet page displays all 5 illusions as a vertical scroll list of glass cards",
+        "Each card shows: illusion name as heading, 'The Illusion' section with what they used to believe, 'The Truth' section with the reframe",
+        "For illusions where the user has a captured insight, a 'Your Insight' section appears with the user's quote text",
+        "For illusions without a captured insight, the 'Your Insight' section is NOT rendered (card is simply shorter — no empty state or placeholder)",
+        "All 5 illusions always display (stress, pleasure, willpower, focus, identity) regardless of insight availability",
+        "Cheat sheet data fetched from ceremony_artifacts API where artifact_type is 'illusions_cheat_sheet'",
+        "Cards use glass card styling with brand design tokens",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Check for existing cheat sheet page (might be at pages/cheat-sheet.vue or similar). If it exists, update to render from the content_json CheatSheetData structure generated by US-006. Each entry has: illusionKey, name, illusion, truth, and optionally userInsight + insightMomentId. Conditionally render 'Your Insight' based on presence of userInsight field (not null check — the field is omitted entirely when absent)."
+    },
+    {
+      "id": "US-017",
+      "title": "localStorage upload retry queue",
+      "description": "As a user whose recording upload failed during the ceremony, I want the upload retried automatically when I return so that my recording isn't lost.",
+      "acceptanceCriteria": [
+        "On ceremony page mount and dashboard page mount, check localStorage key `'unhooked:pending-ceremony-upload'` for pending upload data",
+        "If pending upload found, convert base64 data URL back to Blob and attempt upload to `/api/ceremony/save-final-recording`",
+        "On successful upload, remove the pending upload entry from localStorage",
+        "On failed upload, increment `retryCount` in the stored object and save back to localStorage",
+        "After 10 total retry attempts (retryCount >= 10), remove the pending upload from localStorage (give up gracefully — no error shown to user)",
+        "Retry runs silently in the background with no UI indicators",
+        "PendingUpload localStorage schema matches what CeremonyRecordingInline writes: `{ userId: string, blobDataUrl: string, timestamp: string, retryCount: number }`",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Can be a utility function or small composable (e.g., `usePendingUpload()`). Call in onMounted of both `pages/ceremony.vue` and `pages/dashboard.vue`. The localStorage key and schema must match what CeremonyRecordingInline writes in US-008 when upload fails 3 times. Use $fetch for the upload. Convert base64 data URL to Blob via fetch(dataUrl).then(r => r.blob()) or manual parsing."
     }
   ]
 }
