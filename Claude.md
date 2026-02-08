@@ -265,6 +265,21 @@ docs/
 
 **Important:** Version numbers are NOT included in file names. Git handles versioning.
 
+**Spec versioning convention (MAJOR.MINOR):**
+
+Spec document versions are tied to **feature iterations**, not document edit counts.
+
+| Level | Meaning | When to bump |
+|-------|---------|--------------|
+| **Major (X.0)** | New feature iteration that gets implemented/shipped | Starting a new implementation cycle (e.g., v2 of the ceremony) |
+| **Minor (X.Y)** | Spec refinement within the same iteration | Adding sections, making decisions, UX reviews, technical design updates — same implementation scope |
+
+- Bump **major** when starting a new implementation cycle for the feature
+- Bump **minor** when refining the spec within the current cycle (new sections, decisions, reviews)
+- No patch level — small fixes are just git commits
+- The changelog captures detailed revision history within each version
+- Example: v1.0 → v1.1 → v1.2 (all refining the first implementation), then v2.0 (new iteration)
+
 ---
 
 ## Testing
