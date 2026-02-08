@@ -72,7 +72,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "File: `server/api/chat.post.ts`. Add a ceremony-specific branch alongside existing session type handling. Look for where sessionType is checked and system prompts are selected. For journey generation trigger: scan the accumulated response text for [JOURNEY_GENERATE] and call the generation function (from US-005). If the generation function doesn't exist yet, create the ceremony_artifacts row with status='pending' as a placeholder. User context data can be fetched inline or received from the client (check how core session prompts get their context)."
     },
     {

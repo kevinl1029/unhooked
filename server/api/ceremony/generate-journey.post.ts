@@ -1,20 +1,18 @@
 /**
- * Journey Generation Endpoint
- * Generates the reflective journey narrative as a playlist for client-side playback
- * TTS generation is lazy - segments are generated on first play
+ * Journey Generation Endpoint (Retry)
+ * Retries journey generation for a user (e.g., from dashboard if generation failed)
+ * Uses the reusable generateJourneyArtifact() utility
  */
 
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { generateCeremonyNarrative } from '../../utils/llm/tasks/ceremony-narrative'
-import { selectCeremonyMoments } from '../../utils/llm/tasks/ceremony-select'
-import type { CapturedMoment } from '../../utils/llm/task-types'
+import { generateJourneyArtifact } from '../../utils/ceremony/generate-journey'
 
 interface PlaylistSegment {
   id: string
   type: 'narration' | 'user_moment'
   text: string
   transcript: string
-  duration_ms?: number // Set after TTS generation
+  duration_ms?: number
   moment_id?: string
   audio_generated: boolean
 }
@@ -25,21 +23,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Unauthorized' })
   }
 
-  const body = await readBody(event)
-  const { selected_moment_ids } = body as {
-    selected_moment_ids?: string[]
-  }
-
   const supabase = serverSupabaseServiceRole(event)
 
-  // 1. Fetch user story for origin context
-  const { data: userStory } = await supabase
-    .from('user_story')
-    .select('origin_summary')
-    .eq('user_id', user.sub)
-    .single()
-
-  // Check ceremony completion via user_progress table instead
+  // Check ceremony completion
   const { data: userProgress } = await supabase
     .from('user_progress')
     .select('ceremony_completed_at')
@@ -50,120 +36,33 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Ceremony already completed' })
   }
 
-  // 2. Check for existing artifact first (artifacts are immutable per spec)
-  const { data: existingArtifact } = await supabase
+  // Trigger generation using reusable utility
+  const artifactId = await generateJourneyArtifact(user.sub, supabase)
+
+  if (!artifactId) {
+    throw createError({ statusCode: 500, message: 'Failed to generate journey' })
+  }
+
+  // Fetch the generated artifact
+  const { data: artifact } = await supabase
     .from('ceremony_artifacts')
-    .select('id, content_text, content_json')
-    .eq('user_id', user.sub)
-    .eq('artifact_type', 'reflective_journey')
+    .select('id, content_text, content_json, generation_status')
+    .eq('id', artifactId)
     .single()
 
-  if (existingArtifact) {
-    // Return existing artifact - don't regenerate
-    const existingSegments = (existingArtifact.content_json as { segments: PlaylistSegment[] })?.segments || []
-    return {
-      journey_text: existingArtifact.content_text,
-      playlist: {
-        segments: existingSegments,
-      },
-      artifact_id: existingArtifact.id,
-      selected_moment_count: existingSegments.filter(s => s.type === 'user_moment').length,
-    }
+  if (!artifact) {
+    throw createError({ statusCode: 500, message: 'Failed to retrieve journey' })
   }
 
-  // 3. Fetch all moments (only if no existing artifact)
-  const { data: allMomentsRaw } = await supabase
-    .from('captured_moments')
-    .select('*')
-    .eq('user_id', user.sub)
-    .order('created_at', { ascending: true })
-
-  const allMoments: CapturedMoment[] = (allMomentsRaw || []).map(m => ({
-    id: m.id,
-    userId: m.user_id,
-    conversationId: m.conversation_id,
-    messageId: m.message_id,
-    momentType: m.moment_type,
-    transcript: m.transcript,
-    audioClipPath: m.audio_clip_path,
-    audioDurationMs: m.audio_duration_ms,
-    illusionKey: m.illusion_key,
-    sessionType: m.session_type,
-    illusionLayer: m.illusion_layer,
-    confidenceScore: m.confidence_score,
-    emotionalValence: m.emotional_valence,
-    isUserHighlighted: m.is_user_highlighted,
-    timesPlayedBack: m.times_played_back,
-    lastUsedAt: m.last_used_at,
-    createdAt: m.created_at,
-    updatedAt: m.updated_at,
-  }))
-
-  if (allMoments.length < 3) {
-    throw createError({ statusCode: 400, message: 'Not enough moments for ceremony' })
-  }
-
-  // 4. Select moments (use provided IDs or AI selection)
-  let selectedMoments: CapturedMoment[]
-
-  if (selected_moment_ids && selected_moment_ids.length > 0) {
-    // Use provided selection
-    const selectedIdSet = new Set(selected_moment_ids)
-    selectedMoments = allMoments.filter(m => selectedIdSet.has(m.id))
-  } else {
-    // Use AI selection
-    const selection = await selectCeremonyMoments({
-      allMoments,
-      maxMoments: 12,
-    })
-    const selectedIdSet = new Set(selection.selectedIds)
-    selectedMoments = allMoments.filter(m => selectedIdSet.has(m.id))
-  }
-
-  // 5. Generate narrative
-  const narrative = await generateCeremonyNarrative({
-    selectedMoments,
-    originSummary: userStory?.origin_summary || undefined,
-  })
-
-  if (!narrative.narrative || narrative.segments.length === 0) {
-    throw createError({ statusCode: 500, message: 'Failed to generate narrative' })
-  }
-
-  // 6. Convert to playlist format
-  const playlistSegments: PlaylistSegment[] = narrative.segments.map(seg => ({
-    id: seg.id,
-    type: seg.type,
-    text: seg.text,
-    transcript: seg.text,
-    moment_id: seg.momentId,
-    audio_generated: false,
-  }))
-
-  // 7. Create new artifact (immutable once created)
-  const { data: artifact, error: artifactError } = await supabase
-    .from('ceremony_artifacts')
-    .insert({
-      user_id: user.sub,
-      artifact_type: 'reflective_journey',
-      content_text: narrative.narrative,
-      content_json: { segments: playlistSegments },
-      included_moment_ids: selectedMoments.map(m => m.id),
-    })
-    .select('id')
-    .single()
-
-  if (artifactError) {
-    console.error('[generate-journey] Failed to save artifact:', artifactError)
-    throw createError({ statusCode: 500, message: 'Failed to save journey' })
-  }
+  const segments = (artifact.content_json as { segments: PlaylistSegment[] })?.segments || []
 
   return {
-    journey_text: narrative.narrative,
+    journey_text: artifact.content_text,
     playlist: {
-      segments: playlistSegments,
+      segments,
     },
     artifact_id: artifact.id,
-    selected_moment_count: selectedMoments.length,
+    selected_moment_count: segments.filter(s => s.type === 'user_moment').length,
+    status: artifact.generation_status,
   }
 })

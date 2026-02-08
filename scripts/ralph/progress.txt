@@ -62,3 +62,27 @@ Files changed:
 - Prompt instructions for flexible AI: Use phrases like "guided but flexible" and "exit criteria" to give AI decision-making power within structure
 - Context interface: Match database Row types from types/database.types.ts for type safety
 ---
+## 2026-02-08 - US-004
+- Implemented /api/chat ceremony integration with token detection
+- Added ceremony-specific branch in chat.post.ts that calls buildCeremonySystemPrompt() when sessionType='ceremony'
+- Ceremony prompt populated with full user context: user_story (origin_summary, personal_stakes, primary_triggers), captured_moments grouped by type (rationalizations, insights, breakthroughs, observations), illusions completed list (all 5), and product_type from user_intake
+- Created reusable generateJourneyArtifact() utility function in server/utils/ceremony/generate-journey.ts
+- Journey generation utility handles full lifecycle: creates artifact with 'generating' status, fetches moments, selects best moments via AI, generates narrative, updates to 'ready' status, or marks 'failed' on error
+- Token detection in both streaming (onComplete handler) and non-streaming response branches
+- [JOURNEY_GENERATE] token triggers fire-and-forget call to generateJourneyArtifact() without blocking SSE stream
+- All ceremony tokens ([JOURNEY_GENERATE], [RECORDING_PROMPT], [SESSION_COMPLETE]) naturally passed through in SSE stream for client-side detection
+- Ceremony conversations automatically stored with session_type='ceremony' via existing conversation creation logic
+
+Files changed:
+- server/api/chat.post.ts (added ceremony branch, token detection, journey generation trigger)
+- server/utils/ceremony/generate-journey.ts (created - reusable journey generation utility)
+
+**Learnings for future iterations:**
+- Chat endpoint structure: Session-type specific branches after message processing, before conversation creation (lines 82-246)
+- System prompt pattern: Each session type builds its own system prompt and prepends as first message
+- Token detection pattern: Check response text in onComplete handler, act on tokens, then pass through tokens naturally in SSE stream (client strips for display)
+- Fire-and-forget background tasks: Use .catch() on Promise without await to trigger async work without blocking response
+- Ceremony context fetching: Query user_story, captured_moments, and user_intake in parallel, group moments by type client-side
+- Journey artifact generation: Extracted reusable function from existing endpoint, handles status transitions (pending → generating → ready/failed)
+- Error handling for background tasks: Always log errors but don't throw - background failures shouldn't break the conversation
+---

@@ -1,0 +1,112 @@
+## Codebase Patterns
+- AudioContext preservation: Use `resetPlaybackState()` to clear playback state between streaming messages WITHOUT closing the AudioContext. Only use `stop()` when completely done with audio playback (it closes the AudioContext).
+- iOS Safari audio fix: `initialize()` reuses existing AudioContext when available and not closed. This prevents recreating AudioContext outside user gesture context.
+- Testing: The project has no `typecheck` script - Nuxt 3's default TypeScript setup is used without a custom tsconfig.json. Use `npm run test:unit` to verify changes.
+- SSE streaming: `processStream()` in useStreamingTTS coordinates text tokens and audio chunks from server-sent events.
+- Web Audio API pattern: For sequential audio playback on iOS Safari, schedule ALL buffers upfront from the initial user gesture using `AudioBufferSourceNode.start(scheduleTime)`. Do NOT call `play()` on `<audio>` elements in setTimeout/callbacks outside the gesture context.
+
+# Ralph Progress Log
+Started: Sat Jan 31 23:44:47 EST 2026
+---
+
+## [2026-01-31 23:46] - US-001
+- Implemented `resetPlaybackState()` method in useStreamingAudioQueue that clears all playback state WITHOUT closing the AudioContext
+- Refactored `stop()` to call `resetPlaybackState()` internally, then close the AudioContext and clean up listeners - eliminated code duplication
+- Updated `initialize()` to check for closed AudioContext state and reuse existing contexts when not closed
+- Modified `useStreamingTTS.processStream()` to call `audioQueue.resetPlaybackState()` instead of `audioQueue.reset()` so the AudioContext created by `preInitAudio()` survives between streaming messages
+- Exposed `resetPlaybackState` in useStreamingAudioQueue return object
+
+**Files changed:**
+- composables/useStreamingAudioQueue.ts: Added resetPlaybackState(), refactored stop(), updated initialize()
+- composables/useStreamingTTS.ts: Changed processStream() to use resetPlaybackState()
+
+**Learnings for future iterations:**
+- The root cause: iOS Safari requires AudioContext to be created within a user gesture context. Previously, `processStream()` called `reset()` which closed the AudioContext, then `initialize()` created a NEW context outside the gesture - causing it to start suspended with resume() hanging forever.
+- The fix: Separate "reset playback state" from "close AudioContext". `resetPlaybackState()` clears queues/timings/nodes but keeps the context alive. `preInitAudio()` creates the context in gesture context, and it survives across all subsequent streaming messages.
+- Test coverage: All 16 useStreamingAudioQueue tests pass. Two unrelated journey-contract tests failed (pre-existing issues).
+- Key pattern: When working with Web Audio API on iOS Safari, always create AudioContext once in a user gesture handler and reuse it throughout the session.
+---
+## [2026-01-31 23:49] - US-002
+- Added `preInitAudio()` calls to check-in page gesture handlers in `pages/check-in/[id].vue`
+- Destructured `preInitAudio` from `useVoiceChat()` return value and stored it in a module-level variable for use in `handleMicTap()`
+- In `handleMicTap()`, added `await preInitAudio()` calls at the top of BOTH branches (start recording and stop recording) before any other awaits, ensuring the AudioContext is created within the user gesture context
+- The AudioContext created by `preInitAudio()` now survives through the streaming pipeline thanks to US-001's `resetPlaybackState()` implementation
+
+**Files changed:**
+- pages/check-in/[id].vue: Added preInitAudio destructuring in onMounted(), added preInitAudio() calls in handleMicTap()
+
+**Learnings for future iterations:**
+- The check-in page has its own UI flow separate from SessionView.vue, so it needed its own preInitAudio() integration
+- Pattern confirmed: preInitAudio() must be called at the TOP of any user gesture handler BEFORE other awaits to preserve the gesture context
+- Both recording branches (start and stop) need preInitAudio() because the stop-recording branch triggers the AI response with TTS
+- Testing: All 342 unit tests pass (2 pre-existing journey-contract test failures unrelated to this change)
+- TypeScript: Nuxt 3 default TypeScript setup used (no typecheck script per codebase patterns)
+---
+## [2026-01-31 23:52] - US-003
+- Verified that US-003 acceptance criteria were ALREADY satisfied by previous implementations (US-001 and existing code)
+- No code changes required - the implementation was already complete
+
+**How it works:**
+- SessionView.vue onMounted() (lines 379-381): When `permissionState.value === 'granted'`, calls `startConversation()` directly without a user gesture
+- useStreamingAudioQueue.ts initialize() (lines 125-147): Creates AudioContext, detects if it starts in suspended state, and calls `registerAutoResume()` 
+- registerAutoResume() (lines 77-99): Registers document-level touchstart/touchend/click listeners that fire on first user interaction to resume the suspended context
+- Non-blocking resume strategy (lines 139-143, 302-304): Code explicitly avoids awaiting resume() to prevent blocking the SSE pipeline - text tokens and audio chunks stream and decode regardless of context state
+- Auto-resume listener (lines 80-85): First user interaction (tap mic, type in input, tap anywhere) fires handler that calls `audioContext.resume()` and cleans up listeners
+- AudioContext preservation via US-001: `resetPlaybackState()` keeps the context alive across messages, so after auto-resume fires once, all subsequent messages play immediately
+
+**Acceptance criteria verification:**
+✅ AudioContext created in suspended state with auto-resume listeners registered when startConversation() called without gesture
+✅ Text tokens stream and display correctly while AudioContext suspended (non-blocking resume)
+✅ Audio chunks decode and schedule on suspended context without errors (Web Audio API allows scheduling on suspended contexts)
+✅ First user interaction fires auto-resume listener, transitions context to running, queued audio begins playing
+✅ Subsequent messages play immediately (context stays running and is preserved via US-001)
+✅ Tests pass: 342 unit tests pass (2 pre-existing journey-contract failures unrelated)
+
+**Files verified (no changes made):**
+- components/voice/SessionView.vue: Confirmed onMounted() flow for already-granted permissions
+- composables/useStreamingAudioQueue.ts: Confirmed initialize() and registerAutoResume() implementation
+
+**Learnings for future iterations:**
+- Web Audio API allows decoding and scheduling audio on a suspended AudioContext - the scheduled nodes will play once the context resumes
+- The auto-resume pattern is robust: register listeners on context creation, fire on first interaction, clean up after firing (once: true)
+- This pattern handles the edge case where users return to the app and permissions are already granted - the first session message works seamlessly after any user interaction
+- Key insight: Don't block on resume() when AudioContext is suspended outside gesture context - the promise may never resolve on iOS Safari, which would hang the entire SSE processing pipeline
+---
+## [2026-01-31 23:55] - US-004
+- Refactored JourneyPlayer component to use Web Audio API instead of <audio> element for iOS Safari autoplay compatibility
+- Replaced direct audio playback with AudioContext + AudioBufferSourceNode scheduling pattern
+- All segments are now scheduled upfront from the initial user gesture using `source.start(scheduleTime)` to avoid iOS Safari autoplay restrictions
+- Word tracking refactored to poll `audioContext.currentTime` and track both current segment and current word within segment
+- Pause/resume now uses `AudioContext.suspend()/resume()` instead of `<audio>.pause()`
+- Text-only fallback for unavailable audio preserved by calculating duration and advancing schedule time
+
+**Files changed:**
+- components/JourneyPlayer.vue: Complete refactor from <audio> element to Web Audio API
+
+**Learnings for future iterations:**
+- iOS Safari autoplay restrictions: `play()` calls on `<audio>` elements OUTSIDE a user gesture are blocked, even if the initial playback was user-initiated. The `setTimeout` used for segment gaps moved the play() call outside the gesture context.
+- Web Audio API solution: Schedule ALL audio buffers upfront from the initial gesture using `AudioBufferSourceNode.start(scheduleTime)`. The browser honors these scheduled starts even though they play later, because the scheduling happened within the gesture.
+- Silence gaps with Web Audio: Simply advance `scheduleTime` by `audioBuffer.duration + gapDuration` between segments - no need for separate silence buffers.
+- Word tracking with Web Audio: Poll `audioContext.currentTime - playbackStartTime` to get elapsed seconds, use cumulative segment start times to find current segment, then offset within segment to find current word.
+- Pattern consistency: This matches the same Web Audio pattern used in `useStreamingAudioQueue` for streaming TTS, reinforcing the codebase standard for iOS Safari audio.
+- Testing: All 342 unit tests pass. 2 pre-existing journey-contract test failures are unrelated to this change.
+---
+## [2026-01-31 23:58] - US-005
+- Added 7 new unit tests to verify AudioContext preservation across streaming message resets
+- Tests verify resetPlaybackState() clears state without closing AudioContext
+- Tests verify stop() closes AudioContext after calling resetPlaybackState() internally
+- Tests verify initialize() reuses existing AudioContext after resetPlaybackState()
+- Tests verify enqueueChunk works after resetPlaybackState() on the same AudioContext
+- Tests verify multi-message flow simulation (3 messages with resets in between, single AudioContext throughout)
+
+**Files changed:**
+- tests/unit/composables/useStreamingAudioQueue.test.ts: Added "resetPlaybackState() - AudioContext preservation" test suite with 7 tests
+
+**Learnings for future iterations:**
+- Test suite organization: Group related tests in describe blocks with clear names (e.g., "resetPlaybackState() - AudioContext preservation")
+- MockAudioContext pattern: The existing mock simulates iOS Safari suspended state behavior, making it easy to test gesture-context issues
+- Testing stateful composables: Verify state is cleared (word timings, queues) AND that the underlying resource (AudioContext) is preserved or closed as expected
+- Multi-message flow tests: Simulate realistic usage patterns (initialize → enqueue → reset → repeat) to catch integration issues
+- Test coverage increased from 342 to 349 passing tests (7 new tests)
+- The 2 pre-existing journey-contract test failures are unrelated to AudioContext work
+---
