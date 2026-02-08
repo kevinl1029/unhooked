@@ -20,3 +20,45 @@ Files changed:
 - Build command `npm run build` serves as typecheck for Nuxt projects (no dedicated typecheck script)
 - Comments in migrations improve maintainability and explain the purpose of each change
 ---
+## 2026-02-08 17:30 - US-002
+- Implemented ceremony layout (immersive mode) and exit dialog
+- Created layouts/ceremony.vue with minimal full-viewport layout (no header/navigation)
+- Created components/CeremonyExitDialog.vue with accessibility features (alertdialog role, aria-modal, focus trap)
+- Updated pages/ceremony.vue to use ceremony layout and added Escape key listener for exit dialog
+- Dialog has proper focus management (Stay button gets default focus, Tab/Shift+Tab cycles between buttons)
+
+Files changed:
+- layouts/ceremony.vue (created)
+- components/CeremonyExitDialog.vue (created)
+- pages/ceremony.vue (updated - added layout metadata, Escape listener, exit dialog wiring)
+
+**Learnings for future iterations:**
+- Nuxt layouts: Use `definePageMeta({ layout: 'ceremony' })` to override default layout for specific pages
+- Focus trap pattern: Watch the `open` prop to focus default element when dialog opens, use Tab keydown handler to cycle focus between elements
+- Accessibility: Use `role="alertdialog"`, `aria-modal="true"`, and `aria-labelledby` for proper dialog semantics
+- Vue event listeners cleanup: Always remove document event listeners in `onUnmounted` to prevent memory leaks
+- Glass card styling: Use `glass` class with `rounded-card`, `shadow-card`, and `border-brand-border` for consistent brand styling
+---
+## 2026-02-08 23:45 - US-003
+- Implemented ceremony system prompt builder
+- Created server/utils/prompts/ceremony-prompt.ts with buildCeremonySystemPrompt() function
+- Defined CeremonyContext interface with userStory, momentsByType, illusionsCompleted, productType
+- Implemented complete 7-part ceremony flow with all dialogue scripts and emotional arcs
+- Added token protocol instructions for JOURNEY_GENERATE, RECORDING_PROMPT, SESSION_COMPLETE
+- Product type personalization with fallback to "nicotine products"
+- Rationalization quote contrast in Part 5 with fallback when none captured
+- External motivation handling in Part 3 (validates but redirects to internal)
+- Not-ready exit handling in Part 4 (graceful exit without completion token)
+
+Files changed:
+- server/utils/prompts/ceremony-prompt.ts (created - 449 lines)
+
+**Learnings for future iterations:**
+- Prompt builder pattern: Export function that accepts context object and returns string prompt
+- Long prompts: Use template literals with clear section separators (---) for readability
+- Dynamic sections: Build Part 5A/5B as functions that inject product type and rationalization quotes
+- Token protocol: Tokens are control signals stripped from display/TTS - document placement clearly in prompt
+- Fallback handling: Always provide general framing when personalized content (quotes, product type) is unavailable
+- Prompt instructions for flexible AI: Use phrases like "guided but flexible" and "exit criteria" to give AI decision-making power within structure
+- Context interface: Match database Row types from types/database.types.ts for type safety
+---

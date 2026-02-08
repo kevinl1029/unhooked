@@ -36,7 +36,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Existing layout: layouts/default.vue includes AppHeader. The ceremony layout deliberately omits it. For focus trap, use onKeydown to intercept Tab and cycle between the two buttons. The ceremony page already exists at pages/ceremony.vue — update it in-place. Use glass card styling and brand tokens for the dialog."
     },
     {
@@ -56,7 +56,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Look at existing prompt builders in `server/utils/prompts/` for the pattern (function signature, how they're imported). The ceremony prompt is the longest prompt in the app. Reference ceremony-spec.md §The 7-Part Ceremony Flow for exact script text and emotional arcs for each part. The LLM decides when to advance between parts based on conversational cues — no server-side state machine. The prompt should instruct the AI to be guided but flexible: follow the user's energy within each part but steer back when the beat is complete."
     },
     {
