@@ -125,7 +125,32 @@ export interface MockConversationOptions {
   id?: string
   sessionCompleted?: boolean
   messages?: Array<{ role: 'user' | 'assistant'; content: string }>
+  illusionKey?: 'stress_relief' | 'pleasure' | 'willpower' | 'focus' | 'identity'
   illusionNumber?: number
+}
+
+function numberToIllusionKey(illusionNumber?: number): MockConversationOptions['illusionKey'] {
+  if (illusionNumber === 1) return 'stress_relief'
+  if (illusionNumber === 2) return 'pleasure'
+  if (illusionNumber === 3) return 'willpower'
+  if (illusionNumber === 4) return 'focus'
+  if (illusionNumber === 5) return 'identity'
+  return 'stress_relief'
+}
+
+function getConversationIllusionKey(conv: MockConversationOptions): MockConversationOptions['illusionKey'] {
+  return conv.illusionKey || numberToIllusionKey(conv.illusionNumber)
+}
+
+function getConversationTitle(illusionKey?: MockConversationOptions['illusionKey']): string {
+  const titles: Record<string, string> = {
+    stress_relief: 'The Stress Illusion',
+    pleasure: 'The Pleasure Illusion',
+    willpower: 'The Willpower Illusion',
+    focus: 'The Focus Illusion',
+    identity: 'The Identity Illusion',
+  }
+  return titles[illusionKey || 'stress_relief'] || 'New conversation'
 }
 
 /**
@@ -157,13 +182,15 @@ export async function mockConversationsAPI(
     const conv = convMap.get(convId)
 
     if (conv) {
+      const illusionKey = getConversationIllusionKey(conv)
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           id: convId,
-          title: `Session ${conv.illusionNumber || 1}`,
+          title: getConversationTitle(illusionKey),
           session_completed: conv.sessionCompleted ?? false,
+          illusion_key: illusionKey,
           messages: conv.messages || [],
           created_at: new Date().toISOString(),
         }),
@@ -185,10 +212,10 @@ export async function mockConversationsAPI(
     }
 
     const url = new URL(route.request().url())
-    const illusionParam = url.searchParams.get('illusionNumber')
+    const illusionParam = url.searchParams.get('illusionKey')
 
     const filtered = illusionParam
-      ? conversations.filter((c) => c.illusionNumber === parseInt(illusionParam))
+      ? conversations.filter((c) => getConversationIllusionKey(c) === illusionParam)
       : conversations
 
     await route.fulfill({
@@ -196,10 +223,10 @@ export async function mockConversationsAPI(
       contentType: 'application/json',
       body: JSON.stringify(
         filtered.map((c) => ({
+          illusion_key: getConversationIllusionKey(c),
           id: c.id || 'mock-conversation-id',
           session_completed: c.sessionCompleted ?? false,
-          illusion_number: c.illusionNumber || 1,
-          title: `Session ${c.illusionNumber || 1}`,
+          title: getConversationTitle(getConversationIllusionKey(c)),
           created_at: new Date().toISOString(),
         })),
       ),

@@ -31,6 +31,14 @@ const DEFAULT_INTAKE: MockIntakeOptions = {
   triggers: ['morning', 'after_meals'],
 }
 
+const ILLUSION_KEY_TO_NUMBER: Record<string, number> = {
+  stress_relief: 1,
+  pleasure: 2,
+  willpower: 3,
+  focus: 4,
+  identity: 5,
+}
+
 /**
  * Create a full mock progress object
  */
@@ -100,9 +108,38 @@ export async function mockProgressAPI(
 
   // Mock complete-session endpoint
   await page.route('**/api/progress/complete-session', async (route) => {
+    const body = route.request().postDataJSON() as {
+      conversationId?: string
+      illusionKey?: string
+      illusionNumber?: number
+    }
+
+    if (body?.illusionNumber !== undefined) {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'illusionNumber is no longer supported. Send illusionKey instead.',
+        }),
+      })
+      return
+    }
+
+    if (!body?.illusionKey || ILLUSION_KEY_TO_NUMBER[body.illusionKey] === undefined) {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'illusionKey is required',
+        }),
+      })
+      return
+    }
+
+    const completedIllusionNumber = ILLUSION_KEY_TO_NUMBER[body.illusionKey]
     const updatedProgress = {
       ...mockProgress,
-      illusions_completed: [...(options.illusionsCompleted || []), options.currentIllusion || 1],
+      illusions_completed: [...(options.illusionsCompleted || []), completedIllusionNumber],
       total_sessions: (options.totalSessions || 0) + 1,
     }
 

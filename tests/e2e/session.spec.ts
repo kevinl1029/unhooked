@@ -12,7 +12,7 @@ test.describe('Session Conversation Flow', () => {
         conversationId: 'mock-conv-1',
       })
 
-      await page.goto('/session/1?mode=text')
+      await page.goto('/session/stress_relief?mode=text')
 
       // The page title should show the illusion name
       await expect(page.getByText('The Stress Illusion')).toBeVisible({ timeout: 10000 })
@@ -39,7 +39,7 @@ test.describe('Session Conversation Flow', () => {
         },
       ])
 
-      await page.goto('/session/1?mode=text')
+      await page.goto('/session/stress_relief?mode=text')
 
       // Wait for opening message
       await expect(page.getByText(/Tell me about your experience/)).toBeVisible({ timeout: 15000 })
@@ -65,7 +65,7 @@ test.describe('Session Conversation Flow', () => {
         { responseText: 'That\'s an important realization.', conversationId: 'mock-conv-1' },
       ])
 
-      await page.goto('/session/1?mode=text')
+      await page.goto('/session/stress_relief?mode=text')
       await expect(page.getByText(/What brought you here/)).toBeVisible({ timeout: 15000 })
 
       // First user turn
@@ -92,7 +92,7 @@ test.describe('Session Conversation Flow', () => {
         },
       ])
 
-      await page.goto('/session/1?mode=text')
+      await page.goto('/session/stress_relief?mode=text')
       await expect(page.getByText(/Welcome to the session/)).toBeVisible({ timeout: 15000 })
 
       // Send a message to trigger the completion response
@@ -124,7 +124,7 @@ test.describe('Session Conversation Flow', () => {
         },
       ])
 
-      await page.goto('/session/3?mode=text')
+      await page.goto('/session/willpower?mode=text')
       await expect(page.getByText(/Welcome back/)).toBeVisible({ timeout: 15000 })
 
       // Trigger completion
@@ -144,10 +144,10 @@ test.describe('Session Conversation Flow', () => {
       await mockUserInProgress(page, { currentIllusion: 1, illusionsCompleted: [] })
       await mockConversationsAPI(page, [])
       await mockChatAPI(page, {
-        error: { message: 'Invalid illusion number', status: 400 },
+        error: { message: 'Invalid illusion key', status: 400 },
       })
 
-      await page.goto('/session/999?mode=text')
+      await page.goto('/session/not_a_real_key?mode=text')
 
       // The title should fall back to "Unknown Illusion"
       await expect(page.getByText('Unknown Illusion')).toBeVisible({ timeout: 10000 })
@@ -160,7 +160,7 @@ test.describe('Session Conversation Flow', () => {
         error: { message: 'Service unavailable', status: 500 },
       })
 
-      await page.goto('/session/1?mode=text')
+      await page.goto('/session/stress_relief?mode=text')
 
       // The page should show a friendly error message
       await expect(
@@ -189,7 +189,7 @@ test.describe('Session Conversation Flow', () => {
         },
       ])
 
-      await page.goto('/session/1?mode=text')
+      await page.goto('/session/stress_relief?mode=text')
 
       // Title should be visible
       await expect(page.getByText('The Stress Illusion')).toBeVisible({ timeout: 10000 })

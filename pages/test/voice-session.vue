@@ -184,7 +184,7 @@ const {
   getAudioLevel,
   checkPermission,
   reset
-} = useVoiceChat({ illusionNumber: 1 })
+} = useVoiceChat({ illusionKey: 'stress_relief' })
 
 // Also get playAIResponse for testing
 const voiceSession = useVoiceSession()

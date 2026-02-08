@@ -1,8 +1,8 @@
 import type { Message } from '~/server/utils/llm/types'
+import type { IllusionKey } from '~/server/utils/llm/task-types'
 
 interface VoiceChatOptions {
-  illusionNumber?: number
-  illusionKey?: string
+  illusionKey?: IllusionKey
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
   checkInId?: string
   checkInPrompt?: string
@@ -14,7 +14,6 @@ interface VoiceChatOptions {
 
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
   const {
-    illusionNumber,
     illusionKey,
     sessionType = 'core',
     checkInId,
@@ -70,7 +69,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: JSON.stringify({
             messages: messages.value,
             conversationId: conversationId.value,
-            illusionNumber,
             illusionKey,
             sessionType,
             checkInId,
@@ -116,7 +114,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: {
             messages: messages.value,
             conversationId: conversationId.value,
-            illusionNumber,
             illusionKey,
             sessionType,
             checkInId,
@@ -177,7 +174,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: JSON.stringify({
             messages: [],
             conversationId: conversationId.value,
-            illusionNumber,
             illusionKey,
             sessionType,
             checkInId,
@@ -222,7 +218,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: {
             messages: [],
             conversationId: conversationId.value,
-            illusionNumber,
             illusionKey,
             sessionType,
             checkInId,

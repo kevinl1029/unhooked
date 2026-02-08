@@ -1,3 +1,5 @@
+import type { IllusionKey } from '~/server/utils/llm/task-types'
+
 export interface Progress {
   id: string
   user_id: string
@@ -42,7 +44,7 @@ export const useProgress = () => {
     }
   }
 
-  const completeSession = async (conversationId: string, illusionNumber: number) => {
+  const completeSession = async (conversationId: string, illusionKey: IllusionKey) => {
     isLoading.value = true
     error.value = null
 
@@ -51,7 +53,7 @@ export const useProgress = () => {
         method: 'POST',
         body: {
           conversationId,
-          illusionNumber,
+          illusionKey,
         },
       })
       progress.value = response.progress

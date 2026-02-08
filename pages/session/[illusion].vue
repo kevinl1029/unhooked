@@ -18,7 +18,7 @@
         <!-- Voice Session View (default) -->
         <VoiceSessionView
           v-if="!isTranscriptView && !useTextMode"
-          :illusion-number="illusionNumber"
+          :illusion-key="illusionKey"
           :read-only="sessionComplete"
           :existing-conversation-id="existingConversationId"
           :existing-messages="existingMessages"
@@ -52,7 +52,8 @@
 
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
-import { ILLUSION_NAMES, getIllusionOpening } from '~/server/utils/prompts'
+import { ILLUSION_NAMES } from '~/server/utils/prompts'
+import { ILLUSION_KEYS, illusionNumberToKey, type IllusionKey } from '~/server/utils/llm/task-types'
 
 type ClientMessage = Message
 
@@ -65,8 +66,10 @@ const route = useRoute()
 const router = useRouter()
 const { completeSession, fetchProgress } = useProgress()
 
-const illusionNumber = computed(() => parseInt(route.params.illusion as string))
-const illusionName = computed(() => ILLUSION_NAMES[illusionNumber.value] || 'Unknown Illusion')
+const rawIllusionParam = computed(() => route.params.illusion as string)
+const illusionKey = computed(() => rawIllusionParam.value as IllusionKey)
+const isValidIllusionKey = computed(() => ILLUSION_KEYS.includes(illusionKey.value))
+const illusionName = computed(() => ILLUSION_NAMES[illusionKey.value] || 'Unknown Illusion')
 const isTranscriptView = computed(() => route.query.view === 'transcript')
 const useTextMode = computed(() => route.query.mode === 'text')
 
@@ -89,6 +92,11 @@ const displayMessages = computed(() => {
 })
 
 onMounted(async () => {
+  if (!isValidIllusionKey.value) {
+    error.value = 'Invalid session. Please return to the dashboard and try again.'
+    return
+  }
+
   // Voice session view handles its own initialization
   // Only initialize for transcript view or text mode
   if (isTranscriptView.value) {
@@ -105,7 +113,7 @@ async function initializeSession() {
 
     // Check if there's an existing incomplete conversation for this illusion
     const { data: existingConversations } = await useFetch('/api/conversations', {
-      query: { illusionNumber: illusionNumber.value }
+      query: { illusionKey: illusionKey.value }
     })
 
     if (existingConversations.value && existingConversations.value.length > 0) {
@@ -152,7 +160,7 @@ async function sendOpeningMessage() {
       },
       body: JSON.stringify({
         messages: [], // Empty array - no user message to start
-        illusionNumber: illusionNumber.value,
+        illusionKey: illusionKey.value,
         stream: true
       })
     })
@@ -221,7 +229,7 @@ async function loadTranscript() {
     isLoading.value = true
 
     const { data: conversations } = await useFetch('/api/conversations', {
-      query: { illusionNumber: illusionNumber.value }
+      query: { illusionKey: illusionKey.value }
     })
 
     if (conversations.value && conversations.value.length > 0) {
@@ -267,7 +275,7 @@ async function handleSend(message: string) {
       body: JSON.stringify({
         messages: messages.value,
         conversationId: conversationId.value,
-        illusionNumber: illusionNumber.value,
+        illusionKey: illusionKey.value,
         stream: true
       })
     })
@@ -347,7 +355,7 @@ async function handleSessionComplete() {
   if (!conversationId.value) return
 
   try {
-    const result = await completeSession(conversationId.value, illusionNumber.value)
+    const result = await completeSession(conversationId.value, illusionKey.value)
     nextIllusion.value = result.nextIllusion ?? null
     sessionComplete.value = true
     await fetchProgress()
@@ -375,7 +383,13 @@ async function handleContinue(nextIllusionNumber: number) {
   nextIllusion.value = null
 
   // Navigate to next session
-  await router.push(`/session/${nextIllusionNumber}`)
+  const nextIllusionKey = illusionNumberToKey(nextIllusionNumber)
+  if (!nextIllusionKey) {
+    await router.push('/dashboard')
+    return
+  }
+
+  await router.push(`/session/${nextIllusionKey}`)
 
   // Initialize the new session
   await initializeSession()

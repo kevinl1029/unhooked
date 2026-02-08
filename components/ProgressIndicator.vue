@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ILLUSION_NAMES } from '~/server/utils/prompts'
+import { ILLUSION_DATA, illusionNumberToKey } from '~/server/utils/llm/task-types'
 
 const props = defineProps<{
   illusionOrder: number[]
@@ -101,15 +101,19 @@ const getIllusionClasses = (illusionNumber: number): string => {
 }
 
 const getIllusionLink = (illusionNumber: number): string => {
+  const illusionKey = illusionNumberToKey(illusionNumber)
+  if (!illusionKey) return '/dashboard'
+
   if (isIllusionCompleted(illusionNumber)) {
-    return `/session/${illusionNumber}?view=transcript`
+    return `/session/${illusionKey}?view=transcript`
   } else {
-    return `/session/${illusionNumber}`
+    return `/session/${illusionKey}`
   }
 }
 
 const getIllusionName = (illusionNumber: number): string => {
-  return ILLUSION_NAMES[illusionNumber] || `Illusion ${illusionNumber}`
+  const illusionKey = illusionNumberToKey(illusionNumber)
+  return illusionKey ? ILLUSION_DATA[illusionKey].displayName : `Illusion ${illusionNumber}`
 }
 
 const getAbbreviatedIllusionName = (illusionNumber: number): string => {

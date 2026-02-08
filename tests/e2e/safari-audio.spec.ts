@@ -38,7 +38,7 @@ test.describe('Safari Audio / TTS Regression', () => {
       { text: "Hello, I'm your AI coach. Let's explore the stress illusion together." },
     ])
 
-    await page.goto('/session/1')
+    await page.goto('/session/stress_relief')
     await page.waitForLoadState('networkidle')
 
     // Wait for streaming to process and audio to be scheduled
@@ -67,7 +67,7 @@ test.describe('Safari Audio / TTS Regression', () => {
       { text: "Welcome! Let's begin your journey to freedom." },
     ])
 
-    await page.goto('/session/1')
+    await page.goto('/session/stress_relief')
     await page.waitForLoadState('networkidle')
 
     // Provide a user gesture (tap) — this is critical for iOS Safari
@@ -97,7 +97,7 @@ test.describe('Safari Audio / TTS Regression', () => {
     ])
 
     // Navigate to voice session — AI auto-starts without a user gesture
-    await page.goto('/session/1')
+    await page.goto('/session/stress_relief')
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(2000)
 

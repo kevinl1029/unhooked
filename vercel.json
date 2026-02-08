@@ -1,5 +1,32 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/session/1",
+      "destination": "/session/stress_relief",
+      "permanent": true
+    },
+    {
+      "source": "/session/2",
+      "destination": "/session/pleasure",
+      "permanent": true
+    },
+    {
+      "source": "/session/3",
+      "destination": "/session/willpower",
+      "permanent": true
+    },
+    {
+      "source": "/session/4",
+      "destination": "/session/focus",
+      "permanent": true
+    },
+    {
+      "source": "/session/5",
+      "destination": "/session/identity",
+      "permanent": true
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/check-ins",

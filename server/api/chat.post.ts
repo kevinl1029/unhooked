@@ -9,7 +9,7 @@ import {
   getSessionDetectionTracker,
   TRANSCRIPT_CAPTURE_THRESHOLD,
 } from '../utils/llm/tasks/moment-detection'
-import { illusionNumberToKey, type SessionType, type IllusionLayer, type IllusionKey } from '../utils/llm/task-types'
+import { ILLUSION_KEYS, type SessionType, type IllusionLayer, type IllusionKey } from '../utils/llm/task-types'
 import { handleSessionComplete } from '../utils/session/session-complete'
 import { buildSessionContext, formatContextForPrompt } from '../utils/personalization/context-builder'
 import { buildCrossLayerContext, formatCrossLayerContext } from '../utils/personalization/cross-layer-context'
@@ -30,7 +30,6 @@ export default defineEventHandler(async (event) => {
   const {
     messages,
     conversationId,
-    illusionNumber,
     illusionKey: providedIllusionKey,
     model = defaultModel,
     stream = false,
@@ -45,7 +44,6 @@ export default defineEventHandler(async (event) => {
   } = body as {
     messages: Message[]
     conversationId?: string
-    illusionNumber?: number
     illusionKey?: string
     model?: ModelType
     stream?: boolean
@@ -62,6 +60,12 @@ export default defineEventHandler(async (event) => {
   if (!messages || !Array.isArray(messages)) {
     throw createError({ statusCode: 400, message: 'Messages array is required' })
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'illusionNumber')) {
+    throw createError({ statusCode: 400, message: 'illusionNumber is no longer supported. Send illusionKey instead.' })
+  }
+  if (providedIllusionKey && !ILLUSION_KEYS.includes(providedIllusionKey as IllusionKey)) {
+    throw createError({ statusCode: 400, message: 'Invalid illusionKey' })
+  }
 
   // Allow empty messages array for assistant-first conversations
   // This lets the AI start the conversation
@@ -69,7 +73,9 @@ export default defineEventHandler(async (event) => {
   const router = getModelRouter()
   const supabase = serverSupabaseServiceRole(event)
 
-  // If illusionNumber provided, fetch user intake for personalization and build system prompt
+  const compatibleIllusionKey = providedIllusionKey || null
+
+  // For core sessions, build illusion-specific system prompt from key
   let processedMessages = messages
   const isNewConversation = messages.length === 0
 
@@ -109,9 +115,9 @@ export default defineEventHandler(async (event) => {
       { role: 'system', content: systemPrompt },
       ...messages
     ]
-  } else if (illusionNumber) {
-    const illusionKey = illusionNumberToKey(illusionNumber)
-
+  } else if (sessionType === 'core' && !compatibleIllusionKey) {
+    throw createError({ statusCode: 400, message: 'illusionKey is required for core sessions' })
+  } else if (compatibleIllusionKey) {
     // Fetch basic intake data
     const { data: intake } = await supabase
       .from('user_intake')
@@ -141,35 +147,33 @@ export default defineEventHandler(async (event) => {
       abandonedSessionContext += '\n\nAcknowledge you remember where you left off and continue naturally from their previous insights.'
     }
 
-    if (illusionKey) {
-      // Build session context with captured moments
-      const sessionContext = await buildSessionContext(
+    // Build session context with captured moments
+    const sessionContext = await buildSessionContext(
+      supabase,
+      user.sub,
+      compatibleIllusionKey,
+      sessionType
+    )
+    personalizationContext = formatContextForPrompt(sessionContext)
+
+    // For returning users (Layer 2+), build cross-layer context and bridge message
+    if (illusionLayer !== 'intellectual') {
+      const crossLayerCtx = await buildCrossLayerContext(
         supabase,
         user.sub,
-        illusionKey,
-        sessionType
+        compatibleIllusionKey,
+        illusionLayer
       )
-      personalizationContext = formatContextForPrompt(sessionContext)
+      personalizationContext += formatCrossLayerContext(crossLayerCtx)
 
-      // For returning users (Layer 2+), build cross-layer context and bridge message
-      if (illusionLayer !== 'intellectual') {
-        const crossLayerCtx = await buildCrossLayerContext(
-          supabase,
-          user.sub,
-          illusionKey,
-          illusionLayer
-        )
-        personalizationContext += formatCrossLayerContext(crossLayerCtx)
-
-        // Only add bridge context for new conversations (AI's first message)
-        if (isNewConversation) {
-          bridgeContext = buildBridgeContext(crossLayerCtx)
-        }
+      // Only add bridge context for new conversations (AI's first message)
+      if (isNewConversation) {
+        bridgeContext = buildBridgeContext(crossLayerCtx)
       }
     }
 
     const systemPrompt = buildSystemPrompt({
-      illusionNumber,
+      illusionKey: compatibleIllusionKey,
       userContext,
       isNewConversation,
       personalizationContext,
@@ -195,7 +199,7 @@ export default defineEventHandler(async (event) => {
 
   // Get or create conversation
   let convId = conversationId
-  const conversationIllusionKey = illusionNumber ? illusionNumberToKey(illusionNumber) : null
+  const conversationIllusionKey = compatibleIllusionKey || (sessionType === 'reinforcement' ? providedIllusionKey || null : null)
   // For reinforcement sessions, use providedIllusionKey as the effective illusion key
   const effectiveIllusionKey = conversationIllusionKey || providedIllusionKey || null
 
@@ -206,8 +210,7 @@ export default defineEventHandler(async (event) => {
       .insert({
         user_id: user.sub,
         model,
-        title: illusionNumber ? ILLUSION_NAMES[illusionNumber] : (messages.length > 0 ? messages[0]?.content.slice(0, 50) : 'New conversation'),
-        illusion_number: illusionNumber || null,
+        title: conversationIllusionKey ? ILLUSION_NAMES[conversationIllusionKey] : (messages.length > 0 ? messages[0]?.content.slice(0, 50) : 'New conversation'),
         // New Phase 4A fields
         session_type: sessionType,
         illusion_key: conversationIllusionKey,
@@ -254,7 +257,7 @@ export default defineEventHandler(async (event) => {
 
       // Start moment detection in parallel (if eligible)
       // Only detect on user messages with 20+ words, and within rate limit
-      // Use effectiveIllusionKey to support both core sessions (via illusionNumber) and reinforcement sessions (via providedIllusionKey)
+      // Use effectiveIllusionKey to support both core sessions and reinforcement sessions.
       if (
         effectiveIllusionKey &&
         shouldAttemptDetection(lastUserMessage.content) &&

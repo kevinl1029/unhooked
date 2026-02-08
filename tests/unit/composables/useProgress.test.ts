@@ -17,9 +17,12 @@ const mockProgress: Progress = {
   updated_at: '2024-01-02T00:00:00Z',
 }
 
+const mockFetch = vi.fn()
+
 describe('useProgress', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('$fetch', mockFetch)
   })
 
   describe('getNextIllusion', () => {
@@ -74,6 +77,27 @@ describe('useProgress', () => {
       expect(progress.value).toBeNull()
       expect(isLoading.value).toBe(false)
       expect(error.value).toBeNull()
+    })
+  })
+
+  describe('completeSession', () => {
+    it('posts illusionKey payload to complete-session endpoint', async () => {
+      mockFetch.mockResolvedValueOnce({
+        progress: mockProgress,
+        nextIllusion: 2,
+        isComplete: false,
+      })
+
+      const { completeSession } = useProgress()
+      await completeSession('conv-123', 'stress_relief')
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/progress/complete-session', {
+        method: 'POST',
+        body: {
+          conversationId: 'conv-123',
+          illusionKey: 'stress_relief',
+        },
+      })
     })
   })
 })

@@ -258,7 +258,7 @@
           </p>
 
           <NuxtLink
-            to="/session/1"
+            to="/session/stress_relief"
             class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card inline-block text-lg"
           >
             Begin First Session
@@ -330,7 +330,7 @@
 </template>
 
 <script setup lang="ts">
-import { ILLUSION_NAMES } from '~/server/utils/prompts'
+import { ILLUSION_DATA, illusionNumberToKey } from '~/server/utils/llm/task-types'
 
 definePageMeta({
   middleware: 'auth'
@@ -425,7 +425,8 @@ const nextSessionTitle = computed(() => {
   if (!status.value?.progress) return 'Session 1: The Stress Illusion'
 
   const illusionNumber = status.value.next_session?.illusionNumber || status.value.progress.current_illusion
-  const illusionName = ILLUSION_NAMES[illusionNumber] || `Illusion ${illusionNumber}`
+  const illusionKey = illusionNumberToKey(illusionNumber)
+  const illusionName = illusionKey ? ILLUSION_DATA[illusionKey].displayName : `Illusion ${illusionNumber}`
 
   return `Continue: ${illusionName}`
 })

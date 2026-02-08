@@ -59,7 +59,7 @@ test.describe('Session Progression & Program State', () => {
     await mockTimezoneAPI(page)
 
     // ── Complete a session ──
-    await page.goto('/session/1?mode=text')
+    await page.goto('/session/stress_relief?mode=text')
     await expect(page.getByText(/Welcome to your first session/)).toBeVisible({ timeout: 15000 })
 
     // Send a message to trigger the completion response

@@ -8,10 +8,11 @@ import { ILLUSION_2_PLEASURE_PROMPT } from './illusions/illusion-2-pleasure'
 import { ILLUSION_3_WILLPOWER_PROMPT } from './illusions/illusion-3-willpower'
 import { ILLUSION_4_FOCUS_PROMPT } from './illusions/illusion-4-focus'
 import { ILLUSION_5_IDENTITY_PROMPT } from './illusions/illusion-5-identity'
+import type { IllusionKey } from '../llm/task-types'
 
 // Extended options for buildSystemPrompt
 export interface BuildSystemPromptOptions {
-  illusionNumber: number
+  illusionKey: IllusionKey
   userContext?: UserContext
   isNewConversation?: boolean
   // Phase 4C additions
@@ -20,20 +21,20 @@ export interface BuildSystemPromptOptions {
   abandonedSessionContext?: string // For abandoned session moments
 }
 
-export const ILLUSION_NAMES: Record<number, string> = {
-  1: 'The Stress Illusion',
-  2: 'The Pleasure Illusion',
-  3: 'The Willpower Illusion',
-  4: 'The Focus Illusion',
-  5: 'The Identity Illusion',
+export const ILLUSION_NAMES: Record<IllusionKey, string> = {
+  stress_relief: 'The Stress Illusion',
+  pleasure: 'The Pleasure Illusion',
+  willpower: 'The Willpower Illusion',
+  focus: 'The Focus Illusion',
+  identity: 'The Identity Illusion',
 }
 
-const ILLUSION_PROMPTS: Record<number, string> = {
-  1: ILLUSION_1_STRESS_PROMPT,
-  2: ILLUSION_2_PLEASURE_PROMPT,
-  3: ILLUSION_3_WILLPOWER_PROMPT,
-  4: ILLUSION_4_FOCUS_PROMPT,
-  5: ILLUSION_5_IDENTITY_PROMPT,
+const ILLUSION_PROMPTS: Record<IllusionKey, string> = {
+  stress_relief: ILLUSION_1_STRESS_PROMPT,
+  pleasure: ILLUSION_2_PLEASURE_PROMPT,
+  willpower: ILLUSION_3_WILLPOWER_PROMPT,
+  focus: ILLUSION_4_FOCUS_PROMPT,
+  identity: ILLUSION_5_IDENTITY_PROMPT,
 }
 
 /**
@@ -41,25 +42,8 @@ const ILLUSION_PROMPTS: Record<number, string> = {
  * Supports both legacy signature and new options-based signature
  */
 export function buildSystemPrompt(
-  illusionNumberOrOptions: number | BuildSystemPromptOptions,
-  userContext?: UserContext,
-  isNewConversation = false
+  options: BuildSystemPromptOptions
 ): string {
-  // Handle both old and new signatures
-  let options: BuildSystemPromptOptions
-
-  if (typeof illusionNumberOrOptions === 'number') {
-    // Legacy signature: buildSystemPrompt(illusionNumber, userContext, isNewConversation)
-    options = {
-      illusionNumber: illusionNumberOrOptions,
-      userContext,
-      isNewConversation,
-    }
-  } else {
-    // New options-based signature
-    options = illusionNumberOrOptions
-  }
-
   let prompt = BASE_SYSTEM_PROMPT
 
   // Add basic user context (from intake)
@@ -73,7 +57,7 @@ export function buildSystemPrompt(
   }
 
   // Add illusion-specific prompt
-  const illusionPrompt = ILLUSION_PROMPTS[options.illusionNumber]
+  const illusionPrompt = ILLUSION_PROMPTS[options.illusionKey]
   if (illusionPrompt) {
     prompt += '\n\n' + illusionPrompt
   }
@@ -92,7 +76,7 @@ export function buildSystemPrompt(
 
   // Add opening instruction for new conversations
   if (options.isNewConversation && !options.bridgeContext && !options.abandonedSessionContext) {
-    const openingMessage = ILLUSION_OPENING_MESSAGES[options.illusionNumber]
+    const openingMessage = ILLUSION_OPENING_MESSAGES[options.illusionKey]
     if (openingMessage) {
       prompt += '\n\n## Starting This Session\n\n'
       prompt += 'This is the beginning of this illusion session. Start the conversation with this opening:\n\n'
@@ -109,31 +93,31 @@ export function buildSystemPrompt(
 
 // Opening messages for each illusion session
 // These are shown immediately when user enters a session, creating the first exchange
-export const ILLUSION_OPENING_MESSAGES: Record<number, string> = {
-  1: `Hey there. I want to explore something with you that might feel really true right now: the idea that nicotine helps with stress.
+export const ILLUSION_OPENING_MESSAGES: Record<IllusionKey, string> = {
+  stress_relief: `Hey there. I want to explore something with you that might feel really true right now: the idea that nicotine helps with stress.
 
 Before we dive in, I'm curious—what made you want to start with this one? When you think about nicotine and stress, what comes to mind?`,
 
-  2: `Welcome. Let's talk about pleasure and enjoyment.
+  pleasure: `Welcome. Let's talk about pleasure and enjoyment.
 
 A lot of people feel like nicotine genuinely gives them something pleasurable—like it's a reward or a treat. I want to understand your experience with that. When you think about "enjoying" nicotine, what does that actually feel like for you?`,
 
-  3: `Hey. So this session is about the idea that quitting requires massive willpower and is incredibly hard.
+  willpower: `Hey. So this session is about the idea that quitting requires massive willpower and is incredibly hard.
 
 I'm guessing you've either tried before and it felt brutal, or you've been putting it off because you're dreading how hard it'll be. Tell me—what's your relationship with that belief? What makes quitting feel so difficult?`,
 
-  4: `Welcome. Let's dig into something a lot of people tell me: "I need nicotine to focus" or "I can't function without it."
+  focus: `Welcome. Let's dig into something a lot of people tell me: "I need nicotine to focus" or "I can't function without it."
 
 Does that resonate with you? When you're working, studying, or trying to get something done, what role does nicotine play for you?`,
 
-  5: `Hey. This session is a bit different—it's about identity. About beliefs like "I have an addictive personality" or "I'm just wired differently" or "I'm not like other people who can quit easily."
+  identity: `Hey. This session is a bit different—it's about identity. About beliefs like "I have an addictive personality" or "I'm just wired differently" or "I'm not like other people who can quit easily."
 
 Do any of those thoughts sound familiar? What do you believe about yourself when it comes to nicotine and quitting?`
 }
 
 // Get the opening greeting for a specific illusion
-export function getIllusionOpening(illusionNumber: number): string {
-  return ILLUSION_OPENING_MESSAGES[illusionNumber] || `Let's explore ${ILLUSION_NAMES[illusionNumber]} together. What brings you to this session?`
+export function getIllusionOpening(illusionKey: IllusionKey): string {
+  return ILLUSION_OPENING_MESSAGES[illusionKey] || `Let's explore ${ILLUSION_NAMES[illusionKey]} together. What brings you to this session?`
 }
 
 /**
@@ -167,4 +151,3 @@ Start by speaking the check-in prompt naturally, as if you're asking them direct
 
 Wait for their response before saying anything else.`
 }
-

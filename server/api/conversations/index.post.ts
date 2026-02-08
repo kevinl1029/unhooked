@@ -2,6 +2,7 @@ import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { getDefaultModel } from '../../utils/llm'
 import { ILLUSION_NAMES } from '../../utils/prompts'
 import type { Message } from '../../utils/llm/types'
+import { ILLUSION_KEYS, type IllusionKey } from '../../utils/llm/task-types'
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
@@ -10,19 +11,28 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
+  if (Object.prototype.hasOwnProperty.call(body, 'illusionNumber')) {
+    throw createError({ statusCode: 400, message: 'illusionNumber is no longer supported. Send illusionKey instead.' })
+  }
   const defaultModel = getDefaultModel()
-  const { title, model = defaultModel, illusionNumber, initialMessages } = body as {
+  const { title, model = defaultModel, illusionKey, initialMessages } = body as {
     title?: string
     model?: string
-    illusionNumber?: number
+    illusionKey?: string
     initialMessages?: Message[]
   }
+  const hasIllusionKey = !!illusionKey
+  if (hasIllusionKey && !ILLUSION_KEYS.includes(illusionKey as IllusionKey)) {
+    throw createError({ statusCode: 400, message: 'Invalid illusionKey' })
+  }
+
+  const effectiveIllusionKey = (hasIllusionKey ? illusionKey : null) as IllusionKey | null
 
   const supabase = serverSupabaseServiceRole(event)
 
   // Create the conversation
-  const conversationTitle = illusionNumber
-    ? ILLUSION_NAMES[illusionNumber]
+  const conversationTitle = effectiveIllusionKey
+    ? ILLUSION_NAMES[effectiveIllusionKey]
     : (title || 'New conversation')
 
   const { data: conversation, error: convError } = await supabase
@@ -31,7 +41,7 @@ export default defineEventHandler(async (event) => {
       user_id: user.sub,
       title: conversationTitle,
       model,
-      illusion_number: illusionNumber || null
+      illusion_key: effectiveIllusionKey
     })
     .select()
     .single()

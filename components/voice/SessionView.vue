@@ -222,14 +222,14 @@
 
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
+import type { IllusionKey } from '~/server/utils/llm/task-types'
 
 interface Props {
-  illusionNumber: number
   readOnly?: boolean
   existingConversationId?: string | null
   existingMessages?: Message[]
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
-  illusionKey?: string
+  illusionKey?: IllusionKey
   anchorMoment?: { id: string; transcript: string } | null
 }
 
@@ -285,7 +285,6 @@ const {
   preInitAudio,
   reset
 } = useVoiceChat({
-  illusionNumber: props.illusionNumber,
   sessionType: props.sessionType,
   illusionKey: props.illusionKey,
   anchorMoment: props.anchorMoment,
@@ -549,9 +548,13 @@ const handleSessionComplete = async () => {
     emit('sessionComplete', null)
     return
   }
+  if (!props.illusionKey) {
+    emit('sessionComplete', null)
+    return
+  }
 
   try {
-    const result = await completeSession(conversationId.value, props.illusionNumber)
+    const result = await completeSession(conversationId.value, props.illusionKey)
     emit('sessionComplete', result.nextIllusion)
   } catch (err) {
     console.error('Error completing session:', err)

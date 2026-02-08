@@ -403,7 +403,7 @@ function handleTouchEnd(e: TouchEvent) {
 }
 
 function handleContinue() {
-  navigateTo(`/session/${focusedIllusion.value.number}`)
+  navigateTo(`/session/${focusedIllusion.value.key}`)
 }
 
 function handleRevisit(illusionKey: string) {

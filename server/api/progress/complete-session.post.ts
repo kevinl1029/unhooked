@@ -1,18 +1,10 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { scheduleCheckIns } from '~/server/utils/scheduling/check-in-scheduler'
-
-// Map illusion numbers to illusion keys
-const ILLUSION_KEYS: Record<number, string> = {
-  1: 'stress_relief',
-  2: 'pleasure',
-  3: 'willpower',
-  4: 'focus',
-  5: 'identity',
-}
+import { ILLUSION_KEYS, illusionKeyToNumber, type IllusionKey } from '~/server/utils/llm/task-types'
 
 interface CompleteSessionBody {
   conversationId: string
-  illusionNumber: number
+  illusionKey?: string
 }
 
 export default defineEventHandler(async (event) => {
@@ -22,14 +14,27 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<CompleteSessionBody>(event)
-  const { illusionNumber } = body
+  if (Object.prototype.hasOwnProperty.call(body, 'illusionNumber')) {
+    throw createError({ statusCode: 400, message: 'illusionNumber is no longer supported. Send illusionKey instead.' })
+  }
+  const { illusionKey } = body
 
   // Validate required fields
   if (!body.conversationId) {
     throw createError({ statusCode: 400, message: 'conversationId is required' })
   }
-  if (!illusionNumber || illusionNumber < 1 || illusionNumber > 5) {
-    throw createError({ statusCode: 400, message: 'illusionNumber must be between 1 and 5' })
+  if (illusionKey && !ILLUSION_KEYS.includes(illusionKey as IllusionKey)) {
+    throw createError({ statusCode: 400, message: 'Invalid illusionKey' })
+  }
+
+  const effectiveIllusionKey = (illusionKey || null) as IllusionKey | null
+  if (!effectiveIllusionKey) {
+    throw createError({ statusCode: 400, message: 'illusionKey is required' })
+  }
+
+  const effectiveIllusionNumber = illusionKeyToNumber(effectiveIllusionKey)
+  if (!effectiveIllusionNumber) {
+    throw createError({ statusCode: 400, message: 'Unable to resolve illusion number for provided illusionKey' })
   }
 
   const supabase = serverSupabaseServiceRole(event)
@@ -59,9 +64,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: fetchError.message })
   }
 
-  // Add illusionNumber to illusions_completed (deduplicated)
+  // Add resolved illusion number to illusions_completed (deduplicated)
   const illusionsCompleted = currentProgress.illusions_completed || []
-  const updatedIllusionsCompleted = Array.from(new Set([...illusionsCompleted, illusionNumber]))
+  const updatedIllusionsCompleted = Array.from(new Set([...illusionsCompleted, effectiveIllusionNumber]))
 
   // Calculate next illusion
   const illusionOrder = currentProgress.illusion_order || [1, 2, 3, 4, 5]
@@ -94,14 +99,13 @@ export default defineEventHandler(async (event) => {
   // Only schedule if program is not complete (user still has sessions to do)
   if (!isComplete) {
     const timezone = currentProgress.timezone || 'America/New_York'
-    const illusionKey = ILLUSION_KEYS[illusionNumber]
 
     scheduleCheckIns({
       userId: user.sub,
       timezone,
       trigger: 'session_complete',
       sessionId: body.conversationId,
-      illusionKey,
+      illusionKey: effectiveIllusionKey,
       sessionEndTime: new Date(),
       supabase,
     }).then((scheduled) => {

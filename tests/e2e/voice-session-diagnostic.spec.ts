@@ -286,7 +286,7 @@ test.describe('Streaming TTS - Voice Session Diagnostic', () => {
     })
 
     console.log('[TEST] Navigating to voice session page...')
-    await page.goto('/session/1')
+    await page.goto('/session/stress_relief')
 
     // Wait for the page to be ready
     await page.waitForLoadState('networkidle')
@@ -505,7 +505,7 @@ test.describe('Streaming TTS - Voice Session Diagnostic', () => {
       })
     })
 
-    await page.goto('/session/1')
+    await page.goto('/session/stress_relief')
     await page.waitForLoadState('networkidle')
 
     // Wait for streaming to complete
