@@ -157,7 +157,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Extract recording logic from v1 `pages/ceremony.vue` — look for existing MediaRecorder usage, audio recording state machine, upload to save-final-recording. The existing `useAudioRecorder` composable may be reusable. Lazy-load this component via `defineAsyncComponent` when used in ceremony.vue. For the localStorage pending upload, the schema must match what US-017 (upload retry) expects. Use glass card styling and brand tokens."
     },
     {
