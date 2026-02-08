@@ -19,38 +19,17 @@
 
       <!-- Post-Ceremony Dashboard -->
       <div v-else-if="isPostCeremony" class="animate-fade-in-up space-y-8">
-        <!-- Support Section (primary CTA) -->
-        <DashboardSupportSection />
-
-        <!-- Moment cards section (only if moments exist) -->
-        <div v-if="!isMomentLoading && momentData" class="space-y-4">
-          <h2 class="text-xl font-semibold text-white">Reconnect with Your Insight</h2>
-
-          <!-- Show regular moment card -->
-          <DashboardMomentCard
-            v-if="!momentData.no_moments"
-            :moment-id="momentData.moment_id"
-            :quote="momentData.quote"
-            :illusion-key="momentData.illusion_key"
-            :illusion-name="momentData.illusion_name"
-            :relative-time="momentData.relative_time"
-            @click="handleMomentClick"
-          />
-
-          <!-- Show no-moments warning card -->
-          <DashboardNoMomentsCard
-            v-else
-            :illusion-key="momentData.illusion_key"
-            :illusion-name="momentData.illusion_name"
-          />
+        <!-- YOU'RE FREE Heading -->
+        <div class="text-center mb-8">
+          <h1 class="text-4xl md:text-5xl font-bold text-white mb-3">YOU'RE FREE</h1>
+          <p v-if="ceremonyDate" class="text-white-65 text-lg">
+            {{ formatDate(ceremonyDate) }}
+          </p>
         </div>
 
-        <!-- Your Journey chip row -->
-        <DashboardYourJourneySection :illusions="journeyIllusions" />
-
-        <!-- Artifacts Section -->
-        <div v-if="hasJourneyArtifact || hasFinalRecording || hasCheatSheet" class="grid gap-4 md:grid-cols-2">
-          <!-- Journey Artifact -->
+        <!-- Artifacts Grid -->
+        <div class="grid gap-4 md:grid-cols-2">
+          <!-- Your Journey Card -->
           <div
             v-if="hasJourneyArtifact"
             class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
@@ -81,7 +60,7 @@
             </NuxtLink>
           </div>
 
-          <!-- Final Recording Artifact -->
+          <!-- Your Message Card -->
           <div
             v-if="hasFinalRecording"
             class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
@@ -94,12 +73,14 @@
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-white">Your Message</h3>
-                <p class="text-sm text-white-65">
+                <p v-if="finalRecordingAudioPath" class="text-sm text-white-65">
                   {{ formatDuration(status?.artifacts?.final_recording?.audio_duration_ms) }}
                 </p>
               </div>
             </div>
+            <!-- Audio Player for voice recording -->
             <button
+              v-if="finalRecordingAudioPath"
               class="w-full btn-primary text-white px-4 py-2 rounded-pill font-medium"
               @click="playFinalRecording"
             >
@@ -110,9 +91,13 @@
                 Play
               </span>
             </button>
+            <!-- Display text message -->
+            <div v-else-if="finalRecordingText" class="text-white-85 text-sm italic">
+              "{{ finalRecordingText }}"
+            </div>
           </div>
 
-          <!-- Toolkit -->
+          <!-- Illusions Cheat Sheet Card -->
           <div
             v-if="hasCheatSheet"
             class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
@@ -125,12 +110,12 @@
                 </svg>
               </div>
               <div>
-                <h3 class="text-lg font-semibold text-white">Your Toolkit</h3>
+                <h3 class="text-lg font-semibold text-white">Illusions Cheat Sheet</h3>
                 <p class="text-sm text-white-65">Quick reference guide</p>
               </div>
             </div>
             <NuxtLink
-              to="/toolkit"
+              to="/cheat-sheet"
               class="block w-full text-center btn-primary text-white px-4 py-2 rounded-pill font-medium"
             >
               <span class="flex items-center justify-center gap-2">
@@ -143,24 +128,39 @@
           </div>
         </div>
 
-        <!-- Pending Follow-up -->
-        <div
-          v-if="nextFollowUp"
-          class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
-        >
-          <div class="flex items-center justify-between">
+        <!-- Need a boost? CTA -->
+        <div class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border text-center">
+          <p class="text-white-85 mb-4">Need a boost?</p>
+          <button
+            class="btn-primary text-white px-6 py-3 rounded-pill font-semibold shadow-card inline-flex items-center justify-center gap-2"
+            @click="openSupportChat"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span>Talk to me</span>
+          </button>
+        </div>
+
+        <!-- Reinforcement Items - 5 Illusions -->
+        <div class="space-y-3">
+          <h2 class="text-xl font-semibold text-white mb-4">Reinforce Your Freedom</h2>
+
+          <div
+            v-for="illusion in reinforcementIllusions"
+            :key="illusion.key"
+            class="glass rounded-lg p-4 shadow-card border border-brand-border flex items-center justify-between"
+          >
             <div>
-              <h3 class="text-lg font-semibold text-white">{{ formatFollowUpTitle(nextFollowUp.milestone_type) }}</h3>
-              <p class="text-sm text-white-65">
-                {{ formatFollowUpDate(nextFollowUp.scheduled_for) }}
-              </p>
+              <h3 class="text-white font-medium">{{ illusion.name }}</h3>
+              <p class="text-white-65 text-sm">{{ illusion.description }}</p>
             </div>
-            <NuxtLink
-              :to="`/follow-up/${nextFollowUp.id}`"
-              class="btn-primary text-white px-4 py-2 rounded-pill font-medium"
+            <button
+              class="btn-primary text-white px-4 py-2 rounded-pill font-medium whitespace-nowrap"
+              @click="handleReinforcementClick(illusion.key)"
             >
-              Open
-            </NuxtLink>
+              Reinforce
+            </button>
           </div>
         </div>
       </div>
@@ -175,14 +175,14 @@
             </svg>
           </div>
 
-          <h2 class="text-3xl font-bold text-white mb-3">You're ready for the final step</h2>
-          <p class="text-white-65 mb-6">Set aside about 15 minutes for your ceremony</p>
+          <h2 class="text-3xl font-bold text-white mb-3">You've seen through all five illusions. You're ready.</h2>
+          <p class="text-white-65 mb-6">Your final session—the ceremony—is available now.</p>
 
           <NuxtLink
             to="/ceremony"
             class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card inline-block text-lg"
           >
-            Begin Ceremony
+            Begin Ceremony Now
           </NuxtLink>
         </div>
 
@@ -478,6 +478,27 @@ const journeyIllusions = computed(() => {
   })
 })
 
+// Post-ceremony computed properties
+const finalRecordingAudioPath = computed(() => {
+  return status.value?.artifacts?.final_recording?.audio_path
+})
+
+const finalRecordingText = computed(() => {
+  // If there's an audio path, we don't show text
+  if (finalRecordingAudioPath.value) return null
+  // Otherwise, check if there's a content_text field (typed message)
+  // Note: This will need to be added to the API response if not already present
+  return (status.value?.artifacts?.final_recording as any)?.content_text || null
+})
+
+const reinforcementIllusions = computed(() => [
+  { key: 'stress_relief', name: 'Stress Relief', description: 'The illusion that nicotine relieves stress' },
+  { key: 'pleasure', name: 'Pleasure', description: 'The illusion of pleasure in every dose' },
+  { key: 'willpower', name: 'Willpower', description: 'The illusion that quitting requires willpower' },
+  { key: 'focus', name: 'Focus', description: 'The illusion that nicotine enhances focus' },
+  { key: 'identity', name: 'Identity', description: 'The illusion that addiction defines you' },
+])
+
 // Methods
 function formatDate(date: Date | null): string {
   if (!date) return ''
@@ -551,8 +572,12 @@ function closeAudioPlayer() {
   }
 }
 
-function openSupportChat(mode: 'struggling' | 'boost') {
-  router.push(`/support?mode=${mode}`)
+function openSupportChat() {
+  router.push('/support')
+}
+
+function handleReinforcementClick(illusionKey: string) {
+  navigateTo(`/reinforcement/${illusionKey}`)
 }
 
 async function fetchMomentData(retryCount = 0) {
