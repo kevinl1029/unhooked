@@ -108,6 +108,7 @@ export type Database = {
           content_json: Json | null
           content_text: string | null
           created_at: string | null
+          generation_status: string | null
           id: string
           included_moment_ids: string[] | null
           updated_at: string | null
@@ -121,6 +122,7 @@ export type Database = {
           content_json?: Json | null
           content_text?: string | null
           created_at?: string | null
+          generation_status?: string | null
           id?: string
           included_moment_ids?: string[] | null
           updated_at?: string | null
@@ -134,6 +136,7 @@ export type Database = {
           content_json?: Json | null
           content_text?: string | null
           created_at?: string | null
+          generation_status?: string | null
           id?: string
           included_moment_ids?: string[] | null
           updated_at?: string | null
@@ -647,6 +650,8 @@ export type Database = {
       user_progress: {
         Row: {
           ceremony_completed_at: string | null
+          ceremony_email_sent_at: string | null
+          ceremony_ready_at: string | null
           ceremony_skipped_final_dose: boolean | null
           completed_at: string | null
           created_at: string | null
@@ -666,6 +671,8 @@ export type Database = {
         }
         Insert: {
           ceremony_completed_at?: string | null
+          ceremony_email_sent_at?: string | null
+          ceremony_ready_at?: string | null
           ceremony_skipped_final_dose?: boolean | null
           completed_at?: string | null
           created_at?: string | null
@@ -685,6 +692,8 @@ export type Database = {
         }
         Update: {
           ceremony_completed_at?: string | null
+          ceremony_email_sent_at?: string | null
+          ceremony_ready_at?: string | null
           ceremony_skipped_final_dose?: boolean | null
           completed_at?: string | null
           created_at?: string | null
