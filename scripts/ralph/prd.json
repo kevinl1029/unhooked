@@ -180,7 +180,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "This composable orchestrates — it does NOT own conversation state (SessionView does) or recording state (CeremonyRecordingInline does). It manages the ceremony lifecycle and coordinates between them. Use `$fetch` for API calls. Use `navigateTo` for navigation. For prefers-reduced-motion: `window.matchMedia('(prefers-reduced-motion: reduce)').matches`. The prepare endpoint returns ceremony context + optional active_conversation_id for concurrent tab handling."
     },
     {

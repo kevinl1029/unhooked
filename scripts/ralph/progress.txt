@@ -188,3 +188,32 @@ Files changed:
 - Component lazy loading: defineAsyncComponent should be used in parent (pages/ceremony.vue) not in component itself
 - Timer cleanup: Always clear intervals and timeouts in cleanup function and onUnmounted
 ---
+## 2026-02-08 - US-009
+- Implemented useCeremony() orchestrator composable with full ceremony lifecycle management
+- Created composables/useCeremony.ts exporting reusable ceremony orchestration logic
+- Ceremony phase state machine: pre-ceremony → conversation → recording → completing → transitioning → (dashboard navigation)
+- Error handling: transitions to 'error' phase on prepare failure or completion failure after retries
+- Exponential backoff retry logic: retryWithBackoff() function with configurable attempts and delays (1s, 2s, 4s for 3 retries)
+- Recording flow: handleRecordingPrompt() pauses conversation, handleRecordingSaved()/handleTextSaved() resume
+- Completion flow: handleSessionComplete() calls /api/ceremony/complete with retries, sets ariaAnnouncement, auto-navigates after 5s
+- Accessibility: respects prefers-reduced-motion (immediate navigation if set, 5s delay otherwise)
+- Exit dialog integration: handleEscapeKey() toggles, handleLeave() navigates, handleStay() dismisses
+- TypeScript interfaces: CeremonyPhase union type, CeremonyPrepareResponse, CeremonyCompleteResponse
+- Prepare endpoint integration: validates ready===true, stores conversationId (or active_conversation_id for concurrent tabs)
+- Reactive refs: ceremonyPhase, conversationId, isRecording, isCompleting, isTransitioning, showExitDialog, error, ariaAnnouncement, finalRecordingPath
+- Build passed (npm run build)
+
+Files changed:
+- composables/useCeremony.ts (created - 221 lines)
+
+**Learnings for future iterations:**
+- Composable orchestration pattern: Manages lifecycle and coordinates between components (does NOT own their state)
+- Phase-based state machine: Use union type for phase and transition functions to move between phases
+- Exponential backoff utility: retryWithBackoff<T>(fn, maxRetries, baseDelay) - reusable for any async operation
+- TypeScript response types: Define interfaces for API responses inline in composable for type safety
+- prefers-reduced-motion: window.matchMedia('(prefers-reduced-motion: reduce)').matches for accessibility
+- Ceremony prepare endpoint: Returns ready boolean, active_conversation_id (for concurrent tabs), and user context
+- Ceremony complete endpoint: Requires conversation_id, accepts optional final_recording_path
+- The composable exposes ALL state as refs (no internal state) for template reactivity and testability
+- Navigation pattern: Use navigateTo() for client-side routing in Nuxt
+---
