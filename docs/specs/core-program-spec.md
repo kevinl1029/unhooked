@@ -3,8 +3,10 @@
 **Version:** 5.0
 **Created:** 2026-01-11
 **Last Updated:** 2026-01-28
-**Status:** Active Development
+**Status:** Baseline Implementation
 **Document Type:** Feature Specification (PRD + Technical Design)
+
+> **Note:** This spec defines the core program as originally built (Phases 4A–4C). The session model is evolving to incorporate evidence-based coaching — layer-differentiated sessions, observation assignments, and evidence-loop check-ins. See [evidence-based-coaching-spec.md](evidence-based-coaching-spec.md) (Draft) for that evolution. The infrastructure defined here (layer model, progress tracking, conviction assessment, SESSION_COMPLETE flow) serves as the foundation for those changes.
 
 ---
 
@@ -29,6 +31,8 @@
 The Unhooked Core Program is a structured therapeutic program that guides users through dismantling the psychological illusions that maintain nicotine addiction. Based on Allen Carr's "Easyway" methodology, the program uses AI-powered conversations to help users see through five core illusions about nicotine.
 
 ### Core Philosophy
+
+> **For the full coaching methodology — therapeutic foundations, coaching principles, and per-illusion technique mapping — see the [Coaching Framework Guide](../guides/coaching-framework-guide.md).**
 
 Nicotine addiction is maintained by psychological illusions, not chemical dependency alone. Once someone truly sees that nicotine gives them nothing, quitting becomes effortless. The program achieves this through:
 

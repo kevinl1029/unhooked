@@ -41,7 +41,7 @@ The system prompt is composed by layering sections together in `server/utils/pro
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  1. BASE_SYSTEM_PROMPT                          │  ← Allen Carr methodology, tone, session flow
+│  1. BASE_SYSTEM_PROMPT                          │  ← Coaching methodology, tone, session flow
 │     (server/utils/prompts/base-system.ts)       │
 ├─────────────────────────────────────────────────┤
 │  2. Basic Personalization                       │  ← Product type, frequency, years, triggers
@@ -78,6 +78,8 @@ The final payload sent to the LLM is: `[system message, ...conversation history,
 ## The Base System Prompt
 
 **File:** `server/utils/prompts/base-system.ts`
+
+> **For the therapeutic foundations and coaching principles behind this prompt, see the [Coaching Framework Guide](coaching-framework-guide.md).**
 
 This is the foundation of every core and reinforcement session. It defines:
 
