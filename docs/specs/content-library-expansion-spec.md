@@ -593,20 +593,11 @@ When they can clearly articulate that they're not fundamentally different or bro
 
 ---
 
-## Future Sequencing
+## Relationship to Evidence-Based Coaching Spec
 
-This content expansion is **Phase 1** of a two-phase effort:
+This content expansion and the [evidence-based-coaching-spec.md](evidence-based-coaching-spec.md) (Draft) are co-dependencies:
 
-### Phase 1: Content Library Expansion (this spec)
-Expand the content palette within the current single-session-per-illusion structure. Delivers immediate value: more coaching angles, less repetition, more personalization.
+- **This spec** owns the therapeutic content — prompt text, per-illusion coaching material, multi-technique integration (CBT, MI, Neuroscience alongside Allen Carr). It will be updated to include layer-differentiated content (analytical tone for L1, emotional holding for L2, identity-forward for L3) once the structural architecture is defined.
+- **The evidence-based-coaching spec** owns the structural and architectural changes — the 3-layer session model, evidence loop, observation assignments, check-in evolution, and layer-aware prompt assembly.
 
-### Phase 2: Prompt Architecture Spec + Content Refinement (future)
-1. **Prompt architecture spec** — Define how the system prompt assembly evolves for 3-layer sessions: file structure, assembly order, layer-differentiated tone, what each layer adds/changes.
-2. **Content refinement** — Further expand and restructure the content library to fit the 3-layer model:
-   - Layer-differentiated tone (analytical for L1, emotional holding for L2, identity-forward for L3)
-   - Observation assignments (end of L1 sessions)
-   - Evidence-based openings (start of L2 sessions)
-   - Identity integration prompts (L3 sessions)
-   - Phase 2+ therapeutic content (ACT, MBRP, Narrative Therapy) where appropriate
-
-The expanded content from Phase 1 feeds directly into Phase 2 — Layer 1 draws from CBT/neuroscience analytical angles, Layer 2 from MI/emotional techniques, Layer 3 from narrative/identity material. But the content works independently within the current structure today.
+The expanded content from this spec feeds directly into the evidence-based-coaching architecture — Layer 1 draws from CBT/neuroscience analytical angles, Layer 2 from MI/emotional techniques, Layer 3 from identity material. The content also works independently within the current single-session structure, delivering immediate value (more coaching angles, less repetition, more personalization) ahead of the structural evolution.

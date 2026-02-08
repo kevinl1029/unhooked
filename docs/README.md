@@ -42,6 +42,7 @@ Technical specifications combining product requirements with implementation desi
 | [stripe-market-validation-spec.md](specs/stripe-market-validation-spec.md) | Stripe integration for market validation |
 | [foundation-setup-spec.md](specs/foundation-setup-spec.md) | Initial project setup and infrastructure |
 | [content-library-expansion-spec.md](specs/content-library-expansion-spec.md) | Expanded coaching content: CBT, neuroscience, and MI additions to illusion prompts |
+| [evidence-based-coaching-spec.md](specs/evidence-based-coaching-spec.md) | Session model evolution: 3-layer sessions, evidence loop, observation assignments, check-in evolution (Draft) |
 
 ## Decisions
 
