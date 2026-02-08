@@ -30,6 +30,8 @@ The Unhooked Core Program is a structured therapeutic program that guides users 
 
 ### Core Philosophy
 
+> **For the full coaching methodology — therapeutic foundations, coaching principles, and per-illusion technique mapping — see the [Coaching Framework Guide](../guides/coaching-framework-guide.md).**
+
 Nicotine addiction is maintained by psychological illusions, not chemical dependency alone. Once someone truly sees that nicotine gives them nothing, quitting becomes effortless. The program achieves this through:
 
 - **Layered depth** — Each illusion is explored at three levels (intellectual → emotional → identity)

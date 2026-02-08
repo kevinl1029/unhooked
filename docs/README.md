@@ -41,6 +41,7 @@ Technical specifications combining product requirements with implementation desi
 | [seo-strategy-spec.md](specs/seo-strategy-spec.md) | SEO and landing page optimization |
 | [stripe-market-validation-spec.md](specs/stripe-market-validation-spec.md) | Stripe integration for market validation |
 | [foundation-setup-spec.md](specs/foundation-setup-spec.md) | Initial project setup and infrastructure |
+| [content-library-expansion-spec.md](specs/content-library-expansion-spec.md) | Expanded coaching content: CBT, neuroscience, and MI additions to illusion prompts |
 
 ## Decisions
 
@@ -57,6 +58,7 @@ Reference documentation and how-to guides.
 
 | Document | Description |
 |----------|-------------|
+| [coaching-framework-guide.md](guides/coaching-framework-guide.md) | Coaching methodology, therapeutic foundations, and coaching principles |
 | [llm-configuration-guide.md](guides/llm-configuration-guide.md) | LLM provider configuration and prompt management |
 
 ## Testing
