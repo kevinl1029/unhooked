@@ -217,3 +217,26 @@ Files changed:
 - The composable exposes ALL state as refs (no internal state) for template reactivity and testability
 - Navigation pattern: Use navigateTo() for client-side routing in Nuxt
 ---
+## 2026-02-08 - US-010
+- Implemented ceremony page pre-ceremony screen and route guards
+- Added program_status-based route guards (redirect if completed or not ceremony_ready)
+- Built pre-ceremony screen with "YOUR FINAL SESSION" eyebrow, 15 minutes instruction, quiet space instruction, product-specific text with fallback
+- Product type fetched from /api/intake with friendly display mapping (vape, cigarettes, etc.)
+- Removed entire v1 ceremony wizard (intro, generating, journey, recording, cheatsheet, complete steps)
+- Reduced ceremony.vue from 746 lines to 193 lines (73% reduction)
+- Pre-ceremony screen uses glass card styling with animate-fade-in-up animation
+- Uses ceremony layout (immersive mode, no header)
+- Escape key listener for exit dialog preserved
+- Typecheck passed via npm run build
+
+Files changed:
+- pages/ceremony.vue (complete refactor - removed v1 wizard, added pre-ceremony screen with route guards)
+
+**Learnings for future iterations:**
+- Route guards pattern: Check program_status in onMounted, use navigateTo('/dashboard', { replace: true }) for immediate redirects
+- Product type display: user_intake.product_types is an array, map to friendly names and join with "or" for display
+- Pre-ceremony eligibility: program_status === 'ceremony_ready' is the source of truth (not ceremony_completed_at)
+- Graceful degradation: If API calls fail, show the pre-ceremony screen rather than blocking (user might be eligible)
+- The v1 wizard was deeply coupled to artifact generation timing - v2 moves all that to background during conversation
+- Ceremony page will be extended in US-011 with voice conversation and inline recording (builds on this foundation)
+---

@@ -200,7 +200,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "File: `pages/ceremony.vue` — refactor in-place. The v1 page has a multi-step wizard with steps like 'intro', 'generating', 'journey', 'recording', 'cheatsheet', 'complete'. Strip those out and replace with the pre-ceremony screen for now. Product type can be fetched from user intake data or the ceremony/prepare response. For redirects, use `navigateTo('/dashboard', { replace: true })` in an onMounted guard or equivalent."
     },
     {
