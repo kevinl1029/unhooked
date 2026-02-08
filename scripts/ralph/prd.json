@@ -112,7 +112,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "File: `server/api/ceremony/complete.post.ts` — modify in-place. Remove `already_quit` parameter (AI handles via Pre-Part 5). Remove requirement for artifacts to exist before completion. Add conversation_id as required. The 5 illusion keys and their names/truths are static content — hardcode or reference a config. Query `user_story` table for `{illusionKey}_key_insight_id` fields, then query `captured_moments` by those IDs for insight text. CheatSheetData interface: { entries: Array<{ illusionKey, name, illusion, truth, userInsight?, insightMomentId? }>, generatedAt: string }."
     },
     {

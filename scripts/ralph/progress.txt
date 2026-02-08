@@ -107,3 +107,31 @@ Files changed:
 - Status transitions: pending (created) → generating (LLM working) → ready (metadata saved) or failed (error occurred)
 - TTS happens after 'ready': Audio generation per segment doesn't block 'ready' status
 ---
+## 2026-02-08 - US-006
+- Implemented ceremony complete endpoint v2 with cheat sheet generation
+- Updated endpoint to require conversation_id (required) and accept optional final_recording_path
+- Changed validation to check program_status='completed' instead of ceremony_completed_at
+- Updated completion logic to set program_status='completed' (critical status change) and ceremony_completed_at timestamp
+- Removed v1 artifact existence requirements (journey and final_recording no longer required to complete)
+- Integrated existing cheat sheet generator (generateIllusionsCheatSheet, saveCheatSheetArtifact) from server/utils/ceremony/cheat-sheet-generator.ts
+- Cheat sheet automatically generated at ceremony completion with all 5 illusions (stress_relief, pleasure, willpower, focus, identity)
+- Each illusion includes static content (name, illusion, truth) plus optional userInsight from captured moments via user_story key_insight_id references
+- Cheat sheet generation failures are logged but don't block ceremony completion (graceful degradation)
+- Updated response format to { status: 'completed', ceremony_completed_at: string, journey_artifact_status: 'ready'|'generating'|'pending' }
+- Journey artifact status fetched from ceremony_artifacts.generation_status for polling/UI support
+- Removed v1 response structure with artifacts map and follow_up_scheduled details
+- Typecheck passed via npm run build
+
+Files changed:
+- server/api/ceremony/complete.post.ts (refactored for v2)
+
+**Learnings for future iterations:**
+- Ceremony complete v2 philosophy: Completion should not be blocked by artifact generation status - let artifacts generate async
+- The cheat sheet generator utility already existed and handles the full lifecycle (fetch insights, build entries, save artifact)
+- program_status='completed' is the source of truth for ceremony completion (not ceremony_completed_at alone)
+- Response format simplified for v2: return status fields needed by client, not full artifact objects
+- Journey artifact generation happens in background during Parts 6-7 via [JOURNEY_GENERATE] token trigger (US-004)
+- Cheat sheet generation uses try/catch with logging - ceremony completes even if cheat sheet fails
+- The 5 illusion keys match database column prefixes: stress_relief, pleasure, willpower, focus, identity
+- User insights are optional per illusion - only included if user_story has a key_insight_id and the moment exists
+---
