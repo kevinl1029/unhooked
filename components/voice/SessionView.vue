@@ -156,7 +156,7 @@
         </div>
 
         <!-- Recording State - only show if session is NOT ending -->
-        <div v-else-if="isRecording" class="text-center space-y-3">
+        <div v-else-if="isRecording && !isPausedByCeremony" class="text-center space-y-3">
           <VoiceAudioWaveform
             :is-active="true"
             :audio-level="audioLevel"
@@ -172,8 +172,8 @@
           />
         </div>
 
-        <!-- Ready State - only show if session is NOT ending -->
-        <div v-else-if="!isProcessing" class="text-center space-y-3">
+        <!-- Ready State - only show if session is NOT ending and NOT paused by ceremony -->
+        <div v-else-if="!isProcessing && !isPausedByCeremony" class="text-center space-y-3">
           <VoiceMicButton
             :is-recording="false"
             :disabled="isProcessing"
@@ -189,20 +189,20 @@
           <p class="text-white-65">Processing...</p>
         </div>
 
-        <!-- Text Input Mode - only show if session is NOT ending -->
-        <div v-if="textMode && !isRecording && !isAISpeaking && !isSessionEnding" class="mt-4">
+        <!-- Text Input Mode - only show if session is NOT ending and NOT paused by ceremony -->
+        <div v-if="textMode && !isRecording && !isAISpeaking && !isSessionEnding && !isPausedByCeremony" class="mt-4">
           <div class="flex gap-2">
             <input
               v-model="textInput"
               type="text"
               class="flex-1 glass-input rounded-pill px-4 py-3 text-white placeholder-white-65"
               placeholder="Type your message..."
-              :disabled="isProcessing"
+              :disabled="isProcessing || isPausedByCeremony"
               @keyup.enter="handleSendText"
             />
             <button
               class="btn-primary px-6 py-3 rounded-pill"
-              :disabled="!textInput.trim() || isProcessing"
+              :disabled="!textInput.trim() || isProcessing || isPausedByCeremony"
               @click="handleSendText"
             >
               Send
@@ -244,6 +244,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   sessionComplete: [nextIllusion: number | null]
+  recordingPrompt: []
   error: [message: string]
 }>()
 
@@ -301,8 +302,10 @@ const textInput = ref('')
 const audioLevel = ref(0)
 const showPermissionOverlay = ref(false)
 const sessionCompleteDetected = ref(false)
+const recordingPromptDetected = ref(false)
 const audioHasStartedForCompletion = ref(false)
 const sessionCompletionTriggered = ref(false) // True once handleSessionComplete starts
+const isPausedByCeremony = ref(false)
 let audioLevelFrame: number | null = null
 
 // Responsive check
@@ -323,12 +326,16 @@ onMounted(() => {
   })
 })
 
-// Display messages with [SESSION_COMPLETE] stripped
+// Display messages with ceremony tokens stripped
 // Show the live transcript while text is streaming OR while streaming TTS audio is playing
 const displayMessages = computed(() => {
   const allMessages = messages.value.map(msg => ({
     ...msg,
-    content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
+    content: msg.content
+      .replace('[SESSION_COMPLETE]', '')
+      .replace('[RECORDING_PROMPT]', '')
+      .replace('[JOURNEY_GENERATE]', '')
+      .trim()
   }))
 
   // Show streaming transcript while text is being streamed OR while streaming TTS audio plays
@@ -340,7 +347,11 @@ const displayMessages = computed(() => {
   if (showStreamingTranscript) {
     // Always use currentTranscript for the message content (full text from LLM)
     // The word-by-word component handles TTS word alignment separately via getWords
-    const displayContent = currentTranscript.value.replace('[SESSION_COMPLETE]', '').trim()
+    const displayContent = currentTranscript.value
+      .replace('[SESSION_COMPLETE]', '')
+      .replace('[RECORDING_PROMPT]', '')
+      .replace('[JOURNEY_GENERATE]', '')
+      .trim()
 
     // Check if last message is already the streaming assistant message
     const lastMsg = allMessages[allMessages.length - 1]
@@ -419,18 +430,27 @@ watch(
   }
 )
 
-// Watch for session complete token in messages
+// Watch for session tokens in messages
 watch(
   () => messages.value,
   (msgs) => {
     const lastMsg = msgs[msgs.length - 1]
-    if (lastMsg?.role === 'assistant' && lastMsg.content.includes('[SESSION_COMPLETE]')) {
-      sessionCompleteDetected.value = true
-      // If audio is already playing when we detect SESSION_COMPLETE,
-      // mark that audio has started (the watch won't catch it since isAISpeaking
-      // was already true before sessionCompleteDetected became true)
-      if (isAISpeaking.value) {
-        audioHasStartedForCompletion.value = true
+    if (lastMsg?.role === 'assistant') {
+      // Detect [SESSION_COMPLETE] token
+      if (lastMsg.content.includes('[SESSION_COMPLETE]')) {
+        sessionCompleteDetected.value = true
+        // If audio is already playing when we detect SESSION_COMPLETE,
+        // mark that audio has started (the watch won't catch it since isAISpeaking
+        // was already true before sessionCompleteDetected became true)
+        if (isAISpeaking.value) {
+          audioHasStartedForCompletion.value = true
+        }
+      }
+
+      // Detect [RECORDING_PROMPT] token
+      if (lastMsg.content.includes('[RECORDING_PROMPT]') && !recordingPromptDetected.value) {
+        recordingPromptDetected.value = true
+        emit('recordingPrompt')
       }
     }
   },
@@ -561,4 +581,18 @@ const handleSessionComplete = async () => {
     emit('sessionComplete', null)
   }
 }
+
+// Expose pause/resume methods for ceremony orchestration
+const pause = () => {
+  isPausedByCeremony.value = true
+}
+
+const resume = () => {
+  isPausedByCeremony.value = false
+}
+
+defineExpose({
+  pause,
+  resume
+})
 </script>

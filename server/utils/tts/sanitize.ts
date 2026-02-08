@@ -13,6 +13,8 @@
  */
 const SYSTEM_TOKENS = [
   '[SESSION_COMPLETE]',
+  '[RECORDING_PROMPT]',
+  '[JOURNEY_GENERATE]',
   '[END]',
   '[DONE]',
 ]
