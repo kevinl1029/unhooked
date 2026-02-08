@@ -1,10 +1,11 @@
 /**
- * Ceremony Complete Endpoint
- * Marks ceremony as complete and generates all artifacts
+ * Ceremony Complete Endpoint v2
+ * Marks ceremony as complete and generates illusions cheat sheet artifact
  * Schedules post-ceremony follow-ups
  */
 
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
+import { generateIllusionsCheatSheet, saveCheatSheetArtifact } from '~/server/utils/ceremony/cheat-sheet-generator'
 
 // Follow-up milestone days from ceremony completion
 const FOLLOW_UP_MILESTONES = [
@@ -29,49 +30,37 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { already_quit } = body as {
-    already_quit?: boolean
+  const { conversation_id, final_recording_path } = body as {
+    conversation_id: string
+    final_recording_path?: string
+  }
+
+  if (!conversation_id) {
+    throw createError({ statusCode: 400, message: 'conversation_id is required' })
   }
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // 1. Check if ceremony already completed (use user_progress per ADR-004)
+  // 1. Check if ceremony already completed via program_status
   const { data: userProgress } = await supabase
     .from('user_progress')
-    .select('ceremony_completed_at, timezone')
+    .select('program_status, ceremony_completed_at, timezone')
     .eq('user_id', user.sub)
     .single()
 
-  if (userProgress?.ceremony_completed_at) {
+  if (userProgress?.program_status === 'completed') {
     throw createError({ statusCode: 400, message: 'Ceremony already completed' })
-  }
-
-  // 2. Verify required artifacts exist
-  const { data: artifacts } = await supabase
-    .from('ceremony_artifacts')
-    .select('artifact_type')
-    .eq('user_id', user.sub)
-
-  const artifactTypes = new Set((artifacts || []).map(a => a.artifact_type))
-
-  if (!artifactTypes.has('reflective_journey')) {
-    throw createError({ statusCode: 400, message: 'Journey not generated' })
-  }
-
-  if (!artifactTypes.has('final_recording')) {
-    throw createError({ statusCode: 400, message: 'Final recording not saved' })
   }
 
   const completedAt = new Date()
   const timezone = userProgress?.timezone || 'America/New_York'
 
-  // 3. Mark ceremony as complete in user_progress (per ADR-004)
-  // Note: already_quit is a request parameter only, not stored in database
+  // 2. Mark ceremony as complete in user_progress - set program_status='completed'
   const { error: progressError } = await supabase
     .from('user_progress')
     .update({
+      program_status: 'completed',
       ceremony_completed_at: completedAt.toISOString(),
-      ceremony_skipped_final_dose: already_quit || false,
       updated_at: completedAt.toISOString(),
     })
     .eq('user_id', user.sub)
@@ -81,7 +70,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Failed to complete ceremony' })
   }
 
-  // 4. Update artifacts with completion timestamp
+  // 3. Update artifacts with completion timestamp
   await supabase
     .from('ceremony_artifacts')
     .update({
@@ -89,6 +78,15 @@ export default defineEventHandler(async (event) => {
       updated_at: completedAt.toISOString(),
     })
     .eq('user_id', user.sub)
+
+  // 4. Generate illusions cheat sheet
+  try {
+    const cheatSheet = await generateIllusionsCheatSheet(supabase, user.sub)
+    await saveCheatSheetArtifact(supabase, user.sub, cheatSheet)
+  } catch (error) {
+    // Log but don't block ceremony completion
+    console.error('[ceremony-complete] Failed to generate cheat sheet:', error)
+  }
 
   // 5. Schedule follow-up check-ins
   const followUps: FollowUp[] = []
@@ -119,25 +117,19 @@ export default defineEventHandler(async (event) => {
     console.error('[ceremony-complete] Failed to schedule follow-ups:', followUpError)
   }
 
-  // 6. Fetch final artifacts for response
-  const { data: finalArtifacts } = await supabase
+  // 6. Get journey artifact status for response
+  const { data: journeyArtifact } = await supabase
     .from('ceremony_artifacts')
-    .select('*')
+    .select('generation_status')
     .eq('user_id', user.sub)
+    .eq('artifact_type', 'reflective_journey')
+    .single()
 
-  const artifactsMap: Record<string, typeof finalArtifacts[0]> = {}
-  for (const artifact of finalArtifacts || []) {
-    artifactsMap[artifact.artifact_type] = artifact
-  }
+  const journeyStatus = journeyArtifact?.generation_status || 'pending'
 
   return {
+    status: 'completed',
     ceremony_completed_at: completedAt.toISOString(),
-    already_quit: already_quit || false,
-    artifacts: {
-      reflective_journey: artifactsMap['reflective_journey'] || null,
-      illusions_cheat_sheet: artifactsMap['illusions_cheat_sheet'] || null,
-      final_recording: artifactsMap['final_recording'] || null,
-    },
-    follow_ups_scheduled: followUps,
+    journey_artifact_status: journeyStatus as 'ready' | 'generating' | 'pending',
   }
 })
