@@ -2,7 +2,7 @@
 
 **Version:** 2.0
 **Created:** 2026-01-28
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-02-08
 **Status:** Draft
 **Document Type:** Feature Specification (PRD + Technical Design)
 **Related Documents:**
@@ -19,17 +19,21 @@
 1. [Problem Statement](#problem-statement)
 2. [Goals & Success Metrics](#goals--success-metrics)
 3. [Solution Summary](#solution-summary)
-4. [User Experience](#user-experience)
-5. [The 7-Part Ceremony Flow](#the-7-part-ceremony-flow)
-6. [Post-Ceremony Artifacts](#post-ceremony-artifacts)
-7. [Functional Requirements](#functional-requirements)
-8. [Non-Functional Requirements](#non-functional-requirements)
-9. [Key Product Decisions](#key-product-decisions)
-10. [Technical Design](#technical-design)
-11. [Out of Scope / Deferred](#out-of-scope--deferred)
-12. [Open Questions](#open-questions)
-13. [Appendix](#appendix)
-14. [Changelog](#changelog)
+4. [Ceremony Personas](#ceremony-personas)
+5. [User Experience](#user-experience)
+6. [The 7-Part Ceremony Flow](#the-7-part-ceremony-flow)
+7. [Post-Ceremony Artifacts](#post-ceremony-artifacts)
+8. [Interaction Design](#interaction-design)
+9. [Edge Cases & Error States](#edge-cases--error-states)
+10. [Accessibility](#accessibility)
+11. [Functional Requirements](#functional-requirements)
+12. [Non-Functional Requirements](#non-functional-requirements)
+13. [Key Product Decisions](#key-product-decisions)
+14. [Technical Design](#technical-design)
+15. [Out of Scope / Deferred](#out-of-scope--deferred)
+16. [Open Questions](#open-questions)
+17. [Appendix](#appendix)
+18. [Changelog](#changelog)
 
 ---
 
@@ -103,6 +107,31 @@ The Final Ceremony is a 7-part voice-first conversation that marks the user's tr
 
 ---
 
+<!-- UX-REFINED: Added lightweight ceremony-context personas -->
+## Ceremony Personas
+
+Two distinct user types experience the ceremony differently. These are lightweight, ceremony-specific personas — not full product personas.
+
+### The Early Quitter
+
+**Who:** A user who stopped using nicotine partway through the program — often without a conscious decision. They completed all 15 sessions but realized days or weeks ago that they simply... stopped.
+
+**Emotional state at ceremony entry:** Confident but may feel like the ceremony is "for other people." Might wonder if they need this at all.
+
+**Ceremony path:** Pre-Part 5 → Part 5A (Symbolic Disposal Ritual). The AI celebrates that the desire evaporated naturally — this is the strongest proof the method worked.
+
+### The Ritual Completer
+
+**Who:** A user who has continued using nicotine throughout the program and is ready for the final dose to be their last. They've completed all 15 sessions and understand the illusions intellectually, but haven't yet experienced the final physical separation.
+
+**Emotional state at ceremony entry:** A mix of readiness and nervousness. Wants this to work. May feel pressure for the moment to "feel right."
+
+**Ceremony path:** Pre-Part 5 → Part 5B (Final Dose Ritual). The AI guides them through a mindful final dose, revealing the emptiness of the experience firsthand.
+
+**Note:** Both personas pass through Parts 1-4 identically. The Part 4 "not ready" exit serves as the filter for users who completed sessions but aren't emotionally bought in.
+
+---
+
 ## User Experience
 
 ### Ceremony Eligibility
@@ -155,12 +184,19 @@ Before entering the session:
 
 **Note:** The product mention covers both paths — users who still use will have product nearby for Part 5; users who already quit and disposed simply won't have anything, which is fine. No need to ask quit status here; the AI detects this at Pre-Part 5.
 
+<!-- UX-REFINED: Added product name fallback behavior -->
+**Product name handling:** If the user's specific product type is known from intake (`user_intake.products_used`), use it (e.g., "vape," "cigarettes"). If unknown or generic, fall back to "nicotine products" naturally. No error state needed.
+
 ### Ceremony Email
 
-**Trigger:** If the user reaches `ceremony_ready` status but has not started the ceremony within 24 hours, send this email as a gentle nudge. Delivered via existing Resend infrastructure.
+**Trigger:** If the user reaches `ceremony_ready` status but has not started the ceremony within 24 hours, send this email as a gentle nudge. Delivered via existing Resend infrastructure. **Single email only** — no follow-up cadence. The ceremony should feel like an invitation, not a nag.
+
+<!-- UX-REFINED: Added email send-time status check -->
+**Send-time check:** Before sending, verify the user hasn't already started or completed the ceremony. If status has changed from `ceremony_ready`, do not send.
 
 Subject: **Your final session is ready**
 
+<!-- UX-REFINED: Added product type personalization, noted name personalization as future -->
 > This is it. Your final session.
 >
 > During this conversation, you'll be having your last dose of nicotine—not because you're being cut off, but because there's nothing left for you there. You'll see.
@@ -168,6 +204,8 @@ Subject: **Your final session is ready**
 > Have your [vape/cigarettes/pouches] nearby. You'll know when to use them.
 >
 > When you're ready, click below. Take your time. This is a moment worth being present for.
+
+**Personalization:** Email uses the user's specific product type when known. Name personalization is deferred until the intake form captures user names — when that ships, backfill ceremony email templates.
 
 ### Final Core Session Tease
 
@@ -198,20 +236,28 @@ Only the "Return to Dashboard" CTA is shown — no "Begin Ceremony" shortcut. Th
 
 ### During Ceremony
 
-- Voice-first interface (same as core sessions)
+<!-- UX-REFINED: Added immersive mode and ceremony UI details -->
+- Voice-first interface (same conversation UI as core sessions — no special visual treatment)
+- **Immersive mode:** App header and navigation are hidden during the ceremony. The only way to exit is closing the browser/app.
 - No pause/resume capability
 - Word-by-word transcript with highlighted current word
 - Mic button for responses
-- "Type instead" fallback available
+- "Type instead" fallback available (including for Part 6 recording — see [Interaction Design](#interaction-design))
+- AI wait/processing states use same indicators as core sessions (animated dots)
 
 ### Interruption Handling
 
 If the user exits mid-ceremony:
 - Progress is NOT saved
-- Next visit shows pre-ceremony screen again
-- Conversation restarts from Part 1
+- Next visit shows the **dashboard with the ceremony CTA** (same as before they started — no acknowledgment of prior attempt)
+- Tapping CTA leads to pre-ceremony screen, then ceremony restarts from Part 1
 
-**Rationale:** The ceremony's emotional arc requires continuity. Resuming mid-stream would break the threshold effect.
+**Rationale:** The ceremony's emotional arc requires continuity. Resuming mid-stream would break the threshold effect. Clean slate avoids making the user feel like they "failed" a previous attempt.
+
+### Post-Ceremony URL Access
+
+<!-- UX-REFINED: Added post-completion redirect behavior -->
+If a user navigates to the ceremony URL after completing the ceremony (e.g., via bookmark or back button), redirect to the post-ceremony dashboard. No error message needed.
 
 ---
 
@@ -366,6 +412,9 @@ The AI takes this seriously — no bulldozing. It pauses and explores:
 **If YES (still has product):**
 > "Get rid of it. All of it. Right now. You won't be needing any of it. Let me know when it's done."
 
+<!-- UX-REFINED: Added disposal wait behavior -->
+**Disposal wait:** The mic stays ready with no timeout. The user may take 30 seconds to several minutes to physically dispose of their products. The AI waits patiently. If the user speaks during this time, the AI responds naturally.
+
 [User confirms]
 
 > "It's done. You're free."
@@ -417,6 +466,9 @@ The ritual becomes a symbolic mental gesture:
 >
 > Let me know when it's done."
 
+<!-- UX-REFINED: Added disposal wait behavior -->
+**Disposal wait:** Same as Part 5A — open mic, no timeout. User takes as long as they need.
+
 [User confirms]
 
 > "It's done. You're free."
@@ -442,7 +494,10 @@ The rationalization quote used in Part 5A/5B is sourced from the user's captured
 >
 > Take your time. Record when you're ready."
 
-**UI for recording:**
+<!-- UX-REFINED: Added inline recording transition and recording states -->
+**Recording UI transition:** The AI's prompt fades and the recording UI slides up inline within the same conversation screen. No page navigation or modal overlay. When complete, the recording UI slides away and the conversation resumes with Part 7.
+
+**Recording UI** (reuses existing ceremony recording implementation):
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                                                             │
@@ -458,18 +513,28 @@ The rationalization quote used in Part 5A/5B is sourced from the user's captured
 │         └───────────────┘                                   │
 │      Tap when you're ready                                  │
 │                                                             │
+│      ┈ or type your message ┈                               │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-After recording: "Keep this recording" or "Try again" options.
+**Recording states** (existing implementation):
+1. **Idle:** Mic button with "Tap when you're ready"
+2. **Recording:** Pulsing mic button with elapsed time counter
+3. **Preview:** Playback button + "Keep this recording" / "Try again" options
+4. **Saving:** Upload indicator
+5. **Saved:** Confirmation, conversation resumes
 
-[User records]
+<!-- UX-REFINED: Added text fallback for Part 6 -->
+**Text fallback:** If the user prefers to type (or if mic is unavailable), they can write a text message to their future self instead. The text is stored in the `content_text` field of the `ceremony_artifacts` table (same row, `audio_path` left null). The artifact is still meaningful — "Your Message" on the dashboard displays the text instead of an audio player.
+
+After recording/writing:
 
 > "That's yours now. If you ever need it, it'll be here."
 
 **Emotional arc:** Grounding the moment → Creating an artifact → Future-proofing
 
-**Storage:** The final recording is saved to Supabase Storage and linked from `user_progress.final_recording_path`.
+**Storage:** Audio recordings saved to Supabase Storage at `ceremony-artifacts/{user_id}/final-recording.webm`. Text messages stored in `ceremony_artifacts.content_text`. Both linked via the `ceremony_artifacts` table with `artifact_type: 'final_recording'`.
 
 ---
 
@@ -492,6 +557,9 @@ After recording: "Keep this recording" or "Try again" options.
 > "Hold onto that. That feeling is real. That feeling is *yours*.
 >
 > Welcome to the rest of your life."
+
+<!-- UX-REFINED: Added post-ceremony auto-transition -->
+**Post-ceremony transition:** After the final AI message, wait 5 seconds, then smoothly fade to the post-ceremony dashboard. No button, no intermediate screen. The dashboard state change IS the transition. If `prefers-reduced-motion` is set, skip the fade and transition instantly.
 
 **Emotional arc:** Celebration → Joy → Optimism → Completion
 
@@ -534,24 +602,32 @@ After recording: "Keep this recording" or "Try again" options.
 
 **Content source:** Part 2 of ceremony (Illusions Recap) + captured insights
 
-**Format:** Scrollable cards, one per illusion:
+<!-- UX-REFINED: Added cheat sheet layout and missing insight handling -->
+**Format:** Vertical scroll list — all 5 illusion cards stacked on a single page. Each card contains:
 - **The Illusion:** What they used to believe
 - **The Truth:** The reframe
 - **Your Insight:** Their own quote (with optional audio playback)
 
-**Location in app:** Separate page, linked from dashboard
+**Missing insights:** All 5 illusions always display with Illusion + Truth. The "Your Insight" section only appears for illusions where the user has captured insight moments. No empty state or placeholder needed — cards without insights are simply shorter.
 
-### 3. Final Recording
+**Location in app:** Separate page, linked from dashboard (reuses existing implementation)
 
-**What:** The user's voice message to their future self.
+### 3. Final Recording / Message
+
+<!-- UX-REFINED: Updated to reflect text fallback option -->
+**What:** The user's message to their future self — either a voice recording or a typed text message.
 
 **Content source:** Part 6 of ceremony
 
 **Location in app:**
 - Within "Your Journey" as the capstone
 - Standalone quick-access from dashboard ("Your Message")
+- Dashboard card shows audio player if voice, or text display if typed
 
 ### Post-Ceremony Dashboard State
+
+<!-- UX-REFINED: Added dashboard behavior notes -->
+The post-ceremony dashboard **fully replaces** the pre-ceremony progress dashboard. The old illusion progress view is no longer shown — the user is done. The dashboard is **static** and does not evolve over time (reinforcement session completion may show badges, but the layout stays the same).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -586,6 +662,115 @@ After recording: "Keep this recording" or "Try again" options.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**Visual hierarchy:** Artifacts (Journey, Message, Cheat Sheet) are prominent cards at top. Reinforcement sessions are smaller items below the divider. The existing grouping communicates priority.
+
+---
+
+<!-- UX-REFINED: Added Interaction Design section -->
+## Interaction Design
+
+### Disposal Wait (Parts 5A/5B)
+
+When the AI says "Let me know when it's done," the microphone stays ready with **no timeout**. The user may take 30 seconds to several minutes to physically dispose of their nicotine products. The AI waits patiently — no prompt, no timer. If the user speaks during the wait, the AI responds naturally.
+
+### Recording Transition (Part 6)
+
+The recording UI appears **inline** within the conversation view — no page navigation, no modal overlay. The AI's prompt fades and the recording interface slides up. After the user saves their recording (or types their message), the recording UI slides away and the conversation resumes for Part 7.
+
+### Post-Ceremony Auto-Transition
+
+After the final AI message in Part 7, wait **5 seconds**, then smoothly fade to the post-ceremony dashboard. No button needed. If `prefers-reduced-motion` is set, transition instantly without animation.
+
+### Mic Permission Loss During Ceremony
+
+If microphone permission is revoked or becomes unavailable mid-ceremony, seamlessly fall back to text input mode. The ceremony continues via typing. This follows the existing "Type instead" pattern — no error modal or ceremony restart needed.
+
+**Note:** The existing voice session system (`SessionView.vue`) should be audited for consistent mic-permission-lost handling across core sessions and ceremony. This is not ceremony-specific but surfaced during ceremony UX review.
+
+### Journey Artifact Playback
+
+The Journey Artifact player reuses the existing `JourneyPlayer.vue` implementation:
+- Progress bar with segment indicator (current/total)
+- Word-by-word transcript display with highlighting
+- Play/pause toggle
+- Preloads all audio segments on mount for gapless playback
+- Text-only fallback when audio is unavailable
+
+Accessible via the `/journey` standalone page or embedded within the ceremony flow (Part 4 replayable artifact).
+
+---
+
+<!-- UX-REFINED: Added Edge Cases & Error States section -->
+## Edge Cases & Error States
+
+### AI/LLM Service Failure Mid-Ceremony
+
+If the AI service goes down during the ceremony (e.g., API timeout, provider outage):
+- Show a gentle error message: "Something went wrong. Your ceremony will be ready when you come back."
+- Return user to dashboard
+- Ceremony restarts fresh on next attempt (consistent with no-pause rule)
+- Do NOT save partial conversation state
+
+### Final Recording Upload Failure
+
+If the recording upload fails:
+1. Show retry option (up to 3 attempts)
+2. After 3 failed retries, offer: "We're having trouble saving your recording. You can try again, or continue — we'll try to save it in the background."
+3. **Ceremony can complete without a successful recording upload.** Don't block the emotional moment over a technical failure.
+4. Background retry should be attempted when connectivity is restored.
+
+**Note:** This updates NFR-2.1, which previously required successful upload before completion. The ceremony's emotional arc takes priority.
+
+### Post-Disposal Crash Recovery
+
+If the browser/app crashes after the user has disposed of their products (Part 5) but before ceremony completion:
+- Ceremony restarts from Part 1 on next visit (per standard interruption handling)
+- When the user reaches Part 5 again, the AI asks if they've already quit — they'll say yes and go through Part 5A (Symbolic Disposal)
+- This works naturally with no special handling needed
+
+### Zero Captured Moments
+
+Reaching ceremony eligibility with zero captured moments should be impossible (completing illusions generates moments). However, if it occurs:
+- Part 1 (Journey): AI generates a generic narrative about the user's program completion without personal quotes
+- Part 5 (Contrast): AI uses general framing without a direct rationalization quote (existing fallback behavior)
+- Log the data gap as an issue for investigation
+
+### Browser/Network Issues
+
+- **Temporary network loss:** If network drops briefly during AI response, the existing conversation system should handle reconnection. No ceremony-specific handling needed.
+- **Prolonged network loss:** Same as AI service failure — show error, return to dashboard, restart fresh.
+
+---
+
+<!-- UX-REFINED: Added Accessibility section -->
+## Accessibility
+
+### Voice-First Accessibility
+
+The ceremony is voice-first but fully accessible via text:
+- **Deaf/hard-of-hearing users:** AI responses are visible via the word-by-word transcript display. Journey Artifact includes synchronized transcript. This is sufficient for MVP.
+- **Speech difficulties:** "Type instead" fallback available throughout, including Part 6 (text message to future self).
+- **Mic unavailability:** Seamless fallback to text input if mic permission denied or revoked.
+
+### Motion & Animation
+
+- All ceremony animations (fade-in-up, auto-transition fade) must respect `prefers-reduced-motion`
+- When reduced motion is preferred: disable fade animations, use instant transitions, skip the 5-second auto-transition fade (go directly to dashboard)
+- Implementation: CSS `@media (prefers-reduced-motion: reduce)` media query
+
+### Color & Visual
+
+- Recording mic button uses multi-signal state indicators (pulse animation + color change + label text), not color alone — sufficient for color-blind users
+- Existing UI patterns already meet this requirement (see `MicButton.vue`)
+
+### Screen Reader Support
+
+Key ARIA requirements for ceremony screens:
+- **Post-ceremony dashboard:** Landmark roles for artifact sections, descriptive ARIA labels for playback controls
+- **Journey player:** Play/pause button labeled with state ("Play your journey" / "Pause"), progress announced
+- **Recording UI:** Record button state announced ("Ready to record" / "Recording" / "Recording saved")
+- **Cheat sheet:** Each illusion card is a semantic section with heading
+
 ---
 
 ## Functional Requirements
@@ -616,10 +801,12 @@ After recording: "Keep this recording" or "Try again" options.
 **Description:** Record user's message to future self.
 
 **Requirements:**
-- FR-3.1: Present dedicated recording UI during Part 6
+- FR-3.1: Present dedicated recording UI during Part 6 (inline transition, not modal)
 - FR-3.2: Allow "Try again" if user wants to re-record
 - FR-3.3: Store audio file in Supabase Storage
-- FR-3.4: Link recording path to `user_progress.final_recording_path`
+- FR-3.4: Link recording to `ceremony_artifacts` table with `artifact_type: 'final_recording'`
+- FR-3.5: Support text fallback — if user types instead of recording, store in `content_text` field with `audio_path` null
+- FR-3.6: Allow ceremony completion even if recording upload fails after retries (background retry)
 
 ### FR-4: Ceremony Completion
 
@@ -628,8 +815,11 @@ After recording: "Keep this recording" or "Try again" options.
 **Requirements:**
 - FR-4.1: Update user progress status to `completed`
 - FR-4.2: Record `ceremony_completed_at` timestamp
-- FR-4.3: Generate journey artifact playlist
+- FR-4.3: Begin journey artifact generation in background during Parts 6-7 (not after completion)
 - FR-4.4: Generate illusions cheat sheet content
+- FR-4.5: Auto-transition to post-ceremony dashboard after 5-second delay following Part 7
+- FR-4.6: Redirect ceremony URL to dashboard if ceremony already completed
+- FR-4.7: Post-ceremony dashboard fully replaces pre-ceremony progress view
 
 ### FR-5: Artifact Access
 
@@ -637,8 +827,30 @@ After recording: "Keep this recording" or "Try again" options.
 
 **Requirements:**
 - FR-5.1: Journey artifact playable from dashboard
-- FR-5.2: Final recording accessible standalone and within journey
-- FR-5.3: Illusions cheat sheet accessible from dashboard
+- FR-5.2: Final recording/message accessible standalone and within journey
+- FR-5.3: Illusions cheat sheet accessible from dashboard (vertical scroll list, all 5 illusions always shown)
+- FR-5.4: "Your Insight" section on cheat sheet cards only appears for illusions with captured insights
+
+<!-- UX-REFINED: Added ceremony email and navigation requirements -->
+### FR-6: Ceremony Email
+
+**Description:** Nudge users who haven't started the ceremony.
+
+**Requirements:**
+- FR-6.1: Send single nudge email 24 hours after user reaches `ceremony_ready` status
+- FR-6.2: Check user status at send time — do not send if user has already started or completed ceremony
+- FR-6.3: Personalize email with user's product type when known; fall back to generic "nicotine products"
+- FR-6.4: No follow-up emails after the initial nudge
+- FR-6.5: No post-ceremony congratulations email
+
+### FR-7: Ceremony Navigation
+
+**Description:** Navigation behavior during and after ceremony.
+
+**Requirements:**
+- FR-7.1: Hide app header and navigation during active ceremony conversation (immersive mode)
+- FR-7.2: Dashboard CTA is the only in-app signal for ceremony availability (no badges, toasts, or push notifications)
+- FR-7.3: Redirect ceremony URL to post-ceremony dashboard if ceremony is already completed
 
 ---
 
@@ -651,13 +863,21 @@ After recording: "Keep this recording" or "Try again" options.
 
 ### NFR-2: Reliability
 
-- NFR-2.1: Final recording upload must succeed before ceremony marked complete
-- NFR-2.2: Failed recording upload shows retry option
+- NFR-2.1: ~~Final recording upload must succeed before ceremony marked complete~~ **Updated:** Ceremony can complete without successful upload after 3 retries. Background retry when connectivity restores. Emotional arc takes priority over data persistence.
+- NFR-2.2: Failed recording upload shows retry option (up to 3 attempts, then option to continue)
 
 ### NFR-3: Continuity
 
 - NFR-3.1: Ceremony cannot be paused/resumed
 - NFR-3.2: Incomplete ceremony progress is not persisted
+
+<!-- UX-REFINED: Added accessibility NFRs -->
+### NFR-4: Accessibility
+
+- NFR-4.1: All animations respect `prefers-reduced-motion` setting
+- NFR-4.2: Interactive elements have descriptive ARIA labels
+- NFR-4.3: Recording and playback controls are keyboard-accessible
+- NFR-4.4: Text-only fallback path available for entire ceremony flow
 
 ---
 
@@ -680,6 +900,20 @@ After recording: "Keep this recording" or "Try again" options.
 | **Ceremony email** | Send after 24h delay | If user reaches ceremony_ready but hasn't started within 24 hours, send nudge email via Resend. |
 | **Shareable artifacts** | Deferred | All artifacts private/in-app for MVP. Revisit based on user feedback post-launch. |
 | **Part 2 personalization** | Clean summary only | Five illusions, five truths. No personal insights woven in — Part 1 handles personalization. Personal quotes live in the Illusions Cheat Sheet artifact. |
+| **Return after interruption** | Dashboard with CTA, no acknowledgment | Clean slate. Same ceremony CTA shown as before first attempt. No "continue" or "you started before" messaging. |
+| **Post-Part 7 transition** | 5-second auto-fade to dashboard | No button, no intermediate screen. Dashboard state change IS the transition. Respects `prefers-reduced-motion`. |
+| **Ceremony conversation UI** | Same as core sessions | No special visual treatment. The AI's words create the ceremony feel. Simpler to build and maintain. |
+| **Ceremony navigation** | Header hidden (immersive) | No header, nav, or back button during ceremony. Only exit is closing browser/app (triggers restart-fresh). |
+| **Part 6 text fallback** | Allowed | User can type a message instead of recording. Stored in `content_text` field. Dashboard shows text instead of audio player. |
+| **Part 5 disposal wait** | Open mic, no timeout | AI waits patiently while user physically disposes of products. No prompt timer or confirmation button. |
+| **Recording upload failure** | Allow completion after 3 retries | Don't block emotional moment over technical failure. Background retry when connectivity restores. |
+| **Artifact generation timing** | Background during Parts 6-7 | Start generation before ceremony ends. Dashboard shows loading state if not ready. Avoids blocking post-ceremony transition. |
+| **Ceremony email cadence** | Single email at 24h | One nudge only. No follow-ups. Check status before sending to avoid stale emails. |
+| **Post-ceremony email** | None | In-app celebration is sufficient. No congratulations email. |
+| **Data deletion** | Full cascade delete | Account deletion removes all ceremony artifacts, recordings, and transcripts. |
+| **Cheat sheet missing insights** | Show all 5, omit missing | All illusions display Illusion + Truth. "Your Insight" only appears when captured. No empty states. |
+| **Quit check timing** | Pre-Part 5 (not intro) | AI asks during conversation after emotional buildup. Not a UI toggle at ceremony start. |
+| **API contract (ceremony/complete)** | No journey artifact in response | Journey artifact generated in background; client fetches separately via /api/ceremony/journey. |
 
 ---
 
@@ -777,21 +1011,25 @@ Initialize ceremony conversation.
 
 #### `POST /api/ceremony/complete`
 
-Mark ceremony complete and generate artifacts.
+Mark ceremony complete and finalize artifacts.
 
+<!-- UX-REFINED: Updated API contract — journey artifact fetched separately -->
 ```typescript
 // Request
 {
   conversation_id: string
-  final_recording_path: string
+  final_recording_path?: string  // Optional — may be null if text fallback used or upload failed
 }
 
 // Response
 {
   status: 'completed'
-  journey_artifact: JourneyArtifact
+  ceremony_completed_at: string
+  journey_artifact_status: 'ready' | 'generating'  // Client fetches journey separately
 }
 ```
+
+**Note:** Journey artifact is no longer returned in this response. Generation begins in background during Parts 6-7. Client fetches via `GET /api/ceremony/journey` when dashboard loads.
 
 #### `GET /api/ceremony/journey`
 
@@ -806,29 +1044,42 @@ Retrieve journey artifact for playback.
 
 #### `GET /api/ceremony/final-recording`
 
-Retrieve final recording for playback.
+Retrieve final recording/message for playback.
 
+<!-- UX-REFINED: Updated to support text fallback -->
 ```typescript
 // Response
 {
-  audioPath: string
-  transcript?: string
+  type: 'audio' | 'text'
+  audioPath?: string     // Present if type === 'audio'
+  messageText?: string   // Present if type === 'text'
+  transcript?: string    // Audio transcript (future STT integration)
   recordedAt: string
 }
 ```
 
 ### Final Recording Storage
 
-```typescript
-// Storage path pattern
-`audio/${userId}/final-recording.webm`
+<!-- UX-REFINED: Updated to reflect existing schema and text fallback -->
+Storage uses the existing `ceremony_artifacts` table (not `user_progress`).
 
-// Upload flow
+```typescript
+// Audio recording path pattern
+`ceremony-artifacts/${userId}/final-recording.webm`
+
+// Audio upload flow
 1. Client records audio via MediaRecorder API
-2. Client uploads to Supabase Storage
-3. Client sends path to ceremony/complete endpoint
-4. Server validates and links to user_progress
+2. Client uploads to Supabase Storage (ceremony-artifacts bucket)
+3. Row created in ceremony_artifacts: artifact_type='final_recording', audio_path set, content_text=''
+4. Re-recording overwrites existing artifact (upsert)
+
+// Text message flow (fallback)
+1. User types message in text input
+2. Row created in ceremony_artifacts: artifact_type='final_recording', audio_path=null, content_text set
+3. No Supabase Storage upload needed
 ```
+
+**Existing schema:** The `ceremony_artifacts` table already supports both paths via `audio_path` (nullable) and `content_text` (nullable) fields.
 
 ---
 
@@ -864,12 +1115,35 @@ Retrieve final recording for playback.
 - [x] Post-ceremony transition? **Direct to dashboard. No intermediate screen.**
 - [x] Journey artifact voice? **TTS fine for MVP since no audio capture exists yet.**
 - [x] Final recording scaffolding? **Keep current AI prompt; add "tell your future self what you've learned."**
+- [x] Return flow after interruption? **Dashboard with ceremony CTA, no acknowledgment of prior attempt. Clean slate.**
+- [x] How does post-Part 7 transition work? **5-second auto-fade to dashboard. Respects reduced motion.**
+- [x] Email follow-up cadence? **Single email at 24h only. No follow-ups.**
+- [x] Long-term dashboard evolution? **Static. No changes over time.**
+- [x] Special ceremony visual treatment? **No. Same UI as core sessions.**
+- [x] Quit check timing (intro vs mid-ceremony)? **Pre-Part 5, not at intro. Spec is correct.**
+- [x] Part 5 disposal wait behavior? **Open mic, no timeout.**
+- [x] Part 6 recording transition? **Inline within conversation, no modal or page change.**
+- [x] Text fallback for Part 6 recording? **Allowed. Stored in `content_text` field, `audio_path` null.**
+- [x] Recording upload failure? **Allow completion after 3 retries. Background retry. Don't block emotional moment.**
+- [x] What if zero captured moments? **Should be impossible. Handle gracefully with generic narrative if it occurs.**
+- [x] Mic permission lost mid-ceremony? **Seamless fallback to text mode.**
+- [x] Ceremony email race condition? **Check status at send time. Don't send if already completed.**
+- [x] Post-complete URL access? **Redirect to dashboard.**
+- [x] Ceremony header/nav? **Hidden for immersion. Exit only via browser close.**
+- [x] Post-ceremony dashboard hierarchy? **Current layout is fine. Artifacts prominent at top.**
+- [x] Dashboard replacement? **Full replacement. No archive view of old progress.**
+- [x] Accessibility approach? **Transcript sufficient for deaf/HoH. Respect reduced motion. Existing multi-signal UI for color-blind. ARIA labels documented.**
+- [x] Artifact generation timing? **Background during Parts 6-7, not after completion. Client fetches separately.**
+- [x] API contract for ceremony/complete? **Remove journey_artifact from response. Client fetches via /api/ceremony/journey.**
+- [x] Text message storage? **Use existing `content_text` field in ceremony_artifacts table.**
 
 ### Deferred to Post-MVP
 
 - [ ] **Ceremony repeatability for relapse:** Should users who relapse significantly be able to do a "renewal ceremony"? Keep one-time for now. Don't prevent future reset in data model. Revisit once relapse patterns are observed.
 - [ ] **Shareable artifacts:** Optional "I'm free" card or graduation moment for social sharing. Revisit based on user feedback (if users screenshot dashboard, that's a signal).
 - [ ] **Audio moment capture in journey artifact:** Currently TTS reads user quotes. When audio clip capture ships, journey artifact could include user's actual voice for the "production effect."
+- [ ] **Name personalization in ceremony email:** When intake form captures user names, backfill ceremony email template with name greeting.
+- [ ] **Mic permission loss handling (cross-feature):** Audit voice session system for consistent mic-permission-revoked handling across core sessions and ceremony. Surfaced during ceremony UX review but applies app-wide.
 
 ---
 
@@ -886,9 +1160,35 @@ The ceremony should reference the user's specific nicotine product. Options:
 - "cigarettes"
 - "pouches"
 - "cigars"
-- "nicotine product" (fallback)
+- "nicotine products" (fallback when product type unknown or generic)
 
-This is stored in `user_intake.products_used` and passed to ceremony prompts.
+This is stored in `user_intake.products_used` and passed to ceremony prompts. If the field is missing or contains an unrecognized value, gracefully fall back to "nicotine products" — no error state needed.
+
+### C. Existing Implementation Reference
+
+<!-- UX-REFINED: Documented existing implementations to reuse -->
+The following ceremony components already exist and should be reused/adapted for v2:
+
+| Component | Location | Reuse Notes |
+|-----------|----------|-------------|
+| Ceremony flow page | `pages/ceremony.vue` | Multi-step orchestration with recording, journey player, cheat sheet |
+| Journey player | `components/JourneyPlayer.vue` | Audio playback with word-by-word transcript sync |
+| Voice session | `components/voice/SessionView.vue` | Conversation UI with mic, transcript, text fallback |
+| Mic button | `components/voice/MicButton.vue` | Multi-signal state indicators (animation + color + label) |
+| Audio waveform | `components/voice/AudioWaveform.vue` | Recording/playback visualization |
+| Transcript display | `components/voice/WordByWordTranscript.vue` | Word-by-word highlighting |
+| Session complete card | `components/SessionCompleteCard.vue` | Completion confirmation pattern |
+| Journey playback page | `pages/journey.vue` | Standalone journey player with transcript |
+| Recording save API | `server/api/ceremony/save-final-recording.post.ts` | Upload, upsert, preview cleanup |
+| Ceremony complete API | `server/api/ceremony/complete.post.ts` | Artifact validation, status update |
+| Final recording audio API | `server/api/ceremony/final-recording/audio.get.ts` | Signed URL retrieval |
+
+**Key v1→v2 changes needed:**
+- Remove "Already quit?" toggle from ceremony intro (quit check moves to Pre-Part 5 via AI conversation)
+- Hide app header during active ceremony
+- Add text input fallback for Part 6 recording
+- Update ceremony/complete endpoint response (remove journey_artifact, add generation status)
+- Start artifact generation during Part 6-7 instead of at completion
 
 ---
 
@@ -896,5 +1196,6 @@ This is stored in `user_intake.products_used` and passed to ceremony prompts.
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2026-01-28 | Initial specification created from core-program-epic.md and core-program-spec.md |
-| 2.0 | 2026-02-07 | **Major product refinement.** (1) Removed secondary CTA from dashboard ceremony card — single primary CTA only. (2) Replaced "skip Part 5" for already-quit users with symbolic disposal ritual (Part 5A) including mental gesture when no product remains. (3) Added rationalization moment contrast to Part 5 (both paths). (4) Added final core session tease — AI narration + modified completion card for Identity Layer 3. (5) Added external motivation handling in Part 3 (gentle redirect to self). (6) Added "not ready" handling in Part 4 (pause, explore, graceful exit). (7) Added "guided but flexible" design principle for ceremony structure. (8) Defined ceremony email trigger (24h delay). (9) Updated pre-ceremony screen with product mention. (10) Updated Part 6 recording prompt. (11) Clarified Part 2 as clean summary only (personal insights in cheat sheet). (12) Added deferred decisions: ceremony repeatability, shareable artifacts, audio moment capture. (13) Expanded Key Product Decisions table with all new decisions. |
+| 1.0 | 2026-01-28 | **Initial spec for v1 implementation.** Specification created from core-program-epic.md and core-program-spec.md. |
+| 1.1 | 2026-02-07 | **Product decisions refinement (v1 iteration).** (1) Removed secondary CTA from dashboard ceremony card — single primary CTA only. (2) Replaced "skip Part 5" for already-quit users with symbolic disposal ritual (Part 5A) including mental gesture when no product remains. (3) Added rationalization moment contrast to Part 5 (both paths). (4) Added final core session tease — AI narration + modified completion card for Identity Layer 3. (5) Added external motivation handling in Part 3 (gentle redirect to self). (6) Added "not ready" handling in Part 4 (pause, explore, graceful exit). (7) Added "guided but flexible" design principle for ceremony structure. (8) Defined ceremony email trigger (24h delay). (9) Updated pre-ceremony screen with product mention. (10) Updated Part 6 recording prompt. (11) Clarified Part 2 as clean summary only (personal insights in cheat sheet). (12) Added deferred decisions: ceremony repeatability, shareable artifacts, audio moment capture. (13) Expanded Key Product Decisions table with all new decisions. |
+| 2.0 | 2026-02-08 | **v2 iteration — UX refinement pass.** New implementation cycle. Comprehensive UX audit across 12 dimensions with 42 decisions made. Key additions: (1) Ceremony personas (Early Quitter, Ritual Completer). (2) Interaction Design section — disposal wait behavior, inline recording transition, post-ceremony auto-fade, mic permission loss handling. (3) Edge Cases & Error States section — AI failure, upload failure recovery, zero moments fallback, post-disposal crash, post-complete URL redirect. (4) Accessibility section — reduced motion, ARIA labels, text-only ceremony path, color-blind considerations. (5) Part 6 text fallback — users can type instead of record. (6) Immersive mode — header hidden during ceremony. (7) Updated API contract — journey artifact fetched separately, not in /ceremony/complete response. (8) Background artifact generation during Parts 6-7. (9) Email: single nudge only, status check before send, product personalization. (10) Post-ceremony dashboard: full replacement, static, no evolution. (11) Quit check confirmed at Pre-Part 5 (not intro). (12) 15 new Key Product Decisions. (13) New FRs: FR-6 (email), FR-7 (navigation). (14) New NFR-4 (accessibility). (15) Updated NFR-2.1 (upload not required for completion). (16) Appendix C: existing implementation reference with v1→v2 change list. (17) 20+ new resolved open questions. (18) 2 new deferred items (name personalization, mic permission audit). |
