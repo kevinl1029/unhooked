@@ -354,12 +354,20 @@
         </div>
       </div>
     </div>
+
+    <!-- Exit dialog -->
+    <CeremonyExitDialog
+      :open="showExitDialog"
+      @leave="handleLeave"
+      @stay="handleStay"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 definePageMeta({
-  middleware: 'auth'
+  middleware: 'auth',
+  layout: 'ceremony'
 })
 
 interface JourneySegment {
@@ -390,6 +398,7 @@ const loadingMessage = ref('')
 const error = ref<string | null>(null)
 const isCheckingStatus = ref(true) // Track initial status check loading
 const readinessError = ref<string | null>(null) // Store readiness check errors
+const showExitDialog = ref(false)
 
 // Readiness state
 const notReadyReason = ref<string | null>(null)
@@ -424,7 +433,26 @@ const cheatSheetEntries = ref<CheatSheetEntry[]>([])
 // Check for existing journey on mount
 onMounted(async () => {
   await checkExistingProgress()
+
+  // Add Escape key listener for exit dialog
+  document.addEventListener('keydown', handleEscapeKey)
 })
+
+// Handle Escape key press
+function handleEscapeKey(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    showExitDialog.value = !showExitDialog.value
+  }
+}
+
+// Exit dialog handlers
+function handleLeave() {
+  navigateTo('/dashboard')
+}
+
+function handleStay() {
+  showExitDialog.value = false
+}
 
 // Watch recorder error
 watch(recorderError, (err: string | null) => {
@@ -711,5 +739,7 @@ onUnmounted(() => {
   if (previewAudioUrl.value) {
     URL.revokeObjectURL(previewAudioUrl.value)
   }
+  // Remove Escape key listener
+  document.removeEventListener('keydown', handleEscapeKey)
 })
 </script>
