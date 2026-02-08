@@ -240,3 +240,29 @@ Files changed:
 - The v1 wizard was deeply coupled to artifact generation timing - v2 moves all that to background during conversation
 - Ceremony page will be extended in US-011 with voice conversation and inline recording (builds on this foundation)
 ---
+## 2026-02-08 - US-011
+- Implemented ceremony page voice conversation, recording, and completion wiring
+- Complete ceremony v2 lifecycle orchestration with useCeremony() composable
+- Lazy-loaded CeremonyRecordingInline via defineAsyncComponent (only loads when Part 6 reached)
+- State-driven UI based on ceremonyPhase: pre-ceremony → conversation → recording → completing → transitioning → dashboard
+- Wired SessionView events: @recording-prompt triggers pause + recording UI, @session-complete triggers completion + retry logic
+- Implemented pause/resume with template ref to SessionView.pause()/resume() methods
+- Added completing/transitioning phases with fade-out animation (respects prefers-reduced-motion)
+- Error phase rendering with retry CTA and user-friendly error message
+- ARIA live region for screen reader announcements (ariaAnnouncement ref from useCeremony)
+- Exit dialog wired to useCeremony() handlers (Escape key toggles, Leave/Stay buttons)
+
+Files changed:
+- pages/ceremony.vue (complete refactor to v2 conversation-based ceremony)
+
+**Learnings for future iterations:**
+- Ceremony v2 philosophy: Single-page conversation flow, no multi-step wizard - state machine controls phases
+- Phase-based UI: Use v-if on ceremonyPhase with one root element per phase for clean conditionals
+- Template refs for exposed methods: `ref="sessionViewRef"` + `sessionViewRef.value?.pause()` to call child component methods
+- Lazy-loading pattern: `defineAsyncComponent(() => import('~/components/X.vue'))` for components not needed at mount
+- Event handler wrappers: Create local handlers (handleRecordingPromptEvent) that call both child methods and composable methods
+- Transition component: Use Vue's <Transition> with Tailwind classes for slide-in/out animations (check prefers-reduced-motion)
+- Fade-out timing: Use :class binding with ceremonyPhase + prefersReducedMotion check for conditional animations
+- ARIA live regions: Add empty div with aria-live="polite" bound to reactive announcement text
+- E2E test expectations: v1 ceremony tests expect wizard UI ("the final step", "loading your ceremony progress") - v2 is conversation-based
+---

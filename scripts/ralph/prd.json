@@ -222,7 +222,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "File: `pages/ceremony.vue` — builds on US-010. The page is state-driven by useCeremony().ceremonyPhase: 'pre-ceremony' shows the screen from US-010, 'conversation' shows SessionView, 'recording' shows SessionView (paused) + CeremonyRecordingInline overlay, 'completing'/'transitioning' shows fade-out, 'error' shows error message. Use template ref on SessionView to call pause()/resume(). The @session-complete event fires when [SESSION_COMPLETE] token is detected in SessionView."
     },
     {
