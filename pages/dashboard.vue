@@ -29,9 +29,9 @@
 
         <!-- Artifacts Grid -->
         <div class="grid gap-4 md:grid-cols-2">
-          <!-- Your Journey Card -->
+          <!-- Your Journey Card - Ready State -->
           <div
-            v-if="hasJourneyArtifact"
+            v-if="journeyStatus === 'ready'"
             class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
           >
             <div class="flex items-center gap-3 mb-3">
@@ -58,6 +58,50 @@
                 Play
               </span>
             </NuxtLink>
+          </div>
+
+          <!-- Your Journey Card - Skeleton (pending/generating) -->
+          <div
+            v-else-if="journeyStatus === 'pending' || journeyStatus === 'generating'"
+            class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
+          >
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center">
+                <svg class="w-5 h-5 text-brand-accent animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Your Journey</h3>
+                <p class="text-sm text-white-65">Preparing your journey...</p>
+              </div>
+            </div>
+            <div class="w-full h-10 bg-brand-glass-input rounded-pill shimmer" />
+          </div>
+
+          <!-- Your Journey Card - Failed State -->
+          <div
+            v-else-if="journeyStatus === 'failed'"
+            class="glass rounded-lg md:rounded-card p-6 shadow-card border border-brand-border"
+          >
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Your Journey</h3>
+                <p class="text-sm text-red-400">Generation failed</p>
+              </div>
+            </div>
+            <button
+              class="w-full btn-primary text-white px-4 py-2 rounded-pill font-medium"
+              @click="retryJourneyGeneration"
+              :disabled="isRetryingJourney"
+            >
+              {{ isRetryingJourney ? 'Retrying...' : 'Retry' }}
+            </button>
           </div>
 
           <!-- Your Message Card -->
@@ -393,6 +437,11 @@ interface NoMomentsData {
 const momentData = ref<MomentData | NoMomentsData | null>(null)
 const isMomentLoading = ref(false)
 
+// Journey artifact polling state
+const journeyStatus = ref<'pending' | 'generating' | 'ready' | 'failed' | null>(null)
+const journeyPollingInterval = ref<NodeJS.Timeout | null>(null)
+const isRetryingJourney = ref(false)
+
 // Fetch data on mount and whenever returning to dashboard
 onMounted(async () => {
   await Promise.all([
@@ -418,6 +467,16 @@ onMounted(async () => {
   if (isInProgress.value || isCeremonyReady.value || isPostCeremony.value) {
     await fetchMomentData()
   }
+
+  // Start polling for journey artifact if post-ceremony
+  if (isPostCeremony.value) {
+    await startJourneyPolling()
+  }
+})
+
+// Cleanup polling on unmount
+onUnmounted(() => {
+  stopJourneyPolling()
 })
 
 // Computed
@@ -498,6 +557,69 @@ const reinforcementIllusions = computed(() => [
   { key: 'focus', name: 'Focus', description: 'The illusion that nicotine enhances focus' },
   { key: 'identity', name: 'Identity', description: 'The illusion that addiction defines you' },
 ])
+
+// Journey artifact polling methods
+async function fetchJourneyStatus() {
+  try {
+    const response = await $fetch<{ journey: any; status: string }>('/api/ceremony/journey')
+    journeyStatus.value = response.status as 'pending' | 'generating' | 'ready' | 'failed'
+
+    // Stop polling when status is ready or failed
+    if (journeyStatus.value === 'ready' || journeyStatus.value === 'failed') {
+      stopJourneyPolling()
+    }
+  } catch (err: any) {
+    // If 404, journey doesn't exist yet (might be pre-generation)
+    if (err.statusCode === 404 || err.response?.status === 404) {
+      journeyStatus.value = null
+      stopJourneyPolling()
+    } else {
+      console.error('Failed to fetch journey status:', err)
+    }
+  }
+}
+
+async function startJourneyPolling() {
+  // Fetch initial status
+  await fetchJourneyStatus()
+
+  // Only start polling if status is pending or generating
+  if (journeyStatus.value === 'pending' || journeyStatus.value === 'generating') {
+    journeyPollingInterval.value = setInterval(async () => {
+      await fetchJourneyStatus()
+    }, 3000) // Poll every 3 seconds
+  }
+}
+
+function stopJourneyPolling() {
+  if (journeyPollingInterval.value) {
+    clearInterval(journeyPollingInterval.value)
+    journeyPollingInterval.value = null
+  }
+}
+
+async function retryJourneyGeneration() {
+  isRetryingJourney.value = true
+
+  try {
+    // Call POST /api/ceremony/generate-journey to restart generation
+    const response = await $fetch<{ status: string }>('/api/ceremony/generate-journey', {
+      method: 'POST',
+    })
+
+    journeyStatus.value = response.status as 'pending' | 'generating' | 'ready' | 'failed'
+
+    // Resume polling if generation started
+    if (journeyStatus.value === 'pending' || journeyStatus.value === 'generating') {
+      await startJourneyPolling()
+    }
+  } catch (err) {
+    console.error('Failed to retry journey generation:', err)
+    journeyStatus.value = 'failed'
+  } finally {
+    isRetryingJourney.value = false
+  }
+}
 
 // Methods
 function formatDate(date: Date | null): string {
