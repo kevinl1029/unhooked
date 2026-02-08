@@ -157,3 +157,34 @@ Files changed:
 - Conditional rendering for paused state: Add v-if="!isPausedByCeremony" to voice controls, :disabled="isPausedByCeremony" to input elements
 - The message watcher fires when content changes, so detecting tokens immediately as they arrive from SSE stream
 ---
+## 2026-02-08 - US-008
+- Implemented CeremonyRecordingInline component with complete recording lifecycle
+- Created 5 visual states: idle (ready to record), recording (with timer), preview (playback controls), saving (upload), saved (confirmation)
+- Added text input fallback state for users who prefer typing or have recording issues
+- Integrated MediaRecorder via existing useAudioRecorder composable
+- Implemented 5-minute auto-stop timer with elapsed time counter displayed during recording
+- Upload logic with 3-retry exponential backoff (1s, 2s, 4s delays)
+- localStorage fallback: saves blob as base64 data URL to 'unhooked:pending-ceremony-upload' key when all retries fail
+- Client-side validations: 10MB blob size check with user-friendly error message
+- Server-side validations: MIME type whitelist (audio/webm, audio/ogg), 10MB file size limit
+- Auto-switch to text input if MediaRecorder throws (e.g., device storage full)
+- Accessibility: ARIA labels for states (idle='Ready to record', recording='Recording in progress', saved='Recording saved')
+- Animations: slide-in/out with prefers-reduced-motion support
+- Emits @audio-saved(path), @text-saved(text), @error(message) for ceremony orchestration
+
+Files changed:
+- components/CeremonyRecordingInline.vue (created - 422 lines)
+- server/api/ceremony/save-final-recording.post.ts (added MIME type and file size validations)
+
+**Learnings for future iterations:**
+- Recording component pattern: Use state machine with clear visual states (idle, recording, preview, saving, saved)
+- Upload retry pattern: Exponential backoff with for-loop (1s, 2s, 4s) is simple and effective for 3 retries
+- localStorage fallback schema: Must match what US-017 expects for retry queue (userId, blobDataUrl, timestamp, retryCount)
+- MediaRecorder error handling: Watch recorderError ref and auto-switch to text input on failures (graceful degradation)
+- Client-side size validation: Check blob.size before upload to give immediate feedback (blob.size / 1024 / 1024 for MB)
+- Server-side validations: Always validate MIME type and file size server-side even if client validates
+- Blob to base64: Use FileReader with readAsDataURL() wrapped in Promise for async conversion
+- Animation accessibility: Check window.matchMedia('(prefers-reduced-motion: reduce)').matches to skip animations
+- Component lazy loading: defineAsyncComponent should be used in parent (pages/ceremony.vue) not in component itself
+- Timer cleanup: Always clear intervals and timeouts in cleanup function and onUnmounted
+---
