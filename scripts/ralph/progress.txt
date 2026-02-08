@@ -86,3 +86,24 @@ Files changed:
 - Journey artifact generation: Extracted reusable function from existing endpoint, handles status transitions (pending → generating → ready/failed)
 - Error handling for background tasks: Always log errors but don't throw - background failures shouldn't break the conversation
 ---
+## 2026-02-08 - US-005
+- Implemented background journey artifact generation
+- Refactored generate-journey.post.ts to use reusable generateJourneyArtifact() utility function
+- Updated GET /api/ceremony/journey endpoint to include generation_status in response
+- Journey endpoint now returns { journey: { ... }, status: 'pending' | 'generating' | 'ready' | 'failed' }
+- Reusable utility already existed from US-004 at server/utils/ceremony/generate-journey.ts
+- POST endpoint simplified to call the utility and return status for retry scenarios
+
+Files changed:
+- server/api/ceremony/generate-journey.post.ts (refactored to use utility)
+- server/api/ceremony/journey.get.ts (updated to include generation_status and wrap response in { journey, status } format)
+
+**Learnings for future iterations:**
+- Journey generation utility pattern: Reusable function already created in US-004 handles full lifecycle (pending → generating → ready/failed)
+- GET endpoint pattern: Updated existing journey.get.ts to include generation_status field for polling
+- Response format: Journey endpoint returns { journey: {...}, status: string } to support polling for generation progress
+- POST endpoint purpose: Now acts as a retry mechanism (callable from dashboard) rather than primary generation path
+- Fire-and-forget trigger: The /api/chat endpoint (US-004) calls generateJourneyArtifact() in background when [JOURNEY_GENERATE] token detected
+- Status transitions: pending (created) → generating (LLM working) → ready (metadata saved) or failed (error occurred)
+- TTS happens after 'ready': Audio generation per segment doesn't block 'ready' status
+---

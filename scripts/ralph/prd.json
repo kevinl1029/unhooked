@@ -92,7 +92,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Existing file: `server/api/ceremony/generate-journey.post.ts` — extract generation logic into a reusable function callable from both the endpoint (retry from dashboard) and the /api/chat trigger (background during Parts 6-7). TTS uses existing `server/utils/tts/` infrastructure. Look at the existing generate-journey implementation for the LLM call pattern and moment selection logic."
     },
     {
