@@ -16,6 +16,8 @@ interface CheckInToSend {
   check_in_type: string
   magic_link_token: string
   scheduled_for: string
+  prompt_template: string | null
+  observation_assignment: string | null
   user: {
     email: string
   }
@@ -44,7 +46,9 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
       user_id,
       check_in_type,
       magic_link_token,
-      scheduled_for
+      scheduled_for,
+      prompt_template,
+      observation_assignment
     `)
     .eq('status', 'scheduled')
     .lte('scheduled_for', windowEnd.toISOString())
@@ -132,8 +136,8 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
     from: `${FROM_NAME} <${FROM_EMAIL}>`,
     to: checkIn.user.email,
     subject,
-    html: buildEmailHtml(magicLink),
-    text: buildEmailText(magicLink),
+    html: buildEmailHtml(magicLink, checkIn.check_in_type, checkIn.observation_assignment),
+    text: buildEmailText(magicLink, checkIn.check_in_type, checkIn.observation_assignment),
   })
 
   if (error) {
@@ -145,9 +149,15 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
 
 /**
  * Build HTML email content
- * Email contains link only, no prompt content (per spec)
+ * Evidence bridge emails include observation assignment text
+ * Other check-ins use generic copy
  */
-function buildEmailHtml(magicLink: string): string {
+function buildEmailHtml(magicLink: string, checkInType: string, observationAssignment: string | null): string {
+  // Evidence bridge check-ins show the observation assignment
+  const bodyText = checkInType === 'evidence_bridge' && observationAssignment
+    ? observationAssignment
+    : 'Take a moment to reflect on how things are going.'
+
   return `
 <!DOCTYPE html>
 <html>
@@ -174,7 +184,7 @@ function buildEmailHtml(magicLink: string): string {
           <tr>
             <td align="center" style="padding-bottom: 32px;">
               <p style="color: rgba(255, 255, 255, 0.85); font-size: 16px; line-height: 1.6; margin: 0;">
-                Take a moment to reflect on how things are going.
+                ${bodyText}
               </p>
             </td>
           </tr>
@@ -204,12 +214,17 @@ function buildEmailHtml(magicLink: string): string {
 /**
  * Build plain text email content
  */
-function buildEmailText(magicLink: string): string {
+function buildEmailText(magicLink: string, checkInType: string, observationAssignment: string | null): string {
+  // Evidence bridge check-ins show the observation assignment
+  const bodyText = checkInType === 'evidence_bridge' && observationAssignment
+    ? observationAssignment
+    : 'Take a moment to reflect on how things are going.'
+
   return `UNHOOKED
 
 Your check-in is ready
 
-Take a moment to reflect on how things are going.
+${bodyText}
 
 Open Check-in: ${magicLink}
 
