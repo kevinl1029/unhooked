@@ -350,3 +350,27 @@ Files changed:
 - Grid layout: md:grid-cols-2 for artifact cards, with md:col-span-2 for cheat sheet when other artifacts missing
 - The cheat sheet route is /cheat-sheet (not /toolkit as in v1)
 ---
+## 2026-02-08 - US-015
+- Implemented post-ceremony dashboard journey loading states and polling
+- Added three conditional journey card states: ready (playable), pending/generating (skeleton with shimmer), failed (retry button)
+- Created shimmer animation in main.css for loading skeleton effect
+- Implemented 3-second polling loop with automatic stop when status changes to ready or failed
+- Added journey status tracking (journeyStatus ref) with fetchJourneyStatus(), startJourneyPolling(), stopJourneyPolling(), retryJourneyGeneration()
+- Polling starts on dashboard mount for post-ceremony users, stops on unmount (cleanup)
+- Failed state shows retry button that calls POST /api/ceremony/generate-journey to restart generation
+- Skeleton card uses glass styling with shimmer animation and "Preparing your journey..." text
+- Build passed (npm run build)
+
+Files changed:
+- pages/dashboard.vue (added journey polling logic, skeleton/failed states, retry handler)
+- assets/css/main.css (added @keyframes shimmer animation)
+
+**Learnings for future iterations:**
+- Journey status polling pattern: Fetch initial status, start setInterval only if pending/generating, stop when ready/failed
+- Cleanup pattern: Always clear intervals in onUnmounted to prevent memory leaks
+- Skeleton shimmer: Use @keyframes with background-position animation and linear-gradient for loading effect
+- Journey endpoint returns { journey: {...}, status: string } - 404 means artifact doesn't exist yet
+- Retry logic: POST to generate-journey endpoint to reset status and re-trigger generation, then resume polling
+- Conditional rendering: Use v-if on journeyStatus === 'ready' | 'pending' | 'generating' | 'failed' for state-driven UI
+- The journey card should render conditionally based on journeyStatus, not hasJourneyArtifact computed (which doesn't expose status)
+---

@@ -306,7 +306,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "File: `pages/dashboard.vue` — extends US-014's post-ceremony section. Use setInterval for polling with cleanup in onUnmounted. The skeleton card should match journey card dimensions to prevent layout shift. Poll the GET /api/ceremony/journey endpoint (created in US-005). For retry, POST to generate-journey endpoint to reset status and re-run generation."
     },
     {
