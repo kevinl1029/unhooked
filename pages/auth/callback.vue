@@ -8,8 +8,28 @@ const errorMessage = ref('')
 
 const CALLBACK_MAX_WAIT_MS = 15000
 const CALLBACK_POLL_MS = 250
+const GET_SESSION_TIMEOUT_MS = 2000
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+  }
+}
 
 function normalizeAuthError(raw: unknown): string {
   if (!raw) return ''
@@ -36,13 +56,22 @@ async function waitForSession(): Promise<boolean> {
   while (Date.now() - startTime < CALLBACK_MAX_WAIT_MS) {
     if (user.value) return true
 
-    const { data, error } = await supabase.auth.getSession()
-    if (error) {
-      console.error('[auth/callback] getSession error:', error)
-    }
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.getSession(),
+        GET_SESSION_TIMEOUT_MS,
+        'getSession'
+      )
 
-    if (data.session?.user) {
-      return true
+      if (error) {
+        console.error('[auth/callback] getSession error:', error)
+      }
+
+      if (data.session?.user) {
+        return true
+      }
+    } catch (error) {
+      console.warn('[auth/callback] getSession attempt failed:', error)
     }
 
     await sleep(CALLBACK_POLL_MS)
