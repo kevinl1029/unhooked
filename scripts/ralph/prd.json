@@ -262,7 +262,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "The existing email template and check-in flow already use prompt_template. This may require minimal or no code changes — mainly verification that the cron query includes evidence_bridge type. Check server/api/cron/check-ins.get.ts and server/utils/email/check-in-sender.ts."
     },
     {
@@ -283,7 +283,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "File: components/dashboard/ProgressCarousel.vue. Layer progress line goes in action section below illusion title, above description. Current layer is derived from layerProgress data internally (not passed separately)."
     },
     {

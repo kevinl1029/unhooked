@@ -295,3 +295,50 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Evidence bridge check-ins can be in 'scheduled' or 'sent' status when they need cancellation (user might continue before email is sent or after)
 ---
 
+## 2026-02-09 00:50 EST - US-014
+- Updated check-in email sender to include observation_assignment in emails for evidence_bridge check-ins
+- Added prompt_template and observation_assignment fields to CheckInToSend interface
+- Updated cron query to select prompt_template and observation_assignment columns
+- Modified buildEmailHtml and buildEmailText to conditionally show observation assignment text for evidence_bridge type
+- Evidence bridge check-in emails now display the observation assignment (e.g., "Notice when stress appears — does it really come from nicotine?") instead of generic "Take a moment to reflect"
+- Check-in cron query already includes all check_in_type values (no type filter), so evidence_bridge was already included
+- Evidence bridge check-in conversations already use prompt_template via existing /api/check-ins/open/:token endpoint
+- Build passes with expected OBSERVATION_TEMPLATES duplicate import warnings
+
+**Files changed:**
+- server/utils/email/check-in-sender.ts (updated interface, query, email builders)
+- scripts/ralph/prd.json (marked US-014 as passes=true)
+
+**Learnings for future iterations:**
+- Check-in email sender query needs to select any fields used in email templates (prompt_template, observation_assignment)
+- Email body content can be conditionally customized based on check_in_type
+- The cron query in check-in-sender.ts doesn't filter by type, so all check-in types are automatically included
+- The observation_assignment field is already populated by US-012's scheduleEvidenceBridgeCheckIn function
+- The prompt_template field is used by the check-in opening flow (/api/check-ins/open/:token) for AI conversation opening
+- Email personalization pattern: use check_in_type to conditionally show observation-specific vs generic copy
+---
+
+## 2026-02-09 05:45 EST - US-015
+- Added layer progress dots to ProgressCarousel component
+- Component now accepts layerProgress prop (Record<string, string[]>)
+- Displays "Session X of 3" text below illusion title for current illusion
+- Renders 3 layer progress dots (filled/empty) next to session number
+- Filled dots are 9px, empty dots are 8px for color vision support
+- Filled dots have full opacity (1), empty dots have 0.35 opacity
+- Layer progress dots wrapped with aria-label for accessibility
+- Layer progress only shown for current illusion (status === 'current')
+- Completed and locked illusions do NOT show layer progress
+
+**Files changed:**
+- components/dashboard/ProgressCarousel.vue (added layerProgress prop, computed properties, layer progress UI)
+- scripts/ralph/prd.json (marked US-015 as passes=true)
+
+**Learnings for future iterations:**
+- Layer progress UI goes in action section, between illusion title and description
+- Computed properties derived from props should guard against status checks (only show for current illusion)
+- Size differentiation (9px vs 8px) provides visual distinction for accessibility without relying solely on opacity
+- The aria-label pattern for progress indicators: "${completedCount} of ${totalCount} sessions complete"
+- Layer progress dots use fixed array ['intellectual', 'emotional', 'identity'] and check includes() for filled state
+- Gap utilities (gap-1, gap-2) provide consistent spacing for inline elements
+---
+
