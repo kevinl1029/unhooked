@@ -59,6 +59,7 @@
 import type { Message } from '~/server/utils/llm/types'
 import { ILLUSION_NAMES } from '~/server/utils/prompts'
 import { ILLUSION_KEYS, illusionNumberToKey, type IllusionKey } from '~/server/utils/llm/task-types'
+import { stripChatControlTokens } from '~/utils/chat-control-tokens'
 
 type ClientMessage = Message
 
@@ -96,7 +97,7 @@ const existingMessages = ref<ClientMessage[]>([])
 const displayMessages = computed(() => {
   return messages.value.map(msg => ({
     ...msg,
-    content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
+    content: stripChatControlTokens(msg.content)
   }))
 })
 

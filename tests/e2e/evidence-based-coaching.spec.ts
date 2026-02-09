@@ -276,8 +276,9 @@ test.describe('Evidence-Based Coaching (US-018)', () => {
       timeout: 15000,
     })
     await expect(
-      page.getByText('Notice when stress appears — does it really come from nicotine?', { exact: true })
+      page.getByText(/Notice when stress appears — does it really come from nicotine\?/)
     ).toBeVisible()
+    await expect(page.getByText(/\[OBSERVATION_ASSIGNMENT:/)).toHaveCount(0)
     await expect(page.getByRole('button', { name: /Continue to Next Session/i })).toBeVisible()
 
     await page.getByRole('button', { name: /Return to Dashboard/i }).click()

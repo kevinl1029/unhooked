@@ -19,14 +19,10 @@ import { buildBridgeContext } from '../utils/session/bridge'
 import { createSentenceDetector } from '../utils/tts/sentence-detector'
 import { createSequentialTTSProcessor } from '../utils/tts/sequential-processor'
 import { getTTSProviderFromConfig, type TTSProviderType } from '../utils/tts'
+import { extractObservationAssignment, stripChatControlTokens } from '~/utils/chat-control-tokens'
 
 export default defineEventHandler(async (event) => {
-  const stripControlTokens = (text: string) =>
-    text
-      .replace(/\[SESSION_COMPLETE\]/g, '')
-      .replace(/\[RECORDING_PROMPT\]/g, '')
-      .replace(/\[JOURNEY_GENERATE\]/g, '')
-      .trim()
+  const stripControlTokens = (text: string) => stripChatControlTokens(text)
 
   const ceremonyFallbackResponse = (rawResponse: string) => {
     const hasSessionComplete = rawResponse.includes('[SESSION_COMPLETE]')
@@ -608,13 +604,9 @@ export default defineEventHandler(async (event) => {
               const sessionComplete = finalResponse.includes('[SESSION_COMPLETE]')
 
               // Extract observation assignment if session is complete
-              let observationAssignment: string | null = null
-              if (sessionComplete) {
-                const observationMatch = finalResponse.match(/\[OBSERVATION_ASSIGNMENT:\s*([\s\S]*?)\]/)
-                if (observationMatch) {
-                  observationAssignment = observationMatch[1].trim()
-                }
-              }
+              const observationAssignment = sessionComplete
+                ? extractObservationAssignment(finalResponse)
+                : null
 
               const strippedFinalResponse = stripControlTokens(finalResponse)
               const shouldPersistAssistantMessage = strippedFinalResponse.length > 0
@@ -780,13 +772,9 @@ export default defineEventHandler(async (event) => {
       const sessionComplete = assistantContent.includes('[SESSION_COMPLETE]')
 
       // Extract observation assignment if session is complete
-      let observationAssignment: string | null = null
-      if (sessionComplete) {
-        const observationMatch = assistantContent.match(/\[OBSERVATION_ASSIGNMENT:\s*([\s\S]*?)\]/)
-        if (observationMatch) {
-          observationAssignment = observationMatch[1].trim()
-        }
-      }
+      const observationAssignment = sessionComplete
+        ? extractObservationAssignment(assistantContent)
+        : null
 
       const strippedAssistantContent = stripControlTokens(assistantContent)
       const shouldPersistAssistantMessage = strippedAssistantContent.length > 0

@@ -293,6 +293,7 @@
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
 import type { IllusionKey, IllusionLayer } from '~/server/utils/llm/task-types'
+import { stripChatControlTokens } from '~/utils/chat-control-tokens'
 
 interface Props {
   readOnly?: boolean
@@ -407,11 +408,7 @@ const displayMessages = computed(() => {
   const allMessages = messages.value
     .map(msg => ({
       ...msg,
-      content: msg.content
-        .replace('[SESSION_COMPLETE]', '')
-        .replace('[RECORDING_PROMPT]', '')
-        .replace('[JOURNEY_GENERATE]', '')
-        .trim()
+      content: stripChatControlTokens(msg.content)
     }))
     .filter(msg => !(msg.role === 'assistant' && msg.content.length === 0))
 
@@ -424,11 +421,7 @@ const displayMessages = computed(() => {
   if (showStreamingTranscript) {
     // Always use currentTranscript for the message content (full text from LLM)
     // The word-by-word component handles TTS word alignment separately via getWords
-    const displayContent = currentTranscript.value
-      .replace('[SESSION_COMPLETE]', '')
-      .replace('[RECORDING_PROMPT]', '')
-      .replace('[JOURNEY_GENERATE]', '')
-      .trim()
+    const displayContent = stripChatControlTokens(currentTranscript.value)
 
     // Check if last message is already the streaming assistant message
     const lastMsg = allMessages[allMessages.length - 1]
