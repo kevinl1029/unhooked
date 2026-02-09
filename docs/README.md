@@ -47,25 +47,20 @@ Features that have been built and are live.
 | [stripe-market-validation-spec.md](specs/stripe-market-validation-spec.md) | Stripe checkout integration for market validation |
 | [mailing-list-spec.md](specs/mailing-list-spec.md) | Email capture and mailing list via Resend |
 | [seo-strategy-spec.md](specs/seo-strategy-spec.md) | SEO and landing page optimization |
-
-### Partially Implemented / In Progress
-
-| Document | Description |
-|----------|-------------|
 | [ceremony-spec.md](specs/ceremony-spec.md) | Multi-step ceremony experience for program completion |
 | [check-in-spec.md](specs/check-in-spec.md) | Check-in system: scheduled engagement and evidence-bridge check-ins between sessions |
 | [follow-up-spec.md](specs/follow-up-spec.md) | Post-ceremony follow-up scheduling and reinforcement messaging |
 | [moment-capture-spec.md](specs/moment-capture-spec.md) | Capturing user moments/experiences for AI personalization context |
 | [personalization-engine-spec.md](specs/personalization-engine-spec.md) | Context builder that personalizes coaching based on user moments and progress |
+| [reinforcement-sessions-spec.md](specs/reinforcement-sessions-spec.md) | Post-ceremony reinforcement/boost sessions with progression |
+| [reinforcement-ui-design-spec.md](specs/reinforcement-ui-design-spec.md) | UI/UX design for reinforcement sessions carousel and components |
+| [illusion-key-migration-spec.md](specs/illusion-key-migration-spec.md) | Refactor: illusion_number to illusion_key migration |
+| [lead-funnel-session-zero-magnet-spec.md](specs/lead-funnel-session-zero-magnet-spec.md) | Session Zero lead magnet: 5-minute audio experience for lead nurture |
 
 ### Not Yet Implemented
 
 | Document | Description |
 |----------|-------------|
-| [reinforcement-sessions-spec.md](specs/reinforcement-sessions-spec.md) | Post-ceremony reinforcement/boost sessions with progression |
-| [reinforcement-ui-design-spec.md](specs/reinforcement-ui-design-spec.md) | UI/UX design for reinforcement sessions carousel and components |
-| [illusion-key-migration-spec.md](specs/illusion-key-migration-spec.md) | Refactor: illusion_number to illusion_key migration |
-| [lead-funnel-session-zero-magnet-spec.md](specs/lead-funnel-session-zero-magnet-spec.md) | Session Zero lead magnet: 5-minute audio experience for lead nurture |
 | [analytics-spec.md](specs/analytics-spec.md) | Analytics and event tracking for market validation funnel |
 
 ## Decisions

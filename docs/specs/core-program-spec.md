@@ -3,7 +3,7 @@
 **Version:** 5.0
 **Created:** 2026-01-11
 **Last Updated:** 2026-01-28
-**Status:** Baseline Implementation
+**Status:** Implemented
 **Document Type:** Feature Specification (PRD + Technical Design)
 
 > **Note:** This spec defines the core program as originally built (Phases 4A–4C). The session model has been evolved to incorporate evidence-based coaching — layer-differentiated sessions (3 per illusion), observation assignments, and evidence-loop check-ins. See [evidence-based-coaching-spec.md](evidence-based-coaching-spec.md) for that evolution (now implemented). The infrastructure defined here (layer model, progress tracking, conviction assessment, SESSION_COMPLETE flow) serves as the foundation for those changes.
