@@ -340,6 +340,21 @@ tests/
 - Use route mocking (`page.route()`) to avoid hitting real APIs
 - Test critical user flows end-to-end
 
+**E2E Authentication Pattern (API + addInitScript):**
+
+Supabase stores auth tokens in `localStorage` (`sb-<projectRef>-auth-token`). Playwright's `storageState` has a known timing race where the Supabase JS client initializes before localStorage is restored. The fix:
+
+1. `auth.setup.ts` calls `/api/test/auth` via HTTP (no UI navigation) to get a session
+2. The session is saved to `playwright/.auth/session.json`
+3. A custom fixture (`tests/e2e/fixtures.ts`) injects the token via `context.addInitScript()` before any page JS runs
+4. `storageState` cookies handle SSR auth; `addInitScript` handles client-side auth
+
+**Rules:**
+- Import `{ test, expect }` from `./fixtures`, **never** from `@playwright/test` in spec files
+- For unauthenticated tests, use both: `test.use({ storageState: { cookies: [], origins: [] }, noAuth: true })`
+- `SUPABASE_URL` must be set in `.env` or `.env.local` for E2E tests to run
+- The `/test-login` page still exists as a fallback but is not the primary auth mechanism
+
 **Running Tests Before Commits:**
 - Always run `npm run test:unit` before committing
 - Run `npm run test:e2e` for changes affecting user flows
