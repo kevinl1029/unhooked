@@ -501,6 +501,15 @@ export default defineEventHandler(async (event) => {
               // Check for session complete token
               const sessionComplete = finalResponse.includes('[SESSION_COMPLETE]')
 
+              // Extract observation assignment if session is complete
+              let observationAssignment: string | null = null
+              if (sessionComplete) {
+                const observationMatch = finalResponse.match(/\[OBSERVATION_ASSIGNMENT:\s*([\s\S]*?)\]/)
+                if (observationMatch) {
+                  observationAssignment = observationMatch[1].trim()
+                }
+              }
+
               // Save assistant message with metadata
               await supabase.from('messages').insert({
                 conversation_id: convId,
@@ -517,6 +526,7 @@ export default defineEventHandler(async (event) => {
                   .update({
                     completed_at: new Date().toISOString(),
                     session_completed: true,
+                    observation_assignment: observationAssignment,
                   })
                   .eq('id', convId)
 
@@ -612,6 +622,15 @@ export default defineEventHandler(async (event) => {
       // Check for session complete token
       const sessionComplete = assistantContent.includes('[SESSION_COMPLETE]')
 
+      // Extract observation assignment if session is complete
+      let observationAssignment: string | null = null
+      if (sessionComplete) {
+        const observationMatch = assistantContent.match(/\[OBSERVATION_ASSIGNMENT:\s*([\s\S]*?)\]/)
+        if (observationMatch) {
+          observationAssignment = observationMatch[1].trim()
+        }
+      }
+
       // Save assistant message with metadata
       await supabase.from('messages').insert({
         conversation_id: convId,
@@ -628,6 +647,7 @@ export default defineEventHandler(async (event) => {
           .update({
             completed_at: new Date().toISOString(),
             session_completed: true,
+            observation_assignment: observationAssignment,
           })
           .eq('id', convId)
 
