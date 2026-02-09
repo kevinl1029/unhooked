@@ -1,6 +1,6 @@
 # Unhooked: Check-In System Specification
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2026-01-28
 **Status:** Implemented
 **Document Type:** Feature Specification (PRD + Technical Design)
@@ -86,6 +86,7 @@ The Check-In System provides brief, daily touchpoints via email that link users 
 | Type | When | Duration | Purpose |
 |------|------|----------|---------|
 | **Post-Session** | 2 hours after core session | 1-2 min | Bridge insight to real life |
+| **Evidence Bridge** | 24 hours after L1/L2 session | 1-2 min | Prompt observation review before next layer |
 | **Morning** | 9am local | 1-2 min | Set intention, surface state |
 | **Evening** | 7pm local | 2-3 min | Reflect on day, gather evidence |
 
@@ -177,6 +178,31 @@ The Check-In System provides brief, daily touchpoints via email that link users 
 > "As you look back on today—did you feel more like someone who's trapped by nicotine, or someone who's seeing through it?"
 
 **Capture targets:** Real-world observations (gold for playback), evidence of belief shift in action, struggles and resistance points, wins and moments of clarity.
+
+---
+
+### 4. Evidence Bridge Check-In
+
+**When:** 24 hours after completing a Layer 1 (Intellectual) or Layer 2 (Emotional) session
+**Duration:** 1-2 minutes
+**Purpose:** Prompt the user to report on their observation assignment before moving to the next layer. Bridges real-world evidence into the next session.
+**Tone:** Curious, grounding, builds on their own assignment.
+
+**How it works:**
+
+At the end of L1 and L2 sessions, the AI delivers a personalized observation assignment (e.g., "Pay attention to your stress — is it the situation, or has it been a while since your last use?"). This assignment is captured via the `[OBSERVATION_ASSIGNMENT: ...]` token in the AI's response and stored on the check-in record.
+
+24 hours later, the evidence bridge check-in wraps that assignment into a prompt:
+
+> "You were going to notice [observation assignment] — what did you observe?"
+
+**Not triggered after Layer 3:** L3 (Identity Integration) is the final layer for each illusion and has no observation assignment, so no evidence bridge check-in is scheduled.
+
+**Cancellation:** If the user starts their next layer session before the 24-hour check-in fires, the pending evidence bridge check-in is cancelled with reason `user_continued_immediately`.
+
+**Capture targets:** Real-world observations, evidence of belief shift in daily life, emotional reactions to noticing the pattern.
+
+**Implementation:** `scheduleEvidenceBridgeCheckIn()` in `server/utils/scheduling/check-in-scheduler.ts`
 
 ---
 
@@ -347,14 +373,17 @@ CREATE TABLE public.check_in_schedule (
   -- Type and context
   check_in_type TEXT NOT NULL CHECK (check_in_type IN (
     'post_session',
+    'evidence_bridge',
     'morning',
     'evening'
   )),
   trigger_myth_key TEXT REFERENCES public.illusions(myth_key),
+  trigger_illusion_key TEXT,           -- Illusion key for evidence bridge check-ins
   trigger_session_id UUID REFERENCES public.conversations(id),
 
   -- Content
   prompt_template TEXT NOT NULL,
+  observation_assignment TEXT,          -- Captured from [OBSERVATION_ASSIGNMENT: ...] token
   personalization_context JSONB,
 
   -- State
@@ -624,6 +653,7 @@ See [Check-In Types](#check-in-types) section for full prompt templates organize
 | Morning | "Good morning — quick check-in" |
 | Evening | "Day's winding down — how did it go?" |
 | Post-Session | "Quick thought from earlier..." |
+| Evidence Bridge | "What did you notice?" |
 | Default | "Checking in with you" |
 
 ---
@@ -633,3 +663,4 @@ See [Check-In Types](#check-in-types) section for full prompt templates organize
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-01-28 | Initial specification created from core-program-epic.md and core-program-spec.md |
+| 1.1 | 2026-02-09 | Added evidence bridge check-in type (24-hour timing, observation assignments, cancellation behavior) per evidence-based-coaching-spec integration |

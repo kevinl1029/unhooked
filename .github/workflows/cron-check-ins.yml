@@ -14,9 +14,10 @@ on:
 jobs:
   trigger-check-ins:
     runs-on: ubuntu-latest
-    # Only run on staging branch for now (skip on main/production)
-    # Remove this condition when ready to enable for production
-    if: github.ref == 'refs/heads/staging' || github.event_name == 'workflow_dispatch'
+    # Schedule events always run on default branch (main). The target environment
+    # is controlled by CRON_TARGET_URL secret, not the branch. Update that secret
+    # when ready to switch from staging to production.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Trigger check-in processing
         run: |

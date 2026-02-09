@@ -1,6 +1,6 @@
 # Conversation Architecture Guide
 
-**Last Updated:** 2026-01-30
+**Last Updated:** 2026-02-09
 
 How LLM prompts, system instructions, and conversations are structured in Unhooked.
 
@@ -55,13 +55,16 @@ The system prompt is composed by layering sections together in `server/utils/pro
 │     (server/utils/prompts/illusions/            │
 │      illusion-{1-5}-*.ts)                       │
 ├─────────────────────────────────────────────────┤
-│  5. Bridge Context (Layer 2+)                   │  ← Acknowledgment of prior session
+│  5. Layer Instructions (if layer specified)     │  ← L1/L2/L3 coaching approach + observation
+│     (server/utils/prompts/layer-instructions.ts)│
+├─────────────────────────────────────────────────┤
+│  6. Bridge Context (Layer 2+)                   │  ← Acknowledgment of prior session
 │     (server/utils/personalization/              │
 │      cross-layer-context.ts)                    │
 ├─────────────────────────────────────────────────┤
-│  6. Abandoned Session Context (if applicable)   │  ← Prior moments from incomplete session
+│  7. Abandoned Session Context (if applicable)   │  ← Prior moments from incomplete session
 ├─────────────────────────────────────────────────┤
-│  7. Opening Message Instruction (new sessions)  │  ← Scripted opening for first message
+│  8. Opening Message Instruction (new sessions)  │  ← Scripted opening for first message
 │     (ILLUSION_OPENING_MESSAGES in index.ts)     │
 └─────────────────────────────────────────────────┘
                       +
@@ -72,6 +75,28 @@ The system prompt is composed by layering sections together in `server/utils/pro
 ```
 
 The final payload sent to the LLM is: `[system message, ...conversation history, latest user message]`.
+
+### Layer Instructions (Step 5)
+
+When the session specifies an `illusionLayer`, layer-specific coaching instructions are injected **after** the illusion prompt and **before** the bridge context. This is handled by `getLayerInstructions()` in `server/utils/prompts/index.ts`.
+
+Each illusion is explored across three progressive layers:
+
+| Layer | Name | Focus | Observation Assignment |
+|-------|------|-------|----------------------|
+| L1 | Intellectual Discovery | Socratic questioning, analytical insight | Yes — analytical observation template |
+| L2 | Emotional Processing | Feelings, emotional space, validation | Yes — feeling-focused observation template |
+| L3 | Identity Integration | Values, personal history, "who am I becoming" | No — final layer for this illusion |
+
+**Layer 1 (Intellectual):** Socratic, CBT-informed, evidence-based. Ends with an observation assignment (e.g., "Pay attention to your stress — is it the situation, or has it been a while since your last use?"). Outputs `[OBSERVATION_ASSIGNMENT: personalized version]` after `[SESSION_COMPLETE]`.
+
+**Layer 2 (Emotional):** Opens with an evidence bridge ("What have you been noticing?"). Holds space for emotional processing of the intellectual insight. Ends with a feeling-focused observation assignment. Also outputs `[OBSERVATION_ASSIGNMENT: ...]`.
+
+**Layer 3 (Identity):** Opens with evidence + feelings bridge. Connects the illusion to personal history and values. No observation assignment — instead marks illusion completion and previews the next illusion (or ceremony if final).
+
+**Template placeholders replaced at assembly time:**
+- `{observationTemplate}` → Replaced with the illusion-specific observation template for L1/L2 (from each illusion's `OBSERVATION_TEMPLATES` export)
+- `{nextIllusionPreview}` → Replaced with the next illusion name or ceremony tease for L3
 
 ---
 
