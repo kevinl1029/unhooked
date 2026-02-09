@@ -368,6 +368,43 @@ async function handleSend(message: string) {
   }
 }
 
+function getExpectedLayerFromError(err: any): IllusionLayer | null {
+  const expectedLayer = err?.data?.expectedLayer as IllusionLayer | undefined
+  if (expectedLayer && ['intellectual', 'emotional', 'identity'].includes(expectedLayer)) {
+    return expectedLayer
+  }
+
+  const message = String(err?.data?.message || err?.message || '')
+  const match = message.match(/Expected '([^']+)'/)
+  const parsed = match?.[1] as IllusionLayer | undefined
+  if (parsed && ['intellectual', 'emotional', 'identity'].includes(parsed)) {
+    return parsed
+  }
+
+  return null
+}
+
+async function completeSessionWithRecovery(targetConversationId: string) {
+  const attemptComplete = async (layer: IllusionLayer) => {
+    return completeSession(targetConversationId, illusionKey.value, layer)
+  }
+
+  try {
+    return await attemptComplete(illusionLayer.value)
+  } catch (err: any) {
+    const status = err?.statusCode || err?.status
+    const message = String(err?.data?.message || err?.message || '')
+    const isLayerMismatch = status === 409 || /layer mismatch/i.test(message)
+    if (!isLayerMismatch) throw err
+
+    await fetchProgress()
+    const recoveredLayer = getExpectedLayerFromError(err) || currentLayer.value
+    illusionLayer.value = recoveredLayer
+
+    return await attemptComplete(recoveredLayer)
+  }
+}
+
 async function handleSessionComplete() {
   if (!conversationId.value) return
 
@@ -378,7 +415,7 @@ async function handleSessionComplete() {
       illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
     }
 
-    const result = await completeSession(conversationId.value, illusionKey.value, illusionLayer.value)
+    const result = await completeSessionWithRecovery(conversationId.value)
 
     // Configure SessionCompleteCard based on layer completion response
     if (result.isIllusionComplete === false) {
@@ -386,6 +423,7 @@ async function handleSessionComplete() {
       sessionCompleteSubtext.value = result.observationAssignment
         || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
       showContinueToNextLayer.value = true
+      nextIllusion.value = result.nextIllusion ?? null
     } else {
       // L3 completion
       if (result.isComplete) {
@@ -398,9 +436,9 @@ async function handleSessionComplete() {
         sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
       }
       showContinueToNextLayer.value = false
+      nextIllusion.value = null
     }
 
-    nextIllusion.value = result.nextIllusion ?? null
     sessionComplete.value = true
     await fetchProgress()
   } catch (err) {
@@ -419,7 +457,7 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
       }
 
       // Complete the session with layer tracking
-      const result = await completeSession(existingConversationId.value, illusionKey.value, illusionLayer.value)
+      const result = await completeSessionWithRecovery(existingConversationId.value)
 
       // Configure SessionCompleteCard based on layer completion response
       if (result.isIllusionComplete === false) {
@@ -427,6 +465,7 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
         sessionCompleteSubtext.value = result.observationAssignment
           || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
         showContinueToNextLayer.value = true
+        nextIllusion.value = result.nextIllusion ?? null
       } else {
         // L3 completion
         if (result.isComplete) {
@@ -439,9 +478,8 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
           sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
         }
         showContinueToNextLayer.value = false
+        nextIllusion.value = null
       }
-
-      nextIllusion.value = result.nextIllusion ?? null
     } catch (err) {
       console.error('Error fetching conversation layer:', err)
     }

@@ -139,7 +139,11 @@ export default defineEventHandler(async (event) => {
     if (illusionLayer !== currentLayer) {
       throw createError({
         statusCode: 409,
-        message: `Layer mismatch. Expected '${currentLayer}' but received '${illusionLayer}'.`
+        message: `Layer mismatch. Expected '${currentLayer}' but received '${illusionLayer}'.`,
+        data: {
+          expectedLayer: currentLayer,
+          receivedLayer: illusionLayer,
+        },
       })
     }
 
