@@ -2,7 +2,7 @@
 
 **Created:** 2026-02-08
 **Status:** Draft
-**Version:** 1.2
+**Version:** 1.3
 **Document Type:** Feature Specification (PRD)
 
 ---
@@ -319,7 +319,7 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 - **REQ-5:** All Layer 2 and Layer 3 sessions open by asking the user about their observations, regardless of whether evidence was submitted via check-in. The AI adapts gracefully to whatever the user shares (or doesn't share).
 - **REQ-6:** Check-ins scheduled between layers are specific to the observation assignment from the prior session. The check-in prompt directly references the assignment text.
 - **REQ-7:** Check-in responses (user observations) are stored and surfaced to the next session's prompt context via the personalization engine / context builder.
-- **REQ-8:** The system prompt assembly becomes layer-aware: each layer receives layer-appropriate instructions for tone, flow, and coaching approach (analytical for L1, emotional holding for L2, identity integration for L3).
+- **REQ-8:** The system prompt assembly becomes layer-aware: each layer receives a **generic layer instruction block** for tone, flow, and coaching approach (analytical for L1, emotional holding for L2, identity integration for L3). There are 3 layer instruction blocks total — one per layer — applied identically across all 5 illusions. The full illusion prompt is always injected; the layer instruction adds a methodological lens. Per-illusion layer adjustments are deferred to a future iteration based on manual testing.
 - **REQ-9:** User progress tracks layer completion within each illusion. The ProgressCarousel's action section displays "Session X of 3" with 3 inline dots (filled/empty) for the current illusion in a compact, smaller font. Layer names are not shown to the user.
 - **REQ-10:** Spacing between layers is recommended via the session-complete screen messaging ("Your next session will be ready tomorrow") but not enforced. Users can start the next layer immediately via the "Continue" CTA.
 - **REQ-11:** The observation assignment text is captured and stored when the AI generates it, so it can be referenced in subsequent check-ins and session openings.
@@ -470,6 +470,7 @@ The following questions were open in v1.0 and have been resolved:
 | **Layer transition messaging** | Both conversational and UI. AI marks completion at end of Layer 3; session-complete screen confirms it. | Existing pattern in core-program-spec. Conversational marking feels natural; UI confirmation provides clarity. See REQ-18. |
 | **Cross-illusion evidence** | Evidence stays scoped to its illusion. No explicit cross-routing. | Keeps each illusion's journey self-contained. Cross-references happen naturally via personalization engine's broader context. See REQ-17. |
 | **Observation storage model** | Assignment text stored as field on `check_in_schedule`. Observation responses captured as `real_world_observation` moments via existing pipeline. | Assignment text needs to be referenced by check-in emails and context builder — co-locating with the check-in record is the simplest path. Observation responses fit naturally into the existing moment detection pipeline. See REQ-37, REQ-38. |
+| **Layer instruction granularity** | **Generic per layer** — 3 layer instruction blocks (one for L1, one for L2, one for L3), applied identically across all 5 illusions. Not per-illusion-per-layer. | Simplicity for v1. The illusion prompt already provides per-illusion content; the layer instruction adds a tonal/methodological lens on top. Per-illusion layer adjustments may be introduced in a future iteration based on manual testing findings. See REQ-8. |
 
 ### Open Questions
 
@@ -478,6 +479,10 @@ No open questions remain. All questions have been resolved through UX refinement
 ---
 
 ## Changelog
+
+### v1.3 — Layer Instruction Granularity Decision (2026-02-08)
+
+- **Layer instruction granularity resolved:** Generic per layer (3 blocks), not per-illusion-per-layer (15 blocks). The full illusion prompt is always injected; the layer instruction adds a tonal/methodological lens. Per-illusion adjustments deferred to a future iteration based on manual testing. Added to Resolved Questions table and clarified REQ-8.
 
 ### v1.2 — Requirements Refinement (2026-02-08)
 
