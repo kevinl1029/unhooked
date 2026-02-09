@@ -247,7 +247,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/chat.post.ts — after creating a new conversation. Cancel query: update check_in_schedule where user_id, trigger_illusion_key, check_in_type='evidence_bridge', status IN ('scheduled', 'sent'). Only cancel for core sessions, not reinforcement."
     },
     {

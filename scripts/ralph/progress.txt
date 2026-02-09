@@ -272,3 +272,26 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Check-in scheduling happens AFTER progress update but BEFORE API response (async, non-blocking)
 ---
 
+## 2026-02-09 00:45 EST - US-013
+- Implemented evidence bridge check-in cancellation when user starts next layer session
+- Cancellation logic runs after creating a new core session conversation
+- Updates check_in_schedule to set status='cancelled' and cancellation_reason='user_continued_immediately'
+- Only cancels for core sessions with conversationIllusionKey (not reinforcement sessions)
+- Cancellation query filters by user_id, trigger_illusion_key, check_in_type='evidence_bridge', and status IN ('scheduled', 'sent')
+- Non-blocking fire-and-forget pattern using .then()/.catch() with error logging
+- All 359 unit tests pass
+- Build passes with no TypeScript errors
+
+**Files changed:**
+- server/api/chat.post.ts (added evidence bridge check-in cancellation after new conversation creation)
+- scripts/ralph/prd.json (marked US-013 as passes=true)
+
+**Learnings for future iterations:**
+- New conversation creation happens in the "Get or create conversation" section of chat.post.ts (line ~288)
+- Cancellation should be placed immediately after convId assignment to ensure it runs for new sessions
+- The conversationIllusionKey is already computed earlier and represents the illusion for core sessions
+- Reinforcement sessions are filtered out by checking sessionType === 'core' condition
+- Fire-and-forget pattern for non-critical background operations: use .then()/catch() on promise without await
+- Evidence bridge check-ins can be in 'scheduled' or 'sent' status when they need cancellation (user might continue before email is sent or after)
+---
+
