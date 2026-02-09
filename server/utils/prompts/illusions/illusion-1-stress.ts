@@ -31,3 +31,8 @@ Help them see that nicotine creates a constant low-level anxiety (withdrawal), a
 **Completion Signal:**
 When they can clearly articulate: "I see that nicotine creates the stress it appears to relieve" and they seem genuinely convinced (not just agreeing to please you), the session is complete.
 `
+
+export const OBSERVATION_TEMPLATES: Record<string, string> = {
+  intellectual: 'Between now and next time, pay attention to your stress. When you feel stressed, notice: is it the situation, or has it been a while since your last use?',
+  emotional: 'Notice what you feel next time the stress-nicotine connection shows up — not just what you think about it, but what you actually feel in your body.',
+}

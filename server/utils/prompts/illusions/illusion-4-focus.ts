@@ -32,3 +32,8 @@ Help them see that nicotine withdrawal includes difficulty concentrating, restle
 **Completion Signal:**
 When they can clearly articulate: "I see that nicotine creates the focus problems it appears to solve, and that I'd focus better without it" and they seem ready to trust their natural focus, the session is complete.
 `
+
+export const OBSERVATION_TEMPLATES: Record<string, string> = {
+  intellectual: 'Track your focus across a day — where are the dips? Do they line up with when you last used, or with something else entirely?',
+  emotional: 'Notice how it feels when your focus dips — is it frustration, restlessness, or just habit pulling you toward nicotine?',
+}

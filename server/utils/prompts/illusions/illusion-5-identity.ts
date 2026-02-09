@@ -40,3 +40,8 @@ When completing the identity layer (the third and final layer of this illusion),
 - Don't over-explain or make it feel like homework
 - This should feel like a natural transition, not an announcement
 `
+
+export const OBSERVATION_TEMPLATES: Record<string, string> = {
+  intellectual: 'Notice when the label "addict" or "addicted" shows up in your thinking. When it does, ask yourself: who put that label there? Did you choose it, or was it given to you?',
+  emotional: 'Notice how it feels to question that label — relief? Fear? Both? Pay attention to what comes up without trying to resolve it.',
+}

@@ -32,3 +32,8 @@ Help them distinguish between genuine pleasure (eating when hungry, resting when
 **Completion Signal:**
 When they can clearly articulate: "I see that what I thought was pleasure is actually just relief from withdrawal, and that's not the same thing" and they no longer romanticize nicotine, the session is complete.
 `
+
+export const OBSERVATION_TEMPLATES: Record<string, string> = {
+  intellectual: 'Next time you use, pay attention to the actual physical sensation — not the anticipation, but the moment itself. What do you actually feel?',
+  emotional: 'Notice the difference between wanting it and enjoying it. When the urge comes, pay attention to what you feel before, during, and after.',
+}

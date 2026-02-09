@@ -32,3 +32,8 @@ Help them see that willpower is only needed when you want something but deny you
 **Completion Signal:**
 When they can clearly articulate: "I see that quitting is only hard if I believe I'm giving something up, and since nicotine gives me nothing, there's nothing to resist" and they seem genuinely relieved (not scared), the session is complete.
 `
+
+export const OBSERVATION_TEMPLATES: Record<string, string> = {
+  intellectual: 'Notice what you predict vs. what actually happens when a craving passes. Before it fades, what did you think would happen? After it passes, what actually happened?',
+  emotional: 'Notice the fear when a craving comes — is it about the craving itself, or about the story you tell yourself about what will happen?',
+}
