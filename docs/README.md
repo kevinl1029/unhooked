@@ -35,6 +35,7 @@ Technical specifications combining product requirements with implementation desi
 | [core-program-spec.md](specs/core-program-spec.md) | Core coaching program: sessions, check-ins, ceremonies, and AI interactions |
 | [authentication-spec.md](specs/authentication-spec.md) | User authentication with Supabase (magic link) |
 | [chat-infrastructure-spec.md](specs/chat-infrastructure-spec.md) | Real-time AI chat infrastructure |
+| [chat-resilience-retry-failover-spec.md](specs/chat-resilience-retry-failover-spec.md) | Chat reliability policy: transient retries, failover, and actionable recovery UX |
 | [voice-interface-spec.md](specs/voice-interface-spec.md) | Voice-based coaching interface |
 | [analytics-spec.md](specs/analytics-spec.md) | Analytics and event tracking implementation |
 | [mailing-list-spec.md](specs/mailing-list-spec.md) | Email capture and mailing list functionality |
