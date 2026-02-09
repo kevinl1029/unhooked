@@ -22,7 +22,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": "Run npm run db:types after migration to regenerate TypeScript types. See REQ-50 for migration logic details. Reference existing migration patterns in supabase/migrations/."
     },
     {

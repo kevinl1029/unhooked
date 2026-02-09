@@ -1,16 +1,27 @@
-## Codebase Patterns
-- Migration pattern: Use `ADD COLUMN IF NOT EXISTS` for safe migrations that can run multiple times
-- CHECK constraints: Use DO block to add constraints conditionally (prevents errors on re-run)
-- Type patterns: Database types follow Row/Insert/Update structure with nullable fields having `| null` in Row and `?: type | null` in Insert/Update
-- Build command `npm run build` serves as typecheck for Nuxt projects (no dedicated typecheck script)
-- Layer system: The app has 3 layers per illusion (intellectual, emotional, identity), stored as illusion_layer in conversations table
-- Identity Layer 3 is the final session before ceremony: illusion='identity' (illusion #5) AND illusionLayer='identity' (layer 3)
-- The complete-session endpoint controls program_status transitions: in_progress → ceremony_ready → completed
-- Token detection pattern: Watch messages array with deep:true, check last message content.includes('[TOKEN]'), emit event on detection
-- Prompt builder pattern: Export function that accepts context object and returns string prompt
-- Session page uses VoiceSessionView component (auto-imported from components/voice/SessionView.vue)
-- Conversations API endpoint returns full conversation data including illusion_layer field
-
 # Ralph Progress Log
-Started: 2026-02-08
+Started: Sun Feb  8 23:27:05 EST 2026
+---
+
+## 2026-02-08 23:30 EST - US-001
+- Created database migration file: supabase/migrations/20260209_evidence_based_coaching.sql
+- Added layer_progress JSONB column to user_progress (default '{}')
+- Added observation_assignment TEXT column to conversations
+- Added observation_assignment and cancellation_reason TEXT columns to check_in_schedule
+- Updated check_in_type constraint to include 'evidence_bridge'
+- Updated status constraint to include 'cancelled'
+- Implemented REQ-50 migration logic:
+  - Existing completed illusions get all 3 layers marked complete
+  - In-progress illusions with completed core sessions get 'intellectual' layer marked
+  - Guard prevents overwriting existing layer_progress data
+
+**Files changed:**
+- supabase/migrations/20260209_evidence_based_coaching.sql (new)
+- scripts/ralph/prd.json (marked US-001 as passes=true)
+
+**Learnings for future iterations:**
+- Migration pattern: Use IF NOT EXISTS for columns, DROP CONSTRAINT IF EXISTS for constraint updates
+- REQ-50 migration logic uses LATERAL joins to map illusion numbers to keys via illusions table
+- Guard clause pattern: NOT EXISTS with JSONB ? operator prevents overwriting existing data
+- COALESCE pattern: COALESCE(layer_progress, '{}'::jsonb) handles both NULL and missing column cases
+- All schema changes should follow the ceremony_v2 migration pattern (comments, IF NOT EXISTS, constraint naming)
 ---
