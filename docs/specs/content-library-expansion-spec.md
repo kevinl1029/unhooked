@@ -1,7 +1,8 @@
 # Content Library Expansion Spec
 
 **Created:** 2026-02-08
-**Status:** Draft
+**Status:** Implemented
+**Version:** 1.0
 **Document Type:** Content Specification
 
 ---
@@ -674,9 +675,20 @@ This spec is considered implemented when all of the following are true:
 
 ## Relationship to Evidence-Based Coaching Spec
 
-This content expansion and the [evidence-based-coaching-spec.md](evidence-based-coaching-spec.md) (Draft) are co-dependencies:
+This content expansion and the [evidence-based-coaching-spec.md](evidence-based-coaching-spec.md) are co-dependencies:
 
 - **This spec** owns the therapeutic content — prompt text, per-illusion coaching material, multi-technique integration (CBT, MI, Neuroscience alongside Allen Carr). It will be updated to include layer-differentiated content (analytical tone for L1, emotional holding for L2, identity-forward for L3) once the structural architecture is defined.
 - **The evidence-based-coaching spec** owns the structural and architectural changes — the 3-layer session model, evidence loop, observation assignments, check-in evolution, and layer-aware prompt assembly.
 
 The expanded content from this spec feeds directly into the evidence-based-coaching architecture — Layer 1 draws from CBT/neuroscience analytical angles, Layer 2 from MI/emotional techniques, Layer 3 from identity material. The content also works independently within the current single-session structure, delivering immediate value (more coaching angles, less repetition, more personalization) ahead of the structural evolution.
+
+---
+
+## Changelog
+
+### v1.0 — Initial Implementation (2026-02-09)
+
+- All in-scope content implemented: expanded base system prompt and all 5 illusion prompts with CBT, neuroscience, and MI content alongside existing Allen Carr foundation.
+- Prompt contract invariants preserved.
+- Test updates completed.
+- Status moved from Draft to Implemented.

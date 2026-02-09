@@ -1,8 +1,8 @@
 # Evidence-Based Coaching Spec
 
 **Created:** 2026-02-08
-**Status:** Ready for Development
-**Version:** 1.6
+**Status:** Implemented
+**Version:** 1.7
 **Document Type:** Feature Specification (PRD)
 
 ---
@@ -183,7 +183,7 @@ The existing dashboard uses a `ProgressCarousel` component: a single glass card 
 - All 5 illusions always visible
 
 **New behavior — action section for current illusion:**
-- When the current illusion is focused, the action section adds a layer progress line: "Session X of 3" text followed by 3 inline dots (● filled / ○ empty) — all on one line, in a smaller font size (e.g., `text-sm text-white-65`).
+- When the current illusion is focused, the action section adds a layer progress line: "X of 3 sessions complete" text followed by 3 inline dots — all on one line, in a smaller font size (e.g., `text-sm text-white-65`). Dots have three visual states: **filled** (completed), **orange ring outline** (current/up next), and **dim** (future). This eliminates ambiguity between "how many done" and "which one is next."
 - This keeps vertical space minimal so reinforcement/moment cards remain above the fold.
 - Layer names (Intellectual, Emotional, Identity) are never shown to the user.
 
@@ -202,7 +202,7 @@ The existing dashboard uses a `ProgressCarousel` component: a single glass card 
 │  ──────────────────────────────────────────────────────────  │
 │                                                              │
 │           Continue: The Pleasure Illusion                     │
-│           Session 1 of 3  ○ ○ ○                              │
+│           0 of 3 sessions complete  ◎ ○ ○                    │
 │                                                              │
 │    Discover why the "pleasure" is just an illusion            │
 │    masking withdrawal.                                       │
@@ -216,14 +216,14 @@ Legend:
 (·) = Current circle (orange border, pulsing dot)
 🔒  = Locked circle (muted bg, lock icon)
 ●/○ = Carousel navigation dots (filled = focused)
-● ○ = Layer progress dots (filled = completed layer)
+● ◎ ○ = Layer progress dots (● filled = completed, ◎ ring = current, ○ dim = future)
 ```
 
 **Action section after completing Layer 1:**
 
 ```
 │           Continue: The Pleasure Illusion                     │
-│           Session 2 of 3  ● ○ ○                              │
+│           1 of 3 sessions complete  ● ◎ ○                    │
 │                                                              │
 │    Discover why the "pleasure" is just an illusion            │
 │    masking withdrawal.                                       │
@@ -235,7 +235,7 @@ Legend:
 
 <!-- UX-REFINED: Added accessibility notes for progress indicators -->
 
-**Accessibility:** The layer progress dots must include an `aria-label` describing the state (e.g., "1 of 3 sessions complete"). Filled vs. empty dots must be distinguishable by more than color alone — use opacity difference (filled at full opacity, empty at 0.35) and consider a subtle size or border treatment for color vision deficiency support.
+**Accessibility:** The layer progress dots must include an `aria-label` describing the state (e.g., "1 of 3 sessions complete"). Dots use three visual states — filled white (completed, full opacity), orange ring outline (current/up next, full opacity), and dim white (future, 0.25 opacity) — ensuring they are distinguishable by more than color alone for color vision deficiency support.
 
 #### Session Conversation — Layer-Differentiated
 
@@ -324,7 +324,7 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 - **REQ-6:** Check-ins scheduled between layers are specific to the observation assignment from the prior session. The check-in prompt directly references the assignment text.
 - **REQ-7:** Check-in responses (user observations) are stored and surfaced to the next session's prompt context via the personalization engine / context builder.
 - **REQ-8:** The system prompt assembly becomes layer-aware: each layer receives a **generic layer instruction block** for tone, flow, and coaching approach (analytical for L1, emotional holding for L2, identity integration for L3). There are 3 layer instruction blocks total — one per layer — applied identically across all 5 illusions. The full illusion prompt is always injected; the layer instruction adds a methodological lens. Per-illusion layer adjustments are deferred to a future iteration based on manual testing.
-- **REQ-9:** User progress tracks layer completion within each illusion. The ProgressCarousel's action section displays "Session X of 3" with 3 inline dots (filled/empty) for the current illusion in a compact, smaller font. Layer names are not shown to the user.
+- **REQ-9:** User progress tracks layer completion within each illusion. The ProgressCarousel's action section displays "X of 3 sessions complete" with 3 inline dots (three-state: filled/ring/dim) for the current illusion in a compact, smaller font. Layer names are not shown to the user.
 - **REQ-10:** Spacing between layers is recommended via the session-complete screen messaging ("Your next session will be ready tomorrow") but not enforced. Users can start the next layer immediately via the "Continue" CTA.
 - **REQ-11:** The observation assignment text is captured and stored when the AI generates it, so it can be referenced in subsequent check-ins and session openings.
 - **REQ-12:** Conviction assessment (`llm.session.assess`) runs after each layer session completion, tracking conviction per illusion per layer.
@@ -359,7 +359,7 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 #### Layer Progress & State (State Management)
 
 - **REQ-29:** Layer state is **fully derived from `layer_progress`**: `not_started` (layer not in `layers_completed` and no active conversation), `in_progress` (active conversation exists for this layer), `completed` (layer value present in `layers_completed` array). The current layer is **computed** as the next incomplete layer in the ordered list `['intellectual', 'emotional', 'identity']` — no stored `current_layer` column. This computation is only performed for non-completed illusions (illusions already in `illusions_completed` are never queried for current layer). Internal layer names (`'intellectual'`, `'emotional'`, `'identity'`) match the existing `layers_completed` values. The frontend maps these to "Session 1/2/3 of 3" for display.
-- **REQ-30:** Abandoned layer sessions appear **identically to not-yet-started sessions** on the dashboard. The CTA remains "Continue" with the same "Session X of 3" display. When tapped, a new conversation starts (clean restart) with abandoned session moments injected — the user doesn't see a difference. No "Resume" indicator.
+- **REQ-30:** Abandoned layer sessions appear **identically to not-yet-started sessions** on the dashboard. The CTA remains "Continue" with the same "X of 3 sessions complete" display. When tapped, a new conversation starts (clean restart) with abandoned session moments injected — the user doesn't see a difference. No "Resume" indicator.
 - **REQ-31:** Conviction scores are **point-in-time, immutable snapshots**. Each layer's conviction score is recorded at session completion and never updated retroactively. The system can read the trajectory across layers (e.g., L1: 5, L2: 7, L3: 9) to assess deepening conviction.
 
 #### Illusion Transitions (Functional)
@@ -424,7 +424,7 @@ The following analytics events are defined for future implementation. They are r
 
 ### Accessibility Notes
 
-- **Progress indicator (3 dots):** Must include `aria-label` describing the progress state (e.g., "2 of 3 sessions complete"). Filled vs. empty dots must be distinguishable by more than color alone — use opacity difference and consider subtle size or border treatment for color vision deficiency support.
+- **Progress indicator (3 dots):** Must include `aria-label` describing the progress state (e.g., "2 of 3 sessions complete"). Dots use three visual states — filled white (completed), orange ring outline (current/up next), dim white (future) — ensuring distinguishability beyond color alone for color vision deficiency support.
 - **Session-complete screen:** The integrated observation text must be readable by screen readers as part of the normal document flow (no decorative/hidden elements). CTAs must have sufficient touch target size (minimum 44x44px per WCAG).
 - **Dashboard illusion cards:** Locked illusion cards should convey their locked state to screen readers (e.g., `aria-disabled="true"` with descriptive label: "The Pleasure Illusion — locked").
 
@@ -477,7 +477,7 @@ The evidence-based coaching feature evolves 5 existing system layers. No new ser
 │  components/                                                    │
 │   ├─ SessionCompleteCard.vue  ──→  Shows observation as subtext │
 │   │   (L1/L2: observation + 2 CTAs, L3: settling + 1 CTA)      │
-│   └─ ProgressCarousel.vue     ──→  Shows "Session X of 3" dots │
+│   └─ ProgressCarousel.vue     ──→  Shows "X of 3 complete" dots │
 │                                                                 │
 │  composables/useProgress.ts   ──→  Exposes currentLayer,        │
 │                                    layerSessionNumber computed  │
@@ -1486,20 +1486,19 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 
 #### Story 5.2: Add Layer Progress Dots to ProgressCarousel
 
-**Description:** As a developer, I want the ProgressCarousel to show "Session X of 3" with layer progress dots for the current illusion, so that users understand their progress within an illusion.
+**Description:** As a developer, I want the ProgressCarousel to show "X of 3 sessions complete" with three-state layer progress dots for the current illusion, so that users understand their progress within an illusion.
 
 **Acceptance Criteria:**
-1. Given the current illusion is focused and 0 layers are completed, when the action section renders, then it shows "Session 1 of 3 ○ ○ ○"
-2. Given the current illusion is focused and 1 layer is completed, when the action section renders, then it shows "Session 2 of 3 ● ○ ○"
-3. Given the layer progress dots, when inspected, then filled dots have full opacity and empty dots have 0.35 opacity
+1. Given the current illusion is focused and 0 layers are completed, when the action section renders, then it shows "0 of 3 sessions complete ◎ ○ ○" (ring on first, dim on rest)
+2. Given the current illusion is focused and 1 layer is completed, when the action section renders, then it shows "1 of 3 sessions complete ● ◎ ○" (filled, ring, dim)
+3. Given the layer progress dots, when inspected, then completed dots are solid white at full opacity, the current dot has an orange ring outline at full opacity, and future dots are white at 0.25 opacity
 4. Given the layer progress dots, when inspected by screen reader, then `aria-label` reads "1 of 3 sessions complete" (or equivalent)
 5. Given a completed or locked illusion is focused, when the action section renders, then no layer progress dots are shown
 
 **Technical Notes:**
 - File: `components/dashboard/ProgressCarousel.vue`
 - Add `layerProgress` prop (current layer is derived from `layerProgress` data, not passed separately)
-- Add computed `completedLayerCount` and `layerSessionNumber`
-- Dots: filled = completed layer, empty = not yet. Subtle size difference (9px filled, 8px empty) for color vision support (REQ accessibility)
+- `getSessionDotStyles()` method returns three-state styles: completed (solid white 8px), current (transparent bg + 2.5px orange ring 9px), future (white 8px at 0.25 opacity)
 
 **Dependencies:** Story 5.1 (useProgress exposes layer data), dashboard page passes props
 **Test Requirements:** Unit test for dot rendering with 0, 1, 2, 3 completed layers
@@ -1577,7 +1576,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 
 **Acceptance Criteria:**
 1. Given a user with 2 completed illusions under the old model, when they open the dashboard after migration, then those illusions show as fully completed with all 3 layer dots filled
-2. Given a user mid-program with 1 completed session on their current illusion, when they open the dashboard, then the current illusion shows "Session 2 of 3 ● ○ ○"
+2. Given a user mid-program with 1 completed session on their current illusion, when they open the dashboard, then the current illusion shows "1 of 3 sessions complete ● ◎ ○"
 3. Given a new user who starts after migration, when they begin the program, then they get the full 3-layer experience from the start
 
 **Dependencies:** Story 1.1 (migration)
@@ -1687,7 +1686,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 5. Verify "Continue to Next Session" CTA is visible
 6. Verify "Return to Dashboard" CTA is visible
 7. Click "Return to Dashboard"
-8. Verify dashboard shows "Session 2 of 3 ● ○ ○"
+8. Verify dashboard shows "1 of 3 sessions complete ● ◎ ○"
 
 #### Flow 2: Continue Immediately to Layer 2
 **Setup:** Mock user completing Layer 1
@@ -1715,8 +1714,8 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 1. Navigate to dashboard
 2. Verify stress_relief shows as completed (checkmark)
 3. Navigate carousel to pleasure illusion
-4. Verify action section shows "Session 2 of 3 ● ○ ○"
-5. Verify layer dots have correct opacity (filled=1, empty=0.35)
+4. Verify action section shows "1 of 3 sessions complete ● ◎ ○"
+5. Verify layer dots have correct three-state styling (completed=solid white opacity 1, current=orange ring opacity 1, future=white opacity 0.25)
 
 #### Flow 5: Stale Client Recovery (REQ-46)
 **Setup:** Mock user with `layer_progress: {"stress_relief": ["intellectual"]}` (derived current layer = `'emotional'`), but client sends `illusionLayer: 'intellectual'`
@@ -1835,6 +1834,12 @@ No open questions remain. All questions have been resolved through UX refinement
 
 ## Changelog
 
+### v1.7 — Layer Progress Dots UX Refinement (2026-02-09)
+
+- **Three-state session dots:** Changed layer progress dots from two-state (filled/empty) to three-state: filled white (completed), orange ring outline (current/up next), dim white (future). Eliminates ambiguity where users could confuse "sessions completed" with "current session number."
+- **Completion-framed text:** Changed "Session X of 3" to "X of 3 sessions complete." The dots and text now tell the same unambiguous story — both communicate completion count, while the ring dot and "Continue" CTA indicate what's next.
+- **Updated:** REQ-9, REQ-30, wireframes, accessibility notes, Story 5.2 acceptance criteria, and E2E test flows to reflect the new design.
+
 ### v1.6 — Readiness Review (2026-02-08)
 
 <!-- READINESS-REVIEWED: Full traceability audit across UX→Requirements→Stories→Acceptance Criteria -->
@@ -1913,7 +1918,7 @@ Added based on structured UX audit across 12 dimensions:
 
 - **Personas:** Added 3 personas (Analytical Skeptic, Emotional Processor, Eager Sprinter) to surface how different user types experience the 3-layer model
 - **Per-illusion journey summary:** Added table showing observation themes and identity shift for all 5 illusions (coaching methodology details remain in coaching framework guide)
-- **Dashboard UI:** Layer progress (Session X of 3 + inline dots) added to the ProgressCarousel's action section for the current illusion. Wireframe built on the existing carousel component (circles, focus/scale, arrow navigation). Compact layout preserves vertical space for moment cards above the fold.
+- **Dashboard UI:** Layer progress (X of 3 sessions complete + three-state inline dots) added to the ProgressCarousel's action section for the current illusion. Wireframe built on the existing carousel component (circles, focus/scale, arrow navigation). Compact layout preserves vertical space for moment cards above the fold.
 - **Session-complete screens:** Observation assignment integrated into existing `SessionCompleteCard` component's `subtext` prop as a flowing paragraph. Wireframes match actual component structure (checkmark icon, heading, subtext, side-by-side CTAs). "Continue to Next Session" starts next layer immediately.
 - **Check-in timing:** Specified ~24 hours after session; cancelled if user starts next layer first
 - **Observation assignments:** Decided on hybrid generation model (template + AI personalization with fallback)

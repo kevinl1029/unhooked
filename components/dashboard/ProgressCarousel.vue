@@ -134,17 +134,13 @@
 
           <!-- Layer progress line -->
           <div class="flex items-center justify-center gap-2 mb-2">
-            <p class="text-sm text-white-65">Session {{ currentLayerSessionNumber }} of 3</p>
-            <div class="flex items-center gap-1" :aria-label="`${currentLayersCompleted.length} of 3 sessions complete`">
+            <p class="text-sm text-white-65">{{ currentLayersCompleted.length }} of 3 sessions complete</p>
+            <div class="flex items-center gap-1.5" :aria-label="`${currentLayersCompleted.length} of 3 sessions complete`">
               <div
                 v-for="(layer, index) in ['intellectual', 'emotional', 'identity']"
                 :key="layer"
-                class="rounded-full bg-white transition-all duration-200"
-                :style="{
-                  width: currentLayersCompleted.includes(layer) ? '9px' : '8px',
-                  height: currentLayersCompleted.includes(layer) ? '9px' : '8px',
-                  opacity: currentLayersCompleted.includes(layer) ? 1 : 0.35
-                }"
+                class="rounded-full transition-all duration-200"
+                :style="getSessionDotStyles(layer, index)"
               />
             </div>
           </div>
@@ -284,9 +280,18 @@ const currentLayersCompleted = computed<string[]>(() => {
   return props.layerProgress[focusedIllusion.value.key] || []
 })
 
-const currentLayerSessionNumber = computed<number>(() => {
-  return currentLayersCompleted.value.length + 1
-})
+function getSessionDotStyles(layer: string, index: number): Record<string, string | number> {
+  const isCompleted = currentLayersCompleted.value.includes(layer)
+  const isCurrent = index === currentLayersCompleted.value.length
+
+  if (isCompleted) {
+    return { background: 'white', width: '8px', height: '8px', opacity: 1 }
+  } else if (isCurrent) {
+    return { background: 'transparent', border: '2.5px solid #fc4a1a', width: '9px', height: '9px', opacity: 1 }
+  } else {
+    return { background: 'white', width: '8px', height: '8px', opacity: 0.25 }
+  }
+}
 
 // Methods
 function isFocused(index: number): boolean {
