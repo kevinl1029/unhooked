@@ -177,7 +177,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "File: pages/session/[illusion].vue. Also update components/voice/SessionView.vue (VoiceSessionView) and composables/useVoiceSession.ts to thread illusionLayer through. The session page already has illusionLayer tracking from ceremony spec (US-013) — extend it to use progress-derived layer instead of conversation-fetched layer."
     },
     {

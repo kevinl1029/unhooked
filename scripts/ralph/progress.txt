@@ -174,3 +174,27 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - L3 completion is the only point where illusion is marked complete and next illusion is unlocked
 - The conviction assessment layer tracking was already implemented in session-complete.ts handler
 ---
+## 2026-02-09 00:20 EST - US-009
+- Evolved session page to derive current layer from progress data on mount
+- Session page fetches progress using fetchProgress() and sets illusionLayer from currentLayer computed property
+- illusionLayer is passed to VoiceSessionView component as a prop
+- VoiceSessionView accepts illusionLayer prop and passes it to useVoiceChat composable
+- useVoiceChat accepts illusionLayer in options and passes it to all chat API calls (streaming and non-streaming, opening messages and user messages)
+- Text-based chat mode in session page also passes illusionLayer in API request bodies
+- All 3 files threaded through: pages/session/[illusion].vue → components/voice/SessionView.vue → composables/useVoiceChat.ts
+- Build passes with no TypeScript errors
+
+**Files changed:**
+- pages/session/[illusion].vue (imports currentLayer, fetches progress on mount, passes illusionLayer to VoiceSessionView and text mode API calls)
+- components/voice/SessionView.vue (accepts illusionLayer prop, passes to useVoiceChat)
+- composables/useVoiceChat.ts (accepts illusionLayer in options, passes to all chat API requests)
+- scripts/ralph/prd.json (marked US-009 as passes=true)
+
+**Learnings for future iterations:**
+- Layer derivation happens in useProgress composable via currentLayer computed property
+- Session page fetches progress on mount BEFORE initializing any UI mode (voice/text/transcript)
+- illusionLayer defaults to 'intellectual' throughout the stack (SessionView props, useVoiceChat options)
+- The chat API already accepted illusionLayer parameter from US-007/US-008 work — this story just wires up the client side
+- useVoiceChat threads illusionLayer through to both streaming (streamTTS=true) and non-streaming modes
+- Text-based chat mode requires manual illusionLayer insertion in fetch() call bodies (not handled by composable)
+---
