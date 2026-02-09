@@ -1,10 +1,55 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { scheduleCheckIns } from '~/server/utils/scheduling/check-in-scheduler'
-import { ILLUSION_KEYS, illusionKeyToNumber, type IllusionKey } from '~/server/utils/llm/task-types'
+import { ILLUSION_KEYS, illusionKeyToNumber, type IllusionKey, type IllusionLayer } from '~/server/utils/llm/task-types'
+import {
+  OBSERVATION_TEMPLATES as STRESS_TEMPLATES
+} from '~/server/utils/prompts/illusions/illusion-1-stress'
+import {
+  OBSERVATION_TEMPLATES as PLEASURE_TEMPLATES
+} from '~/server/utils/prompts/illusions/illusion-2-pleasure'
+import {
+  OBSERVATION_TEMPLATES as WILLPOWER_TEMPLATES
+} from '~/server/utils/prompts/illusions/illusion-3-willpower'
+import {
+  OBSERVATION_TEMPLATES as FOCUS_TEMPLATES
+} from '~/server/utils/prompts/illusions/illusion-4-focus'
+import {
+  OBSERVATION_TEMPLATES as IDENTITY_TEMPLATES
+} from '~/server/utils/prompts/illusions/illusion-5-identity'
 
 interface CompleteSessionBody {
   conversationId: string
   illusionKey?: string
+  illusionLayer?: IllusionLayer
+}
+
+const OBSERVATION_TEMPLATES_MAP: Record<IllusionKey, Record<string, string>> = {
+  stress_relief: STRESS_TEMPLATES,
+  pleasure: PLEASURE_TEMPLATES,
+  willpower: WILLPOWER_TEMPLATES,
+  focus: FOCUS_TEMPLATES,
+  identity: IDENTITY_TEMPLATES,
+}
+
+const LAYER_ORDER: IllusionLayer[] = ['intellectual', 'emotional', 'identity']
+
+/**
+ * Derives the current (next incomplete) layer from layer_progress for a given illusion
+ */
+function deriveCurrentLayer(layerProgress: Record<string, IllusionLayer[]> | null, illusionKey: IllusionKey): IllusionLayer {
+  if (!layerProgress) return 'intellectual'
+
+  const completedLayers = layerProgress[illusionKey] || []
+
+  // Find first incomplete layer in order
+  for (const layer of LAYER_ORDER) {
+    if (!completedLayers.includes(layer)) {
+      return layer
+    }
+  }
+
+  // If all layers complete, return identity (shouldn't happen in practice)
+  return 'identity'
 }
 
 export default defineEventHandler(async (event) => {
@@ -17,7 +62,7 @@ export default defineEventHandler(async (event) => {
   if (Object.prototype.hasOwnProperty.call(body, 'illusionNumber')) {
     throw createError({ statusCode: 400, message: 'illusionNumber is no longer supported. Send illusionKey instead.' })
   }
-  const { illusionKey } = body
+  const { illusionKey, illusionLayer } = body
 
   // Validate required fields
   if (!body.conversationId) {
@@ -25,6 +70,9 @@ export default defineEventHandler(async (event) => {
   }
   if (illusionKey && !ILLUSION_KEYS.includes(illusionKey as IllusionKey)) {
     throw createError({ statusCode: 400, message: 'Invalid illusionKey' })
+  }
+  if (illusionLayer && !LAYER_ORDER.includes(illusionLayer)) {
+    throw createError({ statusCode: 400, message: 'Invalid illusionLayer' })
   }
 
   const effectiveIllusionKey = (illusionKey || null) as IllusionKey | null
@@ -39,10 +87,10 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // Get conversation to check illusion_layer
+  // Get conversation to check illusion_layer and observation_assignment
   const { data: conversation, error: conversationFetchError } = await supabase
     .from('conversations')
-    .select('illusion_layer')
+    .select('illusion_layer, observation_assignment')
     .eq('id', body.conversationId)
     .eq('user_id', user.sub)
     .single()
@@ -51,7 +99,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Conversation not found' })
   }
 
-  const illusionLayer = conversation?.illusion_layer
+  const conversationLayer = conversation?.illusion_layer
 
   // Mark conversation as completed
   const { error: convError } = await supabase
@@ -78,6 +126,155 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: fetchError.message })
   }
 
+  // ========================================
+  // LAYER PROGRESSION LOGIC (Evidence-Based Coaching)
+  // ========================================
+
+  // If illusionLayer is provided, handle layer-based progression
+  if (illusionLayer) {
+    const layerProgress = currentProgress.layer_progress || {}
+    const currentLayer = deriveCurrentLayer(layerProgress, effectiveIllusionKey)
+
+    // Validate that the provided layer matches the expected current layer
+    if (illusionLayer !== currentLayer) {
+      throw createError({
+        statusCode: 409,
+        message: `Layer mismatch. Expected '${currentLayer}' but received '${illusionLayer}'.`
+      })
+    }
+
+    // Update layer_progress by adding the completed layer
+    const completedLayers = layerProgress[effectiveIllusionKey] || []
+    const updatedCompletedLayers = Array.from(new Set([...completedLayers, illusionLayer]))
+    const updatedLayerProgress = {
+      ...layerProgress,
+      [effectiveIllusionKey]: updatedCompletedLayers
+    }
+
+    // Determine if this is L3 (illusion complete) or L1/L2 (layer complete, more to go)
+    const isLayer3 = illusionLayer === 'identity'
+
+    if (isLayer3) {
+      // L3: Mark illusion complete, move to next illusion
+      const illusionsCompleted = currentProgress.illusions_completed || []
+      const updatedIllusionsCompleted = Array.from(new Set([...illusionsCompleted, effectiveIllusionNumber]))
+
+      const illusionOrder = currentProgress.illusion_order || [1, 2, 3, 4, 5]
+      const nextIllusion = illusionOrder.find(m => !updatedIllusionsCompleted.includes(m)) || null
+      const isComplete = updatedIllusionsCompleted.length >= 5
+
+      // Check if this is Identity L3 (final session before ceremony)
+      const isIdentityLayer3 = effectiveIllusionKey === 'identity'
+
+      // Determine program status
+      let programStatus: string
+      if (isComplete && isIdentityLayer3) {
+        programStatus = 'ceremony_ready'
+      } else if (isComplete) {
+        programStatus = 'completed'
+      } else {
+        programStatus = 'in_progress'
+      }
+
+      const updateData: any = {
+        layer_progress: updatedLayerProgress,
+        current_illusion: nextIllusion || currentProgress.current_illusion,
+        illusions_completed: updatedIllusionsCompleted,
+        program_status: programStatus,
+        completed_at: isComplete ? new Date().toISOString() : null,
+        last_session_at: new Date().toISOString(),
+        total_sessions: (currentProgress.total_sessions || 0) + 1,
+        updated_at: new Date().toISOString()
+      }
+
+      if (isIdentityLayer3) {
+        updateData.ceremony_ready_at = new Date().toISOString()
+      }
+
+      const { data: updatedProgress, error: updateError } = await supabase
+        .from('user_progress')
+        .update(updateData)
+        .eq('user_id', user.sub)
+        .select()
+        .single()
+
+      if (updateError) {
+        throw createError({ statusCode: 500, message: updateError.message })
+      }
+
+      // Schedule post-session check-in (if not complete)
+      if (!isComplete) {
+        const timezone = currentProgress.timezone || 'America/New_York'
+
+        scheduleCheckIns({
+          userId: user.sub,
+          timezone,
+          trigger: 'session_complete',
+          sessionId: body.conversationId,
+          illusionKey: effectiveIllusionKey,
+          sessionEndTime: new Date(),
+          supabase,
+        }).then((scheduled) => {
+          if (scheduled.length > 0) {
+            console.log(`[complete-session] Scheduled ${scheduled.length} check-in(s) for user ${user.sub}`)
+          }
+        }).catch((err) => {
+          console.error('[complete-session] Failed to schedule check-ins:', err)
+        })
+      }
+
+      // L3 response
+      return {
+        progress: updatedProgress,
+        layerCompleted: 'identity',
+        nextLayer: null,
+        isIllusionComplete: true,
+        observationAssignment: null,
+        nextIllusion,
+        isComplete
+      }
+    } else {
+      // L1 or L2: Update layer progress but DON'T mark illusion complete
+      const nextLayer = LAYER_ORDER[LAYER_ORDER.indexOf(illusionLayer) + 1] || null
+
+      // Get observation assignment (AI-personalized or fallback template)
+      const observationAssignment = conversation.observation_assignment
+        || OBSERVATION_TEMPLATES_MAP[effectiveIllusionKey]?.[illusionLayer]
+        || null
+
+      const updateData: any = {
+        layer_progress: updatedLayerProgress,
+        last_session_at: new Date().toISOString(),
+        total_sessions: (currentProgress.total_sessions || 0) + 1,
+        updated_at: new Date().toISOString()
+      }
+
+      const { data: updatedProgress, error: updateError } = await supabase
+        .from('user_progress')
+        .update(updateData)
+        .eq('user_id', user.sub)
+        .select()
+        .single()
+
+      if (updateError) {
+        throw createError({ statusCode: 500, message: updateError.message })
+      }
+
+      // L1/L2 response
+      return {
+        progress: updatedProgress,
+        layerCompleted: illusionLayer,
+        nextLayer,
+        isIllusionComplete: false,
+        observationAssignment
+      }
+    }
+  }
+
+  // ========================================
+  // LEGACY LOGIC (No illusionLayer provided)
+  // ========================================
+
   // Add resolved illusion number to illusions_completed (deduplicated)
   const illusionsCompleted = currentProgress.illusions_completed || []
   const updatedIllusionsCompleted = Array.from(new Set([...illusionsCompleted, effectiveIllusionNumber]))
@@ -90,7 +287,7 @@ export default defineEventHandler(async (event) => {
   const isComplete = updatedIllusionsCompleted.length >= 5
 
   // Check if this is Identity Layer 3 (final session before ceremony)
-  const isIdentityLayer3 = effectiveIllusionKey === 'identity' && illusionLayer === 'identity'
+  const isIdentityLayer3 = effectiveIllusionKey === 'identity' && conversationLayer === 'identity'
 
   // Determine program status
   let programStatus: string
