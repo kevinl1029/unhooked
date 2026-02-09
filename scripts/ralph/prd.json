@@ -88,7 +88,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/prompts/index.ts. Add illusionLayer to BuildSystemPromptOptions. Import layer instructions and observation templates. Insert after illusion prompt per REQ-36. The {nextIllusionPreview} in L3 is replaced based on illusion order position."
     },
     {

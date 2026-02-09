@@ -72,3 +72,33 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Templates serve dual purpose: AI personalization reference AND fallback text if personalization fails
 - The Record<string, string> type ensures type safety when looking up templates by layer name
 ---
+## 2026-02-09 04:55 EST - US-004
+- Evolved buildSystemPrompt to accept illusionLayer parameter and inject layer-specific instructions
+- Added illusionLayer?: 'intellectual' | 'emotional' | 'identity' to BuildSystemPromptOptions interface
+- Imported all layer instructions (LAYER_1, LAYER_2, LAYER_3) from layer-instructions.ts
+- Imported observation templates from all 5 illusion files with explicit aliases (STRESS_TEMPLATES, PLEASURE_TEMPLATES, etc.)
+- Created OBSERVATION_TEMPLATES_MAP to map illusionKey → templates
+- Implemented getLayerInstructions() helper function:
+  - Selects correct layer instructions based on layer parameter
+  - Replaces {observationTemplate} placeholder for L1/L2 with illusion-specific template
+  - Replaces {nextIllusionPreview} placeholder for L3 with appropriate tease text
+- Implemented getNextIllusionPreview() helper:
+  - Uses illusionKeyToNumber() and illusionNumberToKey() to determine next illusion
+  - Returns ceremony tease for final illusion (identity L3)
+  - Returns next illusion preview for all other L3 completions
+- Layer instructions injected after illusion prompt, before bridge context (correct prompt assembly order maintained)
+- Backwards compatible: when illusionLayer is omitted, no layer instructions injected
+
+**Files changed:**
+- server/utils/prompts/index.ts
+- scripts/ralph/prd.json (marked US-004 as passes=true)
+
+**Learnings for future iterations:**
+- buildSystemPrompt uses optional parameters for backwards compatibility — existing callers without illusionLayer continue to work
+- Observation templates imported with explicit aliases (STRESS_TEMPLATES, PLEASURE_TEMPLATES) to avoid Nuxt auto-import conflicts
+- The OBSERVATION_TEMPLATES_MAP pattern centralizes template lookup by illusionKey
+- Helper functions (getLayerInstructions, getNextIllusionPreview) keep buildSystemPrompt clean and testable
+- Illusion order logic reuses existing utilities (illusionKeyToNumber, illusionNumberToKey) from task-types.ts
+- L3 ceremony tease matches existing ceremony spec copy: "All five illusions dismantled. Your final ceremony is ready when you are."
+- Build warnings about duplicated OBSERVATION_TEMPLATES imports are expected and harmless (noted in US-003)
+---
