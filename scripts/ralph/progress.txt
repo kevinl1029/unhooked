@@ -384,3 +384,24 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Evidence bridge responses reporting observations (e.g., "I noticed...", "I observed...") are now correctly classified
 ---
 
+## 2026-02-09 06:15 EST - US-018 (INCOMPLETE)
+- Created E2E test file tests/e2e/evidence-based-coaching.spec.ts with 5 test scenarios
+- Tests cover L1/L2/L3 completion flows, dashboard layer progress display, and 409 error handling
+- Test implementation encountered issues:
+  - "Send message" button disabled in session tests (chat API mocking needs adjustment)
+  - Dashboard "Session X of 3" text not found (mock setup needs layer_progress integration)
+  - 409 test returning 404 (route mock not being hit)
+- Tests require additional debugging and mock refinement to pass
+
+**Files changed:**
+- tests/e2e/evidence-based-coaching.spec.ts (created, but tests failing)
+- scripts/ralph/prd.json (US-018 remains passes=false)
+
+**Learnings for future iterations:**
+- E2E tests for session progression require careful mock setup of chat API, progress API, and user status API
+- Text mode sessions need mockChatAPI to provide responses that enable the Send button
+- Dashboard tests need mockProgressWithLayers helper to include layer_progress data
+- The 409 error flow requires direct API testing rather than page interaction testing
+- Test failures suggest the mocks don't fully replicate the real API behavior for layer-aware sessions
+---
+
