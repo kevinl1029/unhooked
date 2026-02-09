@@ -2,7 +2,7 @@
 
 **Created:** 2026-02-08
 **Status:** Draft
-**Version:** 1.1
+**Version:** 1.2
 **Document Type:** Feature Specification (PRD)
 
 ---
@@ -158,7 +158,9 @@ The Stress Relief scenario above is the canonical UX example — each illusion f
 | **Focus** | Track your focus across a day — where are the dips? Do they line up with usage timing? | Notice how it feels when your focus dips — is it frustration, restlessness, or habit? | "I focused fine before nicotine. My brain works without it" |
 | **Identity** | Notice when the label 'addict' shows up in your thinking — who put it there? | Notice how it feels to question that label — relief? Fear? Both? | "I was tricked, not broken. That's not who I am" |
 
-**Note:** These are observation *themes*, not exact copy. The AI generates personalized assignments using a hybrid model (see REQ-14). The themes ensure each illusion's observations target the right experiential domain.
+<!-- REQ-REFINED: Clarified that identity shift statements are user-generated examples, not scripted AI lines -->
+
+**Note:** These are observation *themes*, not exact copy. The AI generates personalized assignments using a hybrid model (see REQ-14). The themes ensure each illusion's observations target the right experiential domain. The Layer 3 identity shift column shows *representative examples* of what a user's own articulation might sound like after successful identity integration — these are not scripted lines the AI delivers. The AI's role is to hold space for the user to arrive at their own version of this shift.
 
 ### UX Overview
 
@@ -336,6 +338,84 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 - **REQ-21:** Mid-session exit follows the **existing pattern**: clean restart with abandoned session context injection. The conversation does not resume, but captured moments from the abandoned session are available to the AI. No confirmation dialog on exit.
 - **REQ-22:** The AI adapts to low-engagement users (brief responses, rushing through sessions) through its coaching approach — **no system-level minimum exchange threshold**. Conviction scores will naturally reflect shallow engagement.
 
+<!-- REQ-REFINED: Added requirements REQ-23 through REQ-40 based on requirements refinement audit -->
+
+#### Observation Assignment Delivery (Functional)
+
+- **REQ-23:** The observation assignment is delivered via **prompt instruction**. The layer-aware system prompt instructs the AI to include the observation assignment in its final conversational message before `SESSION_COMPLETE`. The template text is injected into the prompt as a reference. The AI personalizes it naturally in conversation. The session-complete screen shows the AI's personalized version as subtext.
+- **REQ-24:** Observation assignment templates are **full, conversational fallback text** — complete sentences ready to display on the session-complete screen as-is. Templates are stored in the **illusion prompt files** (`server/utils/prompts/illusions/`), co-located with existing illusion-specific content. There are 10 templates total (5 illusions × 2 layers with assignments; Layer 3 has none).
+- **REQ-25:** The canonical observation assignment record is the **template text**, stored on `check_in_schedule.observation_assignment` when the check-in is scheduled. The session-complete screen displays the AI's personalized version (from the conversation). The check-in email uses the template-based stored record. Slight wording differences between the two are acceptable — both reference the same assignment.
+
+#### Check-In Scheduling & Cancellation (Functional)
+
+- **REQ-26:** Check-ins are **scheduled normally** on session completion (Layers 1 & 2). If the user taps "Continue to Next Session," the pending check-in is marked `status='cancelled'` with a cancellation reason (e.g., `'user_continued_immediately'`). The cancelled record is preserved for audit trail.
+- **REQ-27:** Once a check-in is cancelled (user continued to next layer), it is **not re-scheduled** — even if the user subsequently abandons the next layer session. The observation assignment was already shown on the session-complete screen, and the next session's AI opening will ask about observations regardless.
+- **REQ-28:** Evidence bridge check-ins use **~24-hour timing** (overriding the check-in spec's 2-hour default for post-session check-ins). This gives the user a full day to gather real-world observations. Existing check-ins already scheduled under the old timing are not migrated — the new timing applies to layer-session check-ins going forward.
+
+#### Layer Progress & State (State Management)
+
+- **REQ-29:** Layer state is **computed, not stored explicitly**: `not_started` (layer not in `layers_completed` and no active conversation), `in_progress` (active conversation exists for this layer), `completed` (layer value present in `layers_completed` array). A `current_layer` field is added to the illusion progress object, using internal layer names (`'intellectual'`, `'emotional'`, `'identity'`) matching the existing `layers_completed` values. The frontend maps these to "Session 1/2/3 of 3" for display.
+- **REQ-30:** Abandoned layer sessions appear **identically to not-yet-started sessions** on the dashboard. The CTA remains "Continue" with the same "Session X of 3" display. When tapped, a new conversation starts (clean restart) with abandoned session moments injected — the user doesn't see a difference. No "Resume" indicator.
+- **REQ-31:** Conviction scores are **point-in-time, immutable snapshots**. Each layer's conviction score is recorded at session completion and never updated retroactively. The system can read the trajectory across layers (e.g., L1: 5, L2: 7, L3: 9) to assess deepening conviction.
+
+#### Illusion Transitions (Functional)
+
+- **REQ-32:** After Layer 3 completion, the next illusion **auto-unlocks** when the user returns to the dashboard. The ProgressCarousel shows the new illusion as current with "Session 1 of 3." No transition screen or unlock delay. Matches existing core-program-spec behavior.
+- **REQ-33:** The AI's Layer 3 closing includes a **brief, natural preview** of the next illusion: e.g., "Next time, we'll explore something different — the idea that nicotine gives you pleasure." For the final illusion (Identity), the preview is replaced by the ceremony tease per [ceremony-spec.md](ceremony-spec.md).
+- **REQ-34:** The "Revisit" badge on completed illusions triggers the **existing reinforcement session** flow (a single conversation, not the 3-layer sequence). The 3-layer sequence is a one-time program path. Forward-only per REQ-15.
+
+#### Spacing & CTAs (Functional)
+
+- **REQ-35:** Both CTAs on the Layer 1 & 2 session-complete screen ("Return to Dashboard" and "Continue to Next Session") are **always fully visible**. The spacing recommendation is conveyed through copy only ("Your next session will be ready tomorrow"). The "Continue" CTA is not visually de-emphasized or dimmed. Non-judgmental, clean UI.
+
+#### Prompt Assembly (Integration)
+
+- **REQ-36:** Layer-specific instructions are injected in the prompt assembly order **after the illusion prompt and before bridge context**: base → personalization → illusion prompt → **layer instructions** → bridge context → abandoned session context. Layer instructions refine the illusion prompt's approach (analytical for L1, emotional holding for L2, identity-forward for L3).
+
+#### Data Storage (Data)
+
+- **REQ-37:** The observation assignment text is stored as a new `observation_assignment` text field on the existing `check_in_schedule` table. This field is populated when the check-in is scheduled after session completion. The check-in email builder and context builder read it directly.
+- **REQ-38:** Check-in observation responses are captured as **moments with type `'real_world_observation'`** via the existing moment detection pipeline. No new schema needed — the context builder already surfaces moments by type.
+- **REQ-39:** The progress API response nests layer data **within existing illusion progress objects**: each object gains `current_layer` (string) alongside the existing `layers_completed` (array) and `status` fields. No new top-level API fields.
+
+#### Business Rules (Logic)
+
+- **REQ-40:** Low conviction after Layer 3 is defined as a score **≤ 5 out of 10**. Scores at or below this threshold are flagged internally for analytics and future reinforcement targeting. The flag is not user-visible and does not gate progression (per REQ-16).
+
+<!-- REQ-REFINED: Added error handling, edge cases, observability, and migration requirements -->
+
+#### Error Handling & Recovery
+
+- **REQ-41:** If the LLM call fails on the final session message (the one expected to contain the observation assignment and `SESSION_COMPLETE`), standard **retry logic** applies (per core-program-spec). The session is NOT marked complete if retries are exhausted — the user can retry by sending another message or exit and restart later. The observation assignment is delivered on the next successful completion.
+- **REQ-42:** If the observation assignment text is missing or null on the session-complete screen (template lookup failure, storage error), the screen falls back to the **generic settling message**: "Great work. Take a moment to let this settle. Your next session will be ready tomorrow." Same as Layer 3's screen. The next session's AI opening still asks about observations.
+- **REQ-43:** If the conviction assessment LLM call fails after `SESSION_COMPLETE`, the error is **logged for monitoring**. The session completion and progress update are not affected (conviction tracks but does not gate). The missing score appears as null in analytics.
+- **REQ-44:** Check-in email delivery failures (Resend down, cron failure) are handled by **retry on the next cron cycle**. The check-in stays in `'scheduled'` status until sent or expired. After 48 hours with no successful send, the check-in expires.
+- **REQ-45:** Expired magic links on evidence bridge check-in emails redirect to the **dashboard**. If the check-in is still pending (not yet expired at the check-in level), the dashboard interstitial modal shows the check-in prompt. If also expired, the user lands on the dashboard normally.
+
+#### Edge Cases & Concurrency
+
+- **REQ-46:** Multi-tab/multi-device: session start requests are **validated server-side** against the user's actual layer state. If a stale client requests a layer that's already completed, the server returns the correct next layer and the client refreshes state. No duplicate sessions are possible.
+- **REQ-47:** `SESSION_COMPLETE` is the **atomic trigger** for progress updates. The token is processed server-side in the streaming response handler. If the client disconnects after server-side processing, progress is saved. If before, the session is incomplete and restarts on return. No stuck states.
+- **REQ-48:** Long gaps between layers (weeks or more) are handled **gracefully through existing context mechanisms**. No system-level "stale session" threshold. The context builder provides prior layer conviction scores, captured moments, and check-in responses. The AI's opening question ("What have you been noticing?") naturally adapts to the user's response regardless of time elapsed.
+
+#### Observability & Analytics (Deferred Implementation)
+
+The following analytics events are defined for future implementation. They are requirements of this feature but **implementation is deferred** until analytics infrastructure is in place.
+
+- **REQ-49:** Key analytics events to track:
+  - `layer_session_started` — user begins a layer session (with `myth_key`, `layer`, `time_since_last_layer`)
+  - `layer_session_completed` — user completes a layer session (with `myth_key`, `layer`, `session_duration`)
+  - `observation_assignment_delivered` — observation shown on session-complete screen (with `myth_key`, `layer`, `was_personalized`)
+  - `check_in_evidence_submitted` — user responds to an evidence bridge check-in (with `myth_key`, `layer`, `hours_since_session`)
+  - `check_in_cancelled` — check-in cancelled because user continued immediately (with `myth_key`, `layer`)
+  - `conviction_score_recorded` — conviction assessed after session (with `myth_key`, `layer`, `score`)
+  - `illusion_completed` — all 3 layers done for an illusion (with `myth_key`, `total_duration_days`)
+
+#### Migration & Backwards Compatibility
+
+- **REQ-50:** Existing users mid-program at deploy time: illusions marked `'completed'` under the old 1-session model are **honored as-is**. The user's current in-progress illusion and all future illusions use the new 3-layer model. For the current illusion, if the user completed one session under the old model, that counts as **Layer 1 completed** — they continue from Layer 2. No program restart.
+- **REQ-51:** Check-ins already scheduled under the old 2-hour timing at deploy time are **sent as planned**. The new 24-hour timing applies only to check-ins scheduled for layer sessions under the new model. No migration of existing scheduled records.
+
 <!-- UX-REFINED: Added accessibility requirements -->
 
 ### Accessibility Notes
@@ -389,14 +469,36 @@ The following questions were open in v1.0 and have been resolved:
 | **Observation assignment generation** | Hybrid: template per illusion/layer + AI personalization. Fallback to template if AI fails. | Balances testability (templates ensure structural correctness) with personalization (AI tailors to session content). See REQ-14. |
 | **Layer transition messaging** | Both conversational and UI. AI marks completion at end of Layer 3; session-complete screen confirms it. | Existing pattern in core-program-spec. Conversational marking feels natural; UI confirmation provides clarity. See REQ-18. |
 | **Cross-illusion evidence** | Evidence stays scoped to its illusion. No explicit cross-routing. | Keeps each illusion's journey self-contained. Cross-references happen naturally via personalization engine's broader context. See REQ-17. |
+| **Observation storage model** | Assignment text stored as field on `check_in_schedule`. Observation responses captured as `real_world_observation` moments via existing pipeline. | Assignment text needs to be referenced by check-in emails and context builder — co-locating with the check-in record is the simplest path. Observation responses fit naturally into the existing moment detection pipeline. See REQ-37, REQ-38. |
 
 ### Open Questions
 
-- **Observation storage model:** Where do observations live? As a new field on `check_in_schedule` responses, as entries in `captured_moments`, or as a new table? This is a technical design question for the next phase.
+No open questions remain. All questions have been resolved through UX refinement (v1.1) and requirements refinement (v1.2).
 
 ---
 
 ## Changelog
+
+### v1.2 — Requirements Refinement (2026-02-08)
+
+Added based on structured requirements audit across 12 dimensions (functional completeness, state management, data requirements, business rules, integration/API, error handling, security, performance, observability, edge cases, accessibility, migration):
+
+- **Observation delivery mechanism:** Prompt instruction model — AI includes assignment in final message via layer-aware system prompt. Templates stored in illusion prompt files (REQ-23, REQ-24, REQ-25)
+- **Check-in scheduling:** Schedule-then-cancel pattern with audit trail. Cancelled check-ins not re-scheduled on layer abandonment (REQ-26, REQ-27, REQ-28)
+- **Layer state model:** Computed states (not_started, in_progress, completed) from existing data. Added `current_layer` field using internal names. Abandoned layers show identically to not-started (REQ-29, REQ-30)
+- **Conviction scoring:** Point-in-time immutable snapshots. Low conviction threshold defined as ≤ 5/10 (REQ-31, REQ-40)
+- **Illusion transitions:** Auto-unlock on dashboard return. AI previews next illusion at Layer 3 close. Revisit triggers reinforcement sessions, not 3-layer replay (REQ-32, REQ-33, REQ-34)
+- **Spacing CTAs:** Both CTAs always fully visible, no dimming (REQ-35)
+- **Prompt assembly order:** Layer instructions injected after illusion prompt, before bridge context (REQ-36)
+- **Data storage:** Observation assignment as field on `check_in_schedule`. Responses captured as `real_world_observation` moments. Progress API nests layer data in existing objects (REQ-37, REQ-38, REQ-39)
+- **Error handling:** Graceful degradation for LLM failures, missing assignments, conviction assessment failures, email delivery failures, expired magic links (REQ-41 through REQ-45)
+- **Edge cases:** Multi-tab server-side validation, SESSION_COMPLETE atomic trigger, long-gap graceful handling (REQ-46, REQ-47, REQ-48)
+- **Analytics events:** 7 key events defined for future implementation (REQ-49)
+- **Migration:** Existing completed illusions honored, old session maps to Layer 1 complete, check-in timing applied going forward only (REQ-50, REQ-51)
+- **Identity shift clarification:** Per-illusion table entries clarified as user-generated examples, not scripted AI lines
+- **Observation storage model resolved:** Last open question closed (assignment on `check_in_schedule`, responses as moments)
+- **Check-in timing conflict resolved:** Evidence bridge check-ins use 24-hour timing, overriding check-in spec's 2-hour default for layer transitions
+- **New requirements:** Added REQ-23 through REQ-51
 
 ### v1.1 — UX Refinement (2026-02-08)
 
