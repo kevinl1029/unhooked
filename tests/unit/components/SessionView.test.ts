@@ -14,6 +14,9 @@ vi.mock('~/composables/useVoiceChat', () => ({
     currentTranscript: ref(''),
     isStreamingMode: ref(false),
     isTextStreaming: ref(false),
+    retryStatusCopy: ref(null),
+    failedTurnMessage: ref(null),
+    hasFailedTurn: ref(false),
     getWords: computed(() => []),
     getTranscriptText: computed(() => ''),
     error: ref(null),
@@ -31,6 +34,8 @@ vi.mock('~/composables/useVoiceChat', () => ({
     getAudioLevel: vi.fn(() => 0),
     checkPermission: vi.fn().mockResolvedValue('granted'),
     requestPermission: vi.fn().mockResolvedValue(true),
+    retryFailedTurn: vi.fn().mockResolvedValue(true),
+    preInitAudio: vi.fn().mockResolvedValue(undefined),
     reset: vi.fn()
   }))
 }))

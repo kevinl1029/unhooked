@@ -63,10 +63,17 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
   const defaultModel = getDefaultModel()
+  const classifyError = (status?: number): 'transient' | 'non_transient' => {
+    if (!status) return 'transient'
+    if (status === 400 || status === 401 || status === 403) return 'non_transient'
+    if (status === 503 || status === 408 || status === 429 || status >= 500) return 'transient'
+    return 'non_transient'
+  }
   const {
     messages,
     conversationId,
     illusionKey: providedIllusionKey,
+    debugRequestId,
     model = defaultModel,
     stream = false,
     streamTTS = false,
@@ -77,10 +84,13 @@ export default defineEventHandler(async (event) => {
     checkInId,
     checkInPrompt,
     anchorMoment,
+    resilienceAttempt,
+    resilienceRoute,
   } = body as {
     messages: Message[]
     conversationId?: string
     illusionKey?: string
+    debugRequestId?: string
     model?: ModelType
     stream?: boolean
     streamTTS?: boolean
@@ -91,11 +101,32 @@ export default defineEventHandler(async (event) => {
     checkInId?: string
     checkInPrompt?: string
     anchorMoment?: { id: string; transcript: string }
+    resilienceAttempt?: number
+    resilienceRoute?: 'primary' | 'secondary'
   }
 
   if (!messages || !Array.isArray(messages)) {
     throw createError({ statusCode: 400, message: 'Messages array is required' })
   }
+  const requestId =
+    debugRequestId
+    || (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
+  const requestStartedAt = Date.now()
+
+  console.log('[chat] Request received', {
+    requestId,
+    model,
+    resilienceAttempt: resilienceAttempt ?? null,
+    resilienceRoute: resilienceRoute ?? null,
+    stream,
+    streamTTS,
+    sessionType,
+    inputModality,
+    conversationId: conversationId || null,
+    messagesCount: messages.length,
+    lastMessageRole: messages[messages.length - 1]?.role || null,
+    lastMessageLength: messages[messages.length - 1]?.content?.length || 0
+  })
   if (Object.prototype.hasOwnProperty.call(body, 'illusionNumber')) {
     throw createError({ statusCode: 400, message: 'illusionNumber is no longer supported. Send illusionKey instead.' })
   }
@@ -427,6 +458,9 @@ export default defineEventHandler(async (event) => {
     const streamResponse = new ReadableStream({
       async start(controller) {
         let fullResponse = ''
+        let tokenCount = 0
+        let tokenChars = 0
+        let audioChunkCount = 0
 
         // Initialize streaming TTS components if enabled
         const sentenceDetector = useStreamingTTS ? createSentenceDetector() : null
@@ -437,8 +471,9 @@ export default defineEventHandler(async (event) => {
           ? createSequentialTTSProcessor(
               getTTSProviderFromConfig(),
               (chunk) => {
+                audioChunkCount += 1
                 // This callback is invoked in strict order for each synthesized chunk
-                const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId })
+                const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId, requestId })
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               }
             )
@@ -449,9 +484,11 @@ export default defineEventHandler(async (event) => {
           {
             onToken: (token) => {
               fullResponse += token
+              tokenCount += 1
+              tokenChars += token.length
 
               // Always send the token for text display
-              const data = JSON.stringify({ type: 'token', token, conversationId: convId })
+              const data = JSON.stringify({ type: 'token', token, conversationId: convId, requestId })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
 
               // If streaming TTS enabled, detect sentences and enqueue for sequential synthesis
@@ -472,7 +509,7 @@ export default defineEventHandler(async (event) => {
               if (usedFallbackResponse) {
                 finalResponse = ceremonyFallbackResponse(finalResponse)
                 // Emit fallback text so client transcript does not appear empty.
-                const fallbackData = JSON.stringify({ type: 'token', token: finalResponse, conversationId: convId })
+                const fallbackData = JSON.stringify({ type: 'token', token: finalResponse, conversationId: convId, requestId })
                 controller.enqueue(encoder.encode(`data: ${fallbackData}\n\n`))
 
                 // Feed fallback text into sentence detector for TTS streaming when enabled.
@@ -532,14 +569,47 @@ export default defineEventHandler(async (event) => {
                 }
               }
 
-              // Save assistant message with metadata
-              await supabase.from('messages').insert({
-                conversation_id: convId,
-                role: 'assistant',
-                content: finalResponse,
-                message_length: finalResponse.length,
-                time_since_last_message: null
+              const strippedFinalResponse = stripControlTokens(finalResponse)
+              const shouldPersistAssistantMessage = strippedFinalResponse.length > 0
+              if (shouldPersistAssistantMessage) {
+                await supabase.from('messages').insert({
+                  conversation_id: convId,
+                  role: 'assistant',
+                  content: finalResponse,
+                  message_length: finalResponse.length,
+                  time_since_last_message: null
+                })
+              }
+
+              const durationMs = Date.now() - requestStartedAt
+              console.log('[chat] Stream completed', {
+                requestId,
+                model,
+                resilienceAttempt: resilienceAttempt ?? null,
+                resilienceRoute: resilienceRoute ?? null,
+                conversationId: convId,
+                sessionType,
+                finalResponseLength: finalResponse.length,
+                strippedResponseLength: strippedFinalResponse.length,
+                persistedAssistantMessage: shouldPersistAssistantMessage,
+                tokenCount,
+                tokenChars,
+                audioChunkCount,
+                durationMs
               })
+              if (!shouldPersistAssistantMessage) {
+                console.warn('[chat] Stream completed with empty assistant response', {
+                  requestId,
+                  model,
+                  resilienceAttempt: resilienceAttempt ?? null,
+                  resilienceRoute: resilienceRoute ?? null,
+                  conversationId: convId,
+                  sessionType,
+                  tokenCount,
+                  tokenChars,
+                  audioChunkCount
+                })
+              }
 
               // If session complete, lock the conversation and run post-session tasks
               if (sessionComplete) {
@@ -589,21 +659,39 @@ export default defineEventHandler(async (event) => {
                 done: true,
                 conversationId: convId,
                 sessionComplete,
-                streamingTTS: ttsProcessor ? ttsProcessor.getSentCount() > 0 : false
+                streamingTTS: ttsProcessor ? ttsProcessor.getSentCount() > 0 : false,
+                requestId
               })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               controller.close()
             },
             onError: (error) => {
+              const durationMs = Date.now() - requestStartedAt
+              console.error('[chat] Stream error', {
+                requestId,
+                model,
+                resilienceAttempt: resilienceAttempt ?? null,
+                resilienceRoute: resilienceRoute ?? null,
+                conversationId: convId,
+                sessionType,
+                tokenCount,
+                tokenChars,
+                audioChunkCount,
+                durationMs,
+                error: error.message
+              })
               // Improved: Stream error details to client
               const status = (error as any)?.status
               const statusText = (error as any)?.statusText
+              const classification = classifyError(status)
               const data = JSON.stringify({
                 type: 'error',
                 error: error.message,
                 status,
                 statusText,
-                conversationId: convId
+                classification,
+                conversationId: convId,
+                requestId
               })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               controller.close()
@@ -653,14 +741,40 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      // Save assistant message with metadata
-      await supabase.from('messages').insert({
-        conversation_id: convId,
-        role: 'assistant',
-        content: assistantContent,
-        message_length: assistantContent.length,
-        time_since_last_message: null
+      const strippedAssistantContent = stripControlTokens(assistantContent)
+      const shouldPersistAssistantMessage = strippedAssistantContent.length > 0
+      if (shouldPersistAssistantMessage) {
+        await supabase.from('messages').insert({
+          conversation_id: convId,
+          role: 'assistant',
+          content: assistantContent,
+          message_length: assistantContent.length,
+          time_since_last_message: null
+        })
+      }
+      const durationMs = Date.now() - requestStartedAt
+      console.log('[chat] Non-stream completed', {
+        requestId,
+        model,
+        resilienceAttempt: resilienceAttempt ?? null,
+        resilienceRoute: resilienceRoute ?? null,
+        conversationId: convId,
+        sessionType,
+        assistantContentLength: assistantContent.length,
+        strippedResponseLength: strippedAssistantContent.length,
+        persistedAssistantMessage: shouldPersistAssistantMessage,
+        durationMs
       })
+      if (!shouldPersistAssistantMessage) {
+        console.warn('[chat] Non-stream completed with empty assistant response', {
+          requestId,
+          model,
+          resilienceAttempt: resilienceAttempt ?? null,
+          resilienceRoute: resilienceRoute ?? null,
+          conversationId: convId,
+          sessionType
+        })
+      }
 
       // If session complete, lock the conversation and run post-session tasks
       if (sessionComplete) {
@@ -709,6 +823,7 @@ export default defineEventHandler(async (event) => {
         ...response,
         content: assistantContent,
         conversationId: convId,
+        requestId,
         sessionComplete
       }
     } catch (error: any) {

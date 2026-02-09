@@ -24,6 +24,20 @@ interface SSEEvent {
   sessionComplete?: boolean
   streamingTTS?: boolean
   error?: string
+  status?: number
+  statusText?: string
+  requestId?: string
+}
+
+interface StreamStats {
+  tokenCount: number
+  tokenChars: number
+  audioChunkCount: number
+  sawDone: boolean
+  sawErrorEvent: boolean
+  errorStatus: number | null
+  errorStatusText: string | null
+  requestId: string | null
 }
 
 export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
@@ -41,6 +55,16 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
   const fullText = ref('')
   const conversationId = ref<string | null>(null)
   const error = ref<string | null>(null)
+  const lastStreamStats = ref<StreamStats>({
+    tokenCount: 0,
+    tokenChars: 0,
+    audioChunkCount: 0,
+    sawDone: false,
+    sawErrorEvent: false,
+    errorStatus: null,
+    errorStatusText: null,
+    requestId: null
+  })
 
   /**
    * Parse SSE data from a line
@@ -72,6 +96,16 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
     isStreaming.value = true
     fullText.value = ''
     error.value = null
+    lastStreamStats.value = {
+      tokenCount: 0,
+      tokenChars: 0,
+      audioChunkCount: 0,
+      sawDone: false,
+      sawErrorEvent: false,
+      errorStatus: null,
+      errorStatusText: null,
+      requestId: null
+    }
 
     // Initialize audio context (reuses existing context if available)
     await audioQueue.initialize()
@@ -102,29 +136,48 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
             case 'token':
               if (event.token) {
                 fullText.value += event.token
+                lastStreamStats.value.tokenCount += 1
+                lastStreamStats.value.tokenChars += event.token.length
                 options.onTextUpdate?.(fullText.value)
               }
               if (event.conversationId) {
                 conversationId.value = event.conversationId
               }
+              if (event.requestId) {
+                lastStreamStats.value.requestId = event.requestId
+              }
               break
 
             case 'audio_chunk':
               if (event.chunk) {
+                lastStreamStats.value.audioChunkCount += 1
                 await audioQueue.enqueueChunk(event.chunk)
+              }
+              if (event.requestId) {
+                lastStreamStats.value.requestId = event.requestId
               }
               break
 
             case 'done':
+              lastStreamStats.value.sawDone = true
               if (event.conversationId) {
                 conversationId.value = event.conversationId
+              }
+              if (event.requestId) {
+                lastStreamStats.value.requestId = event.requestId
               }
               // Pass whether streaming TTS was actually used by the server
               options.onComplete?.(fullText.value, event.sessionComplete || false, event.streamingTTS || false)
               break
 
             case 'error':
+              lastStreamStats.value.sawErrorEvent = true
               error.value = event.error || 'Unknown error'
+              lastStreamStats.value.errorStatus = event.status ?? null
+              lastStreamStats.value.errorStatusText = event.statusText ?? null
+              if (event.requestId) {
+                lastStreamStats.value.requestId = event.requestId
+              }
               options.onError?.(error.value)
               break
 
@@ -199,6 +252,7 @@ export const useStreamingTTS = (options: StreamingTTSOptions = {}) => {
     ttsWords: audioQueue.ttsWords,
     ttsText: audioQueue.ttsText,
     error: readonly(error),
+    lastStreamStats: readonly(lastStreamStats),
 
     // Methods
     processStream,

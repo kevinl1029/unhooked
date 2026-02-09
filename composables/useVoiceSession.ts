@@ -16,6 +16,17 @@ interface TranscribeResponse {
   language: string | null
 }
 
+interface StreamingResponseResult {
+  success: boolean
+  sessionComplete: boolean
+  conversationId: string | null
+  sawDone: boolean
+  sawErrorEvent: boolean
+  errorStatus: number | null
+  requestId: string | null
+  assistantContentLength: number
+}
+
 export const useVoiceSession = () => {
   // State
   const isAISpeaking = ref(false)
@@ -175,7 +186,7 @@ export const useVoiceSession = () => {
    */
   const playStreamingResponse = async (
     reader: ReadableStreamDefaultReader<Uint8Array>
-  ): Promise<{ success: boolean; sessionComplete: boolean; conversationId: string | null }> => {
+  ): Promise<StreamingResponseResult> => {
     error.value = null
     streamingTTSResult.value = null
     currentTranscript.value = ''
@@ -188,17 +199,34 @@ export const useVoiceSession = () => {
 
       const convId = streamingTTS.conversationId.value
       const result = streamingTTSResult.value
+      const streamStats = streamingTTS.lastStreamStats.value
 
       // Check if streaming TTS was actually used
       if (result?.usedStreamingTTS) {
         // Streaming TTS was used - audio is playing/will play
         streamingModeFlag.value = true
         isAISpeaking.value = true
+        console.log('[useVoiceSession] Stream completed (streaming TTS)', {
+          requestId: streamStats.requestId,
+          conversationId: convId,
+          textLength: currentTranscript.value.length,
+          tokenCount: streamStats.tokenCount,
+          tokenChars: streamStats.tokenChars,
+          audioChunkCount: streamStats.audioChunkCount,
+          sawDone: streamStats.sawDone,
+          sawErrorEvent: streamStats.sawErrorEvent
+        })
         // Note: streamingModeFlag stays true until onAudioComplete callback is called
+        const streamHealthy = streamStats.sawDone && !streamStats.sawErrorEvent && currentTranscript.value.trim().length > 0
         return {
-          success: true,
+          success: streamHealthy,
           sessionComplete: result.sessionComplete,
-          conversationId: convId
+          conversationId: convId,
+          sawDone: streamStats.sawDone,
+          sawErrorEvent: streamStats.sawErrorEvent,
+          errorStatus: streamStats.errorStatus,
+          requestId: streamStats.requestId,
+          assistantContentLength: currentTranscript.value.trim().length
         }
       } else {
         // Streaming TTS was NOT used by server - fall back to batch TTS
@@ -210,18 +238,48 @@ export const useVoiceSession = () => {
           isTextStreaming.value = true
           // Use batch TTS to synthesize and play the complete response
           const success = await playAIResponse(textToSpeak)
+          console.log('[useVoiceSession] Stream completed (batch fallback TTS)', {
+            requestId: streamStats.requestId,
+            conversationId: convId,
+            textLength: textToSpeak.length,
+            tokenCount: streamStats.tokenCount,
+            tokenChars: streamStats.tokenChars,
+            audioChunkCount: streamStats.audioChunkCount,
+            sawDone: streamStats.sawDone,
+            sawErrorEvent: streamStats.sawErrorEvent,
+            ttsSuccess: success
+          })
           // Now we can turn off text streaming - audio is ready/playing
           isTextStreaming.value = false
           return {
-            success,
+            success: success && streamStats.sawDone && !streamStats.sawErrorEvent && textToSpeak.trim().length > 0,
             sessionComplete: result?.sessionComplete || false,
-            conversationId: convId
+            conversationId: convId,
+            sawDone: streamStats.sawDone,
+            sawErrorEvent: streamStats.sawErrorEvent,
+            errorStatus: streamStats.errorStatus,
+            requestId: streamStats.requestId,
+            assistantContentLength: textToSpeak.trim().length
           }
         } else {
+          console.warn('[useVoiceSession] Stream completed with empty transcript', {
+            requestId: streamStats.requestId,
+            conversationId: convId,
+            tokenCount: streamStats.tokenCount,
+            tokenChars: streamStats.tokenChars,
+            audioChunkCount: streamStats.audioChunkCount,
+            sawDone: streamStats.sawDone,
+            sawErrorEvent: streamStats.sawErrorEvent
+          })
           return {
-            success: true,
+            success: false,
             sessionComplete: result?.sessionComplete || false,
-            conversationId: convId
+            conversationId: convId,
+            sawDone: streamStats.sawDone,
+            sawErrorEvent: streamStats.sawErrorEvent,
+            errorStatus: streamStats.errorStatus,
+            requestId: streamStats.requestId,
+            assistantContentLength: 0
           }
         }
       }
@@ -233,7 +291,12 @@ export const useVoiceSession = () => {
       return {
         success: false,
         sessionComplete: false,
-        conversationId: null
+        conversationId: null,
+        sawDone: false,
+        sawErrorEvent: true,
+        errorStatus: null,
+        requestId: null,
+        assistantContentLength: 0
       }
     }
   }

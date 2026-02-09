@@ -19,6 +19,8 @@ function getAnalyticsDomain(): string | null {
 }
 
 const analyticsDomain = getAnalyticsDomain()
+const defaultLlmProvider = process.env.DEFAULT_LLM_PROVIDER || 'gemini'
+const defaultSecondaryProvider = defaultLlmProvider === 'groq' ? 'gemini' : 'groq'
 
 export default defineNuxtConfig({
   devtools: { enabled: true },
@@ -96,7 +98,11 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Server-side only (not exposed to client)
     // Default LLM Provider
-    defaultLlmProvider: process.env.DEFAULT_LLM_PROVIDER || 'gemini',
+    defaultLlmProvider,
+    chatPrimaryProvider: process.env.CHAT_PRIMARY_PROVIDER || defaultLlmProvider,
+    chatSecondaryProvider: process.env.CHAT_SECONDARY_PROVIDER || defaultSecondaryProvider,
+    chatRetryBackoffMinMs: Number(process.env.CHAT_RETRY_BACKOFF_MIN_MS || 600),
+    chatRetryBackoffMaxMs: Number(process.env.CHAT_RETRY_BACKOFF_MAX_MS || 1200),
 
     // Groq Configuration (Primary LLM Provider)
     groqApiKey: process.env.GROQ_API_KEY,
@@ -156,6 +162,11 @@ export default defineNuxtConfig({
       // App mode: 'disabled' (waitlist only), 'validation' (checkout but no app), 'enabled' (full access)
       appMode: process.env.NUXT_PUBLIC_APP_MODE || 'enabled',
       isStaging: process.env.VERCEL_ENV === 'preview',
+      chatResilienceEnabled: process.env.NUXT_PUBLIC_CHAT_RESILIENCE_ENABLED || 'true',
+      chatPrimaryProvider: process.env.NUXT_PUBLIC_CHAT_PRIMARY_PROVIDER || process.env.CHAT_PRIMARY_PROVIDER || defaultLlmProvider,
+      chatSecondaryProvider: process.env.NUXT_PUBLIC_CHAT_SECONDARY_PROVIDER || process.env.CHAT_SECONDARY_PROVIDER || defaultSecondaryProvider,
+      chatRetryBackoffMinMs: Number(process.env.NUXT_PUBLIC_CHAT_RETRY_BACKOFF_MIN_MS || process.env.CHAT_RETRY_BACKOFF_MIN_MS || 600),
+      chatRetryBackoffMaxMs: Number(process.env.NUXT_PUBLIC_CHAT_RETRY_BACKOFF_MAX_MS || process.env.CHAT_RETRY_BACKOFF_MAX_MS || 1200),
     }
   },
 

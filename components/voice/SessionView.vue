@@ -96,6 +96,29 @@
               </div>
             </div>
           </div>
+
+          <!-- Retry/failover status bubble -->
+          <div v-if="retryStatusCopy && !hasFailedTurn" class="flex justify-start mb-4">
+            <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3">
+              <p class="text-white-65">{{ retryStatusCopy }}</p>
+            </div>
+          </div>
+
+          <!-- Final actionable failure bubble -->
+          <div v-if="hasFailedTurn && failedTurnMessage" class="flex justify-start mb-4">
+            <div class="max-w-[85%] md:max-w-[70%]">
+              <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3">
+                <p class="text-white mb-3">{{ failedTurnMessage }}</p>
+                <button
+                  class="btn-primary px-5 py-2 rounded-pill font-semibold"
+                  :disabled="isProcessing"
+                  @click="handleRetryFailedTurn"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          </div>
         </template>
       </div>
 
@@ -269,6 +292,9 @@ const {
   currentTranscript,
   isStreamingMode,
   isTextStreaming,
+  retryStatusCopy,
+  failedTurnMessage,
+  hasFailedTurn,
   getWords,
   getTranscriptText,
   error,
@@ -286,6 +312,7 @@ const {
   getAudioLevel,
   checkPermission,
   requestPermission,
+  retryFailedTurn,
   preInitAudio,
   reset
 } = useVoiceChat({
@@ -572,6 +599,11 @@ const handleSendText = async () => {
 
   // Send with voice response
   await sendMessage(text, 'text', true)
+}
+
+const handleRetryFailedTurn = async () => {
+  await preInitAudio()
+  await retryFailedTurn()
 }
 
 const sendTextMessage = async (content: string) => {
