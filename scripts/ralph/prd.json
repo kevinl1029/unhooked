@@ -44,7 +44,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Reference docs/guides/coaching-framework-guide.md Section 6 for session flow patterns. L1/L2 have {observationTemplate} placeholder replaced at assembly time. L3 has {nextIllusionPreview} placeholder replaced at assembly time. See the spec's Prompt Design section for exact template content."
     },
     {

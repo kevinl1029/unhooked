@@ -25,3 +25,28 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - COALESCE pattern: COALESCE(layer_progress, '{}'::jsonb) handles both NULL and missing column cases
 - All schema changes should follow the ceremony_v2 migration pattern (comments, IF NOT EXISTS, constraint naming)
 ---
+
+## 2026-02-09 04:35 EST - US-002
+- Created layer instruction prompt file: server/utils/prompts/layer-instructions.ts
+- Exported LAYER_1_INTELLECTUAL_INSTRUCTIONS with Socratic questioning, CBT evidence examination, MI reflective listening
+- Exported LAYER_2_EMOTIONAL_INSTRUCTIONS with emotional holding, validating, reflective listening
+- Exported LAYER_3_IDENTITY_INSTRUCTIONS with identity integration, historical connection, values-based approach
+- L1 session flow: Surface belief → explore → reframe → discover contradiction → solidify
+- L2 session flow: Evidence bridge opening → revisit intellectual insight → hold emotional space → process → solidify
+- L3 session flow: Evidence + feelings bridge → connect to personal history → explore values/identity → invite identity statement → solidify
+- L1/L2 include {observationTemplate} placeholder and [OBSERVATION_ASSIGNMENT: ...] token instructions
+- L3 includes {nextIllusionPreview} placeholder and explicitly states NO observation assignment
+
+**Files changed:**
+- server/utils/prompts/layer-instructions.ts (new)
+- scripts/ralph/prd.json (marked US-002 as passes=true)
+
+**Learnings for future iterations:**
+- Layer instruction prompts follow the same structure as illusion prompts — exported as string constants with markdown formatting
+- Each layer prompt defines tone, method, session flow, and session ending behavior
+- Placeholders use {curlyBraces} syntax for runtime replacement by buildSystemPrompt
+- Token instructions use [UPPERCASE_TOKEN: ...] format for AI output detection
+- L1/L2 both assign observations but with different focus (intellectual vs emotional)
+- L3 marks illusion completion conversationally and previews next content
+- Build passes with no TypeScript errors — Nuxt 3 auto-detects exports from utils/ folder
+---
