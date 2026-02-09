@@ -44,7 +44,10 @@
         class="flex-shrink-0"
         :next-illusion="nextIllusion"
         :ceremony-tease="illusionKey === 'identity' && illusionLayer === 'identity'"
+        :subtext="sessionCompleteSubtext"
+        :show-continue="showContinueToNextLayer"
         @continue="handleContinue"
+        @continue-layer="handleContinueLayer"
         @dashboard="handleDashboard"
         @finish="handleFinish"
       />
@@ -82,6 +85,8 @@ const error = ref<string | null>(null)
 const sessionComplete = ref(false)
 const nextIllusion = ref<number | null>(null)
 const illusionLayer = ref<IllusionLayer>('intellectual')
+const sessionCompleteSubtext = ref<string>('')
+const showContinueToNextLayer = ref(false)
 
 // For voice session view
 const existingConversationId = ref<string | null>(null)
@@ -372,7 +377,20 @@ async function handleSessionComplete() {
       illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
     }
 
-    const result = await completeSession(conversationId.value, illusionKey.value)
+    const result = await completeSession(conversationId.value, illusionKey.value, illusionLayer.value)
+
+    // Configure SessionCompleteCard based on layer completion response
+    if (result.isIllusionComplete === false) {
+      // L1 or L2 completion - show observation assignment and continue CTA
+      sessionCompleteSubtext.value = result.observationAssignment
+        || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
+      showContinueToNextLayer.value = true
+    } else {
+      // L3 completion - generic settling message, no continue CTA
+      sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
+      showContinueToNextLayer.value = false
+    }
+
     nextIllusion.value = result.nextIllusion ?? null
     sessionComplete.value = true
     await fetchProgress()
@@ -383,19 +401,37 @@ async function handleSessionComplete() {
 
 // Voice session handlers
 async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
-  // Fetch the conversation layer before marking complete
+  // Fetch the conversation layer and complete session
   if (existingConversationId.value) {
     try {
       const { data: conversationData } = await useFetch(`/api/conversations/${existingConversationId.value}`)
       if (conversationData.value && conversationData.value.illusion_layer) {
         illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
       }
+
+      // Complete the session with layer tracking
+      const result = await completeSession(existingConversationId.value, illusionKey.value, illusionLayer.value)
+
+      // Configure SessionCompleteCard based on layer completion response
+      if (result.isIllusionComplete === false) {
+        // L1 or L2 completion - show observation assignment and continue CTA
+        sessionCompleteSubtext.value = result.observationAssignment
+          || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
+        showContinueToNextLayer.value = true
+      } else {
+        // L3 completion - generic settling message, no continue CTA
+        sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
+        showContinueToNextLayer.value = false
+      }
+
+      nextIllusion.value = result.nextIllusion ?? null
     } catch (err) {
       console.error('Error fetching conversation layer:', err)
     }
+  } else {
+    nextIllusion.value = nextIllusionNum
   }
 
-  nextIllusion.value = nextIllusionNum
   sessionComplete.value = true
   await fetchProgress()
 }
@@ -422,6 +458,29 @@ async function handleContinue(nextIllusionNumber: number) {
 
   // Initialize the new session
   await initializeSession()
+}
+
+async function handleContinueLayer() {
+  // Re-initialize for the next layer of the same illusion
+  // Reset state
+  messages.value = []
+  conversationId.value = null
+  sessionComplete.value = false
+  nextIllusion.value = null
+  sessionCompleteSubtext.value = ''
+  showContinueToNextLayer.value = false
+  existingConversationId.value = null
+  existingMessages.value = []
+
+  // Fetch updated progress to get the new current layer
+  await fetchProgress()
+  illusionLayer.value = currentLayer.value
+
+  // Re-initialize session (voice mode will handle its own init)
+  if (useTextMode.value) {
+    await initializeSession()
+  }
+  // VoiceSessionView will re-initialize automatically due to reactive state changes
 }
 
 function handleDashboard() {

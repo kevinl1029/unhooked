@@ -21,9 +21,18 @@
       >
         Return to Dashboard
       </button>
-      <!-- Secondary CTA: Continue or Complete (hidden when ceremony tease) -->
+      <!-- Secondary CTA: Continue to Next Layer (L1/L2) -->
       <button
-        v-if="nextIllusion && !ceremonyTease"
+        v-if="showContinue"
+        type="button"
+        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
+        @click="$emit('continue-layer')"
+      >
+        Continue to Next Session
+      </button>
+      <!-- Secondary CTA: Continue to Next Illusion or Complete (hidden when ceremony tease or showContinue) -->
+      <button
+        v-else-if="nextIllusion && !ceremonyTease"
         type="button"
         class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
         @click="$emit('continue', nextIllusion)"
@@ -31,7 +40,7 @@
         Continue to Next Session
       </button>
       <button
-        v-else-if="!ceremonyTease"
+        v-else-if="!ceremonyTease && !showContinue"
         type="button"
         class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
         @click="$emit('finish')"
@@ -49,12 +58,14 @@ const props = withDefaults(
     heading?: string
     subtext?: string
     ceremonyTease?: boolean
+    showContinue?: boolean
   }>(),
   {
     nextIllusion: null,
     heading: 'Session Complete',
     subtext: 'Great work. Take a moment to let this settle.',
     ceremonyTease: false,
+    showContinue: false,
   }
 )
 
@@ -68,6 +79,7 @@ const displaySubtext = computed(() =>
 
 defineEmits<{
   continue: [illusionNumber: number]
+  'continue-layer': []
   dashboard: []
   finish: []
 }>()
