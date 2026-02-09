@@ -43,6 +43,18 @@ export default defineEventHandler(async (event) => {
     return 'I am here with you. Tell me what you are noticing right now.'
   }
 
+  const shouldForceCeremonyComplete = (text: string) => {
+    if (text.includes('[SESSION_COMPLETE]')) return false
+    const normalized = text.toLowerCase()
+    const hasClosureLanguage =
+      normalized.includes('welcome to the rest of your life') ||
+      normalized.includes('you did it') ||
+      normalized.includes("you're free") ||
+      normalized.includes('you are free')
+    const stillAskingQuestion = normalized.includes('how does that feel')
+    return hasClosureLanguage && !stillAskingQuestion
+  }
+
   // Verify authentication
   const user = await serverSupabaseUser(event)
   if (!user || !user.sub) {
@@ -450,6 +462,12 @@ export default defineEventHandler(async (event) => {
                 }
               }
 
+              // Guardrail: if ceremony clearly reached closing language but the model
+              // forgot the completion token, force it so the client can transition.
+              if (sessionType === 'ceremony' && shouldForceCeremonyComplete(finalResponse)) {
+                finalResponse = `${finalResponse.trim()} [SESSION_COMPLETE]`
+              }
+
               // Flush any remaining text for TTS
               if (sentenceDetector && ttsProcessor) {
                 const remaining = sentenceDetector.flush()
@@ -573,6 +591,12 @@ export default defineEventHandler(async (event) => {
       // Guardrail: never persist or emit token-only ceremony responses.
       if (sessionType === 'ceremony' && stripControlTokens(assistantContent).length === 0) {
         assistantContent = ceremonyFallbackResponse(assistantContent)
+      }
+
+      // Guardrail: if ceremony clearly reached closing language but the model
+      // forgot the completion token, force it so the client can transition.
+      if (sessionType === 'ceremony' && shouldForceCeremonyComplete(assistantContent)) {
+        assistantContent = `${assistantContent.trim()} [SESSION_COMPLETE]`
       }
 
       // Check for ceremony-specific tokens

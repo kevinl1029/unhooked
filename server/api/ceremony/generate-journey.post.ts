@@ -25,17 +25,6 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // Check ceremony completion
-  const { data: userProgress } = await supabase
-    .from('user_progress')
-    .select('ceremony_completed_at')
-    .eq('user_id', user.sub)
-    .single()
-
-  if (userProgress?.ceremony_completed_at) {
-    throw createError({ statusCode: 400, message: 'Ceremony already completed' })
-  }
-
   // Trigger generation using reusable utility
   const artifactId = await generateJourneyArtifact(user.sub, supabase)
 

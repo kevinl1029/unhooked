@@ -444,6 +444,7 @@ const isMomentLoading = ref(false)
 const journeyStatus = ref<'pending' | 'generating' | 'ready' | 'failed' | null>(null)
 const journeyPollingInterval = ref<NodeJS.Timeout | null>(null)
 const isRetryingJourney = ref(false)
+const hasAttemptedAutoJourneyRetry = ref(false)
 
 // Fetch data on mount and whenever returning to dashboard
 onMounted(async () => {
@@ -577,8 +578,14 @@ async function fetchJourneyStatus() {
   } catch (err: any) {
     // If 404, journey doesn't exist yet (might be pre-generation)
     if (err.statusCode === 404 || err.response?.status === 404) {
-      journeyStatus.value = null
-      stopJourneyPolling()
+      // Auto-retry generation once for post-ceremony users missing a journey artifact.
+      if (!hasAttemptedAutoJourneyRetry.value) {
+        hasAttemptedAutoJourneyRetry.value = true
+        await retryJourneyGeneration()
+      } else {
+        journeyStatus.value = null
+        stopJourneyPolling()
+      }
     } else {
       console.error('Failed to fetch journey status:', err)
     }

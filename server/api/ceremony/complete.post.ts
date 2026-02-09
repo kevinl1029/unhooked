@@ -6,6 +6,7 @@
 
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { generateIllusionsCheatSheet, saveCheatSheetArtifact } from '~/server/utils/ceremony/cheat-sheet-generator'
+import { generateJourneyArtifact } from '~/server/utils/ceremony/generate-journey'
 
 // Follow-up milestone days from ceremony completion
 const FOLLOW_UP_MILESTONES = [
@@ -116,6 +117,13 @@ export default defineEventHandler(async (event) => {
     // Log but don't block ceremony completion
     console.error('[ceremony-complete] Failed to generate cheat sheet:', error)
   }
+
+  // 4b. Ensure journey generation is kicked off as a safety net.
+  // Normally this starts in Part 6 via [JOURNEY_GENERATE], but if that token is
+  // missed we still want the post-ceremony dashboard to eventually have a journey.
+  generateJourneyArtifact(user.sub, supabase).catch((error) => {
+    console.error('[ceremony-complete] Failed to generate journey:', error)
+  })
 
   // 5. Schedule follow-up check-ins
   const followUps: FollowUp[] = []
