@@ -303,6 +303,28 @@ export default defineEventHandler(async (event) => {
 
     if (convError) throw createError({ statusCode: 500, message: convError.message })
     convId = newConv.id
+
+    // Cancel pending evidence bridge check-ins when starting next layer (core sessions only)
+    if (sessionType === 'core' && conversationIllusionKey) {
+      supabase
+        .from('check_in_schedule')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: 'user_continued_immediately',
+        })
+        .eq('user_id', user.sub)
+        .eq('trigger_illusion_key', conversationIllusionKey)
+        .eq('check_in_type', 'evidence_bridge')
+        .in('status', ['scheduled', 'sent'])
+        .then(({ error }) => {
+          if (error) {
+            console.error('[chat] Failed to cancel evidence bridge check-ins:', error)
+          }
+        })
+        .catch(err => {
+          console.error('[chat] Failed to cancel evidence bridge check-ins:', err)
+        })
+    }
   }
 
   // Save user message with metadata (only if there are messages)
