@@ -57,12 +57,14 @@ Identify if this message contains any of these moment types:
 - RATIONALIZATION: Stories they tell themselves about why they use
 - INSIGHT: A reframe or realization expressed in their own words
 - EMOTIONAL_BREAKTHROUGH: Strong emotion (anger, grief, relief, surprise at realization)
-- REAL_WORLD_OBSERVATION: Something they noticed in their actual life
+- REAL_WORLD_OBSERVATION: Evidence from their actual life - things they noticed, tracked, or observed between sessions. Examples: "I noticed my stress was from the situation, not nicotine", "I paid attention to the sensation and it wasn't pleasurable", "I tracked my focus and it actually got worse after using"
 - IDENTITY_STATEMENT: How they describe themselves in relation to addiction
 - COMMITMENT: Statements about what they want or who they want to be
 - FEAR_RESISTANCE: Fears about quitting, resistance to accepting a reframe
 
 Only flag moments with genuine therapeutic significance. Routine acknowledgments ("yeah", "okay", "I see") are NOT moments.
+
+IMPORTANT: Evidence bridge responses reporting observations from between sessions should be classified as REAL_WORLD_OBSERVATION, not as generic INSIGHT or RATIONALIZATION. If they're reporting something they actively noticed or tracked in their life (e.g., "I noticed...", "I observed...", "I paid attention to..."), that's REAL_WORLD_OBSERVATION.
 
 Respond with JSON only:
 {
