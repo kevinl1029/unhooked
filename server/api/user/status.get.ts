@@ -33,9 +33,11 @@ export default defineEventHandler(async (event) => {
 
   if (!progress) {
     phase = 'not_started'
-  } else if (progress.ceremony_completed_at) {
+  } else if (progress.program_status === 'completed' || progress.ceremony_completed_at) {
+    // `completed` is a terminal post-ceremony state. If ceremony_completed_at is
+    // missing due to legacy/inconsistent data, still treat as post-ceremony.
     phase = 'post_ceremony'
-  } else if (progress.program_status === 'completed') {
+  } else if (progress.program_status === 'ceremony_ready') {
     phase = 'ceremony_ready'
   } else {
     phase = 'in_progress'
@@ -122,8 +124,8 @@ export default defineEventHandler(async (event) => {
     } : null,
     // ceremony_completed_at comes from user_progress per ADR-004
     // already_quit is not stored - it's a request parameter only
-    ceremony: progress?.ceremony_completed_at ? {
-      completed_at: progress.ceremony_completed_at,
+    ceremony: progress?.program_status === 'completed' || progress?.ceremony_completed_at ? {
+      completed_at: progress.ceremony_completed_at || progress.updated_at,
     } : null,
     artifacts,
     pending_follow_ups: pendingFollowUps,

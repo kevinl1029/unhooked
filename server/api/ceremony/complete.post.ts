@@ -49,7 +49,36 @@ export default defineEventHandler(async (event) => {
     .single()
 
   if (userProgress?.program_status === 'completed') {
-    throw createError({ statusCode: 400, message: 'Ceremony already completed' })
+    const completedAt = userProgress.ceremony_completed_at || new Date().toISOString()
+
+    // Self-heal legacy/inconsistent rows where status is completed but timestamp is missing.
+    if (!userProgress.ceremony_completed_at) {
+      await supabase
+        .from('user_progress')
+        .update({
+          ceremony_completed_at: completedAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.sub)
+    }
+
+    // Idempotent completion: if already complete, return success to handle
+    // retries, duplicate submissions, and multi-tab races gracefully.
+    const { data: journeyArtifact } = await supabase
+      .from('ceremony_artifacts')
+      .select('generation_status')
+      .eq('user_id', user.sub)
+      .eq('artifact_type', 'reflective_journey')
+      .single()
+
+    const journeyStatus = journeyArtifact?.generation_status || 'pending'
+
+    return {
+      status: 'completed',
+      already_completed: true,
+      ceremony_completed_at: completedAt,
+      journey_artifact_status: journeyStatus as 'ready' | 'generating' | 'pending',
+    }
   }
 
   const completedAt = new Date()
@@ -129,6 +158,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     status: 'completed',
+    already_completed: false,
     ceremony_completed_at: completedAt.toISOString(),
     journey_artifact_status: journeyStatus as 'ready' | 'generating' | 'pending',
   }

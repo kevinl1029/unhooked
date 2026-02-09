@@ -1,15 +1,131 @@
+/**
+ * Ceremony E2E Tests
+ *
+ * Tests the voice-first ceremony page:
+ * - Pre-ceremony screen renders correctly for ceremony_ready users
+ * - Redirects for completed or not-ready users
+ * - Begin Ceremony button transitions to conversation phase
+ * - Error state when ceremony preparation fails
+ */
+
 import { test, expect } from '@playwright/test'
 import {
   mockUserInProgress,
   mockCeremonyPrepare,
-  mockCeremonyGenerateJourney,
-  type PlaylistSegment,
 } from './utils'
 
-test.describe('Ceremony - Intro and Journey Generation', () => {
-  test('shows intro step with "still using" and "already stopped" buttons', async ({ page }) => {
+test.describe('Ceremony - Pre-ceremony Screen', () => {
+  test('shows pre-ceremony screen with "The Ceremony" heading and Begin button', async ({ page }) => {
     // Mock user who is ready for ceremony
     await mockUserInProgress(page, {
+      programStatus: 'ceremony_ready',
+      currentIllusion: 5,
+      illusionsCompleted: [1, 2, 3, 4, 5],
+      totalSessions: 5,
+    })
+
+    await page.goto('/ceremony')
+
+    // Should see the pre-ceremony screen
+    await expect(page.getByText('YOUR FINAL SESSION')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible()
+
+    // Should see preparation instructions
+    await expect(page.getByText(/set aside 15 minutes/i)).toBeVisible()
+    await expect(page.getByText(/find a quiet space/i)).toBeVisible()
+
+    // Should see Begin Ceremony button
+    await expect(page.getByRole('button', { name: /begin ceremony/i })).toBeVisible()
+  })
+
+  test('shows product-specific instructions based on intake', async ({ page }) => {
+    await mockUserInProgress(page, {
+      programStatus: 'ceremony_ready',
+      currentIllusion: 5,
+      illusionsCompleted: [1, 2, 3, 4, 5],
+      totalSessions: 5,
+    })
+
+    await page.goto('/ceremony')
+
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible({ timeout: 10000 })
+
+    // Should show product-specific text (default mock is 'vape')
+    await expect(page.getByText(/vape/i)).toBeVisible()
+  })
+
+  test('shows motivational text on pre-ceremony screen', async ({ page }) => {
+    await mockUserInProgress(page, {
+      programStatus: 'ceremony_ready',
+      currentIllusion: 5,
+      illusionsCompleted: [1, 2, 3, 4, 5],
+      totalSessions: 5,
+    })
+
+    await page.goto('/ceremony')
+
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible({ timeout: 10000 })
+
+    // Should see motivational text
+    await expect(page.getByText(/moment worth being present for/i)).toBeVisible()
+  })
+})
+
+test.describe('Ceremony - Route Guards', () => {
+  test('redirects to dashboard if user is post-ceremony', async ({ page }) => {
+    await mockUserInProgress(page, {
+      programStatus: 'completed',
+      currentIllusion: 5,
+      illusionsCompleted: [1, 2, 3, 4, 5],
+      totalSessions: 5,
+    })
+    await page.route('**/api/user/status', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          phase: 'post_ceremony',
+          progress: {
+            program_status: 'completed',
+            current_illusion: 5,
+            illusions_completed: [1, 2, 3, 4, 5],
+            illusion_order: [1, 2, 3, 4, 5],
+            total_sessions: 5,
+            started_at: new Date().toISOString(),
+          },
+          ceremony: { completed_at: new Date().toISOString() },
+          artifacts: null,
+          pending_follow_ups: null,
+          next_session: null,
+        }),
+      })
+    })
+
+    await page.goto('/ceremony')
+
+    // Should redirect to dashboard
+    await page.waitForURL(/\/dashboard/, { timeout: 10000 })
+  })
+
+  test('redirects to dashboard if user is not ceremony_ready', async ({ page }) => {
+    await mockUserInProgress(page, {
+      programStatus: 'in_progress',
+      currentIllusion: 3,
+      illusionsCompleted: [1, 2],
+      totalSessions: 2,
+    })
+
+    await page.goto('/ceremony')
+
+    // Should redirect to dashboard
+    await page.waitForURL(/\/dashboard/, { timeout: 10000 })
+  })
+})
+
+test.describe('Ceremony - Begin Ceremony Flow', () => {
+  test('Begin Ceremony button triggers prepare API and transitions to conversation', async ({ page }) => {
+    await mockUserInProgress(page, {
+      programStatus: 'ceremony_ready',
       currentIllusion: 5,
       illusionsCompleted: [1, 2, 3, 4, 5],
       totalSessions: 5,
@@ -21,438 +137,150 @@ test.describe('Ceremony - Intro and Journey Generation', () => {
       totalMoments: 5,
     })
 
-    await page.goto('/ceremony')
-
-    // Wait for initial status check to complete
-    await expect(page.getByText(/loading your ceremony progress/i)).toBeVisible()
-    await expect(page.getByText(/loading your ceremony progress/i)).not.toBeVisible({ timeout: 10000 })
-
-    // Should see intro step
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-    await expect(page.getByText(/you've completed all 5 sessions/i)).toBeVisible()
-
-    // Should see the two option buttons
-    await expect(page.getByRole('button', { name: /still using/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /already stopped/i })).toBeVisible()
-
-    // Should see Begin Ceremony button
-    await expect(page.getByRole('button', { name: /begin ceremony/i })).toBeVisible()
-  })
-
-  test('clicking "Begin Ceremony" without selecting option shows disabled state', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
+    // Mock the chat API for the conversation (SSE endpoint)
+    await page.route('**/api/chat', async (route) => {
+      if (route.request().method() === 'POST') {
+        const encoder = new TextEncoder()
+        const body = encoder.encode(
+          'data: {"type":"token","content":"Welcome "}\n\n' +
+          'data: {"type":"token","content":"to your ceremony."}\n\n' +
+          'data: {"type":"done","conversationId":"mock-ceremony-conv"}\n\n'
+        )
+        await route.fulfill({
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+          body: Buffer.from(body),
+        })
+      } else {
+        await route.continue()
+      }
     })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
 
-    await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-
-    // Begin Ceremony button should be disabled
-    const beginButton = page.getByRole('button', { name: /begin ceremony/i })
-    await expect(beginButton).toBeDisabled()
-  })
-
-  test('selecting option and clicking "Begin Ceremony" triggers journey generation', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-
-    const mockSegments: PlaylistSegment[] = [
-      {
-        id: 'seg-1',
-        type: 'narration',
-        text: 'Your journey begins here.',
-        transcript: 'Your journey begins here.',
-        audio_generated: false,
-      },
-      {
-        id: 'seg-2',
-        type: 'user_moment',
-        text: 'I realized nicotine never helped my stress.',
-        transcript: 'I realized nicotine never helped my stress.',
-        moment_id: 'moment-1',
-        audio_generated: false,
-      },
-    ]
-    await mockCeremonyGenerateJourney(page, mockSegments)
-
-    await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-
-    // Select "Still using" option
-    await page.getByRole('button', { name: /still using/i }).click()
-
-    // Begin Ceremony button should now be enabled
-    const beginButton = page.getByRole('button', { name: /begin ceremony/i })
-    await expect(beginButton).not.toBeDisabled()
-
-    // Click Begin Ceremony
-    await beginButton.click()
-
-    // Should see generating step (use heading to avoid strict mode violation)
-    await expect(page.getByRole('heading', { name: /creating your journey/i })).toBeVisible()
-  })
-
-  test('journey generation shows loading state with "Creating Your Journey" message', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-
-    // Delay the journey generation response to test loading state
-    await page.route('**/api/ceremony/generate-journey', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Mock conversations API
+    await page.route('**/api/conversations', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          journey_text: 'Your reflective journey...',
-          playlist: {
-            segments: [
-              {
-                id: 'seg-1',
-                type: 'narration',
-                text: 'Your journey begins.',
-                transcript: 'Your journey begins.',
-                audio_generated: false,
-              },
-            ],
-          },
-          artifact_id: 'mock-artifact-id',
-          selected_moment_count: 0,
-        }),
+        body: JSON.stringify([]),
       })
     })
 
     await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
 
-    // Select option and begin
-    await page.getByRole('button', { name: /already stopped/i }).click()
+    // Wait for pre-ceremony screen
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible({ timeout: 10000 })
+
+    // Click Begin Ceremony
     await page.getByRole('button', { name: /begin ceremony/i }).click()
 
-    // Should see loading state
-    await expect(page.getByText(/creating your journey/i)).toBeVisible()
-    await expect(page.getByText(/weaving together the most powerful moments/i)).toBeVisible()
-
-    // Should see spinner
-    const spinner = page.locator('.animate-spin').first()
-    await expect(spinner).toBeVisible()
+    // Should transition away from pre-ceremony (Begin Ceremony button should disappear)
+    await expect(page.getByRole('button', { name: /begin ceremony/i })).not.toBeVisible({ timeout: 10000 })
   })
 
-  test('after generation, journey player is displayed with segments', async ({ page }) => {
+  test('shows error state when ceremony prepare fails', async ({ page }) => {
     await mockUserInProgress(page, {
+      programStatus: 'ceremony_ready',
       currentIllusion: 5,
       illusionsCompleted: [1, 2, 3, 4, 5],
       totalSessions: 5,
     })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
 
-    const mockSegments: PlaylistSegment[] = [
-      {
-        id: 'seg-1',
-        type: 'narration',
-        text: 'Your journey begins with understanding.',
-        transcript: 'Your journey begins with understanding.',
-        audio_generated: false,
-      },
-      {
-        id: 'seg-2',
-        type: 'user_moment',
-        text: 'I started vaping to cope with stress.',
-        transcript: 'I started vaping to cope with stress.',
-        moment_id: 'moment-1',
-        audio_generated: false,
-      },
-      {
-        id: 'seg-3',
-        type: 'narration',
-        text: 'And now you see the truth.',
-        transcript: 'And now you see the truth.',
-        audio_generated: false,
-      },
-    ]
-    await mockCeremonyGenerateJourney(page, mockSegments)
+    // Mock prepare to fail
+    await page.route('**/api/ceremony/prepare', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Failed to prepare ceremony' }),
+      })
+    })
 
     await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
 
-    // Select option and begin
-    await page.getByRole('button', { name: /still using/i }).click()
+    // Wait for pre-ceremony screen
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible({ timeout: 10000 })
+
+    // Click Begin Ceremony
     await page.getByRole('button', { name: /begin ceremony/i }).click()
 
-    // Wait for journey to load
-    await expect(page.getByText(/creating your journey/i)).toBeVisible()
-    await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({ timeout: 10000 })
+    // Should show error state
+    await expect(page.getByText(/something went wrong/i)).toBeVisible({ timeout: 10000 })
 
-    // Should see journey player step
-    await expect(page.getByText(/listen to the story of your transformation/i)).toBeVisible()
-
-    // Should see skip button
-    await expect(page.getByRole('button', { name: /skip for now/i })).toBeVisible()
+    // Should show return to dashboard button
+    await expect(page.getByRole('button', { name: /return to dashboard/i })).toBeVisible()
   })
 
-  test('shows not ready state when illusions incomplete', async ({ page }) => {
+  test('shows error state when prepare returns not ready', async ({ page }) => {
     await mockUserInProgress(page, {
-      currentIllusion: 2,
-      illusionsCompleted: [1],
-      totalSessions: 1,
+      programStatus: 'ceremony_ready',
+      currentIllusion: 5,
+      illusionsCompleted: [1, 2, 3, 4, 5],
+      totalSessions: 5,
     })
+
+    // Mock prepare to return not ready
     await mockCeremonyPrepare(page, {
       ready: false,
       ceremonyCompleted: false,
       illusionsCompleted: ['stress_relief'],
-      totalMoments: 2,
+      totalMoments: 1,
     })
 
     await page.goto('/ceremony')
 
-    // Should see not ready state
-    await expect(page.getByText(/not quite ready yet/i)).toBeVisible()
-    await expect(page.getByText(/illusions completed/i)).toBeVisible()
-    await expect(page.getByText(/1.*\/.*5/i)).toBeVisible()
+    // Wait for pre-ceremony screen
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible({ timeout: 10000 })
 
-    // Should see return button
-    await expect(page.getByRole('link', { name: /return to dashboard/i })).toBeVisible()
-  })
+    // Click Begin Ceremony
+    await page.getByRole('button', { name: /begin ceremony/i }).click()
 
-  test('shows not ready state when not enough moments captured', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, {
-      ready: false,
-      ceremonyCompleted: false,
-      illusionsCompleted: ['stress_relief', 'pleasure', 'willpower', 'focus', 'identity'],
-      totalMoments: 2, // Less than required 3
-    })
-
-    await page.goto('/ceremony')
-
-    // Should see not ready state
-    await expect(page.getByText(/not quite ready yet/i)).toBeVisible()
-    await expect(page.getByText(/2.*\/.*3 minimum/i)).toBeVisible()
-  })
-
-  test('redirects to dashboard if ceremony already completed', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, {
-      ready: true,
-      ceremonyCompleted: true, // Already completed
-    })
-
-    await page.goto('/ceremony')
-
-    // Should redirect to dashboard
-    await page.waitForURL(/\/dashboard/, { timeout: 10000 })
+    // Should show error state (prepare returned not ready)
+    await expect(page.getByText(/something went wrong/i)).toBeVisible({ timeout: 10000 })
   })
 })
-test.describe('Ceremony - Recording and Completion', () => {
-  test('user can skip journey and proceed to recording step', async ({ page }) => {
+
+test.describe('Ceremony - Error and Exit', () => {
+  test('error state has return to dashboard button that navigates to dashboard', async ({ page }) => {
     await mockUserInProgress(page, {
+      programStatus: 'ceremony_ready',
       currentIllusion: 5,
       illusionsCompleted: [1, 2, 3, 4, 5],
       totalSessions: 5,
     })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
 
-    const mockSegments: PlaylistSegment[] = [
-      {
-        id: 'seg-1',
-        type: 'narration',
-        text: 'Your journey begins.',
-        transcript: 'Your journey begins.',
-        audio_generated: false,
-      },
-    ]
-    await mockCeremonyGenerateJourney(page, mockSegments)
-
-    await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-
-    // Select option and begin ceremony
-    await page.getByRole('button', { name: /still using/i }).click()
-    await page.getByRole('button', { name: /begin ceremony/i }).click()
-
-    // Wait for journey player to load
-    await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({ timeout: 10000 })
-
-    // Click skip
-    await page.getByRole('button', { name: /skip for now/i }).click()
-
-    // Should move to recording step
-    await expect(page.getByText(/your message/i)).toBeVisible()
-    await expect(page.getByText(/record a message to your future self/i)).toBeVisible()
-  })
-
-  test('recording step shows microphone button', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-    await mockCeremonyGenerateJourney(page)
-
-    await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-
-    // Go through to recording step
-    await page.getByRole('button', { name: /already stopped/i }).click()
-    await page.getByRole('button', { name: /begin ceremony/i }).click()
-    await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({ timeout: 10000 })
-    await page.getByRole('button', { name: /skip for now/i }).click()
-
-    // Should see recording step with microphone button
-    await expect(page.getByText(/your message/i)).toBeVisible()
-    await expect(page.getByText(/tap to start recording/i)).toBeVisible()
-
-    // Should see microphone icon
-    const micButton = page.locator('button.bg-brand-accent').first()
-    await expect(micButton).toBeVisible()
-  })
-
-  test('cheat sheet step displays illusion entries', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-    await mockCeremonyGenerateJourney(page)
-
-    const { mockCeremonyCheatSheet } = await import('./utils')
-    await mockCeremonyCheatSheet(page) // Uses default entries
-
-    // Mock save recording endpoint
-    await page.route('**/api/ceremony/save-final-recording', async (route) => {
+    // Mock prepare to fail
+    await page.route('**/api/ceremony/prepare', async (route) => {
       await route.fulfill({
-        status: 200,
+        status: 500,
         contentType: 'application/json',
-        body: JSON.stringify({ artifact_id: 'mock-recording-id' }),
+        body: JSON.stringify({ message: 'Server error' }),
       })
     })
 
-    await page.goto('/ceremony')
-
-    // Skip to cheat sheet (simulating completed recording by navigating directly)
-    // We can't actually test real recording, so we mock the flow
-    await page.evaluate(() => {
-      // @ts-ignore - Direct state manipulation for testing
-      window.location.hash = '#cheatsheet'
-    })
-
-    // Manually trigger the flow by going through the ceremony
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-    await page.getByRole('button', { name: /still using/i }).click()
-    await page.getByRole('button', { name: /begin ceremony/i }).click()
-    await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({ timeout: 10000 })
-    await page.getByRole('button', { name: /skip for now/i }).click()
-
-    // Wait for recording step, then simulate recording completion
-    await expect(page.getByText(/your message/i)).toBeVisible()
-
-    // Since we can't actually record audio in E2E tests, we'll just verify the cheat sheet can load
-    // by checking that the ceremony has the structure to support it
-    await expect(page.getByText(/record a message to your future self/i)).toBeVisible()
-  })
-
-  test('complete ceremony button triggers completion API', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-    await mockCeremonyGenerateJourney(page)
-
-    const { mockCeremonyCheatSheet, mockCeremonyComplete } = await import('./utils')
-    await mockCeremonyCheatSheet(page)
-    await mockCeremonyComplete(page)
-
-    // Track if completion API was called
-    let completionCalled = false
-    await page.route('**/api/ceremony/complete', async (route) => {
-      completionCalled = true
+    // Mock dashboard APIs for redirect
+    await page.route('**/api/user/status', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          ceremony_completed_at: new Date().toISOString(),
-          already_quit: false,
-          artifacts: {},
-          follow_ups_scheduled: [],
+          phase: 'ceremony_ready',
+          progress: { program_status: 'ceremony_ready', current_illusion: 5, illusions_completed: [1, 2, 3, 4, 5], illusion_order: [1, 2, 3, 4, 5], total_sessions: 5, started_at: new Date().toISOString() },
+          ceremony: { completed_at: null },
+          artifacts: null,
+          pending_follow_ups: null,
+          next_session: null,
         }),
       })
     })
 
     await page.goto('/ceremony')
+    await expect(page.getByRole('heading', { name: /the ceremony/i })).toBeVisible({ timeout: 10000 })
 
-    // Verify completion flow structure exists
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-  })
-
-  test('after completion, user sees success message with link to dashboard', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-    await mockCeremonyGenerateJourney(page)
-
-    const { mockCeremonyCheatSheet, mockCeremonyComplete } = await import('./utils')
-    await mockCeremonyCheatSheet(page)
-    await mockCeremonyComplete(page)
-
-    await page.goto('/ceremony')
-
-    // Verify the ceremony flow has completion step structure
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-  })
-
-  test('error states show retry button', async ({ page }) => {
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-
-    // Mock journey generation failure
-    await page.route('**/api/ceremony/generate-journey', async (route) => {
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Failed to generate narrative' }),
-      })
-    })
-
-    await page.goto('/ceremony')
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-
-    // Trigger journey generation
-    await page.getByRole('button', { name: /still using/i }).click()
+    // Trigger error
     await page.getByRole('button', { name: /begin ceremony/i }).click()
+    await expect(page.getByText(/something went wrong/i)).toBeVisible({ timeout: 10000 })
 
-    // Should see error state
-    await expect(page.getByText(/something went wrong/i)).toBeVisible()
-
-    // Should see retry button
-    await expect(page.getByRole('button', { name: /try again/i })).toBeVisible()
+    // Click Return to Dashboard
+    await page.getByRole('button', { name: /return to dashboard/i }).click()
+    await page.waitForURL(/\/dashboard/, { timeout: 10000 })
   })
 })

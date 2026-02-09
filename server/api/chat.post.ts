@@ -21,6 +21,28 @@ import { createSequentialTTSProcessor } from '../utils/tts/sequential-processor'
 import { getTTSProviderFromConfig, type TTSProviderType } from '../utils/tts'
 
 export default defineEventHandler(async (event) => {
+  const stripControlTokens = (text: string) =>
+    text
+      .replace(/\[SESSION_COMPLETE\]/g, '')
+      .replace(/\[RECORDING_PROMPT\]/g, '')
+      .replace(/\[JOURNEY_GENERATE\]/g, '')
+      .trim()
+
+  const ceremonyFallbackResponse = (rawResponse: string) => {
+    const hasSessionComplete = rawResponse.includes('[SESSION_COMPLETE]')
+    const hasRecordingPrompt = rawResponse.includes('[RECORDING_PROMPT]')
+    const hasJourneyGenerate = rawResponse.includes('[JOURNEY_GENERATE]')
+
+    if (hasSessionComplete) {
+      return 'You did it. You are free. Let this land in your body. [SESSION_COMPLETE]'
+    }
+    if (hasRecordingPrompt) {
+      const prefix = hasJourneyGenerate ? '[JOURNEY_GENERATE]\n' : ''
+      return `${prefix}Take your time. Record your message when you are ready. [RECORDING_PROMPT]`
+    }
+    return 'I am here with you. Tell me what you are noticing right now.'
+  }
+
   // Verify authentication
   const user = await serverSupabaseUser(event)
   if (!user || !user.sub) {
@@ -408,6 +430,26 @@ export default defineEventHandler(async (event) => {
               }
             },
             onComplete: async (response) => {
+              let finalResponse = response
+              const usedFallbackResponse =
+                sessionType === 'ceremony' && stripControlTokens(finalResponse).length === 0
+
+              // Guardrail: never persist or emit token-only ceremony responses.
+              if (usedFallbackResponse) {
+                finalResponse = ceremonyFallbackResponse(finalResponse)
+                // Emit fallback text so client transcript does not appear empty.
+                const fallbackData = JSON.stringify({ type: 'token', token: finalResponse, conversationId: convId })
+                controller.enqueue(encoder.encode(`data: ${fallbackData}\n\n`))
+
+                // Feed fallback text into sentence detector for TTS streaming when enabled.
+                if (sentenceDetector && ttsProcessor) {
+                  const fallbackSentences = sentenceDetector.addToken(finalResponse)
+                  for (const sentence of fallbackSentences) {
+                    ttsProcessor.enqueueSentence(sentence, false)
+                  }
+                }
+              }
+
               // Flush any remaining text for TTS
               if (sentenceDetector && ttsProcessor) {
                 const remaining = sentenceDetector.flush()
@@ -429,7 +471,7 @@ export default defineEventHandler(async (event) => {
               }
 
               // Check for ceremony-specific tokens
-              const journeyGenerateToken = response.includes('[JOURNEY_GENERATE]')
+              const journeyGenerateToken = finalResponse.includes('[JOURNEY_GENERATE]')
 
               // Trigger background journey generation (fire-and-forget)
               if (journeyGenerateToken && sessionType === 'ceremony') {
@@ -439,14 +481,14 @@ export default defineEventHandler(async (event) => {
               }
 
               // Check for session complete token
-              const sessionComplete = response.includes('[SESSION_COMPLETE]')
+              const sessionComplete = finalResponse.includes('[SESSION_COMPLETE]')
 
               // Save assistant message with metadata
               await supabase.from('messages').insert({
                 conversation_id: convId,
                 role: 'assistant',
-                content: response,
-                message_length: response.length,
+                content: finalResponse,
+                message_length: finalResponse.length,
                 time_since_last_message: null
               })
 
@@ -526,9 +568,15 @@ export default defineEventHandler(async (event) => {
     // Non-streaming response
     try {
       const response = await router.chat({ messages: processedMessages, model })
+      let assistantContent = response.content
+
+      // Guardrail: never persist or emit token-only ceremony responses.
+      if (sessionType === 'ceremony' && stripControlTokens(assistantContent).length === 0) {
+        assistantContent = ceremonyFallbackResponse(assistantContent)
+      }
 
       // Check for ceremony-specific tokens
-      const journeyGenerateToken = response.content.includes('[JOURNEY_GENERATE]')
+      const journeyGenerateToken = assistantContent.includes('[JOURNEY_GENERATE]')
 
       // Trigger background journey generation (fire-and-forget)
       if (journeyGenerateToken && sessionType === 'ceremony') {
@@ -538,14 +586,14 @@ export default defineEventHandler(async (event) => {
       }
 
       // Check for session complete token
-      const sessionComplete = response.content.includes('[SESSION_COMPLETE]')
+      const sessionComplete = assistantContent.includes('[SESSION_COMPLETE]')
 
       // Save assistant message with metadata
       await supabase.from('messages').insert({
         conversation_id: convId,
         role: 'assistant',
-        content: response.content,
-        message_length: response.content.length,
+        content: assistantContent,
+        message_length: assistantContent.length,
         time_since_last_message: null
       })
 
@@ -593,6 +641,7 @@ export default defineEventHandler(async (event) => {
 
       return {
         ...response,
+        content: assistantContent,
         conversationId: convId,
         sessionComplete
       }

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { MOCK_USER } from './mock-auth'
 
 export interface MockProgressOptions {
-  programStatus?: 'not_started' | 'in_progress' | 'completed'
+  programStatus?: 'not_started' | 'in_progress' | 'ceremony_ready' | 'completed'
   currentIllusion?: number
   illusionsCompleted?: number[]
   illusionOrder?: number[]
@@ -63,6 +63,33 @@ function createMockProgress(options: MockProgressOptions = {}) {
   }
 }
 
+function toMockUserStatus(progress: ReturnType<typeof createMockProgress>) {
+  let phase: 'not_started' | 'in_progress' | 'ceremony_ready' | 'post_ceremony' = 'in_progress'
+  if (!progress) {
+    phase = 'not_started'
+  } else if (progress.ceremony_completed_at) {
+    phase = 'post_ceremony'
+  } else if (progress.program_status === 'completed' || progress.program_status === 'ceremony_ready') {
+    phase = 'ceremony_ready'
+  }
+
+  return {
+    phase,
+    progress: {
+      program_status: progress.program_status,
+      current_illusion: progress.current_illusion,
+      illusions_completed: progress.illusions_completed,
+      illusion_order: progress.illusion_order,
+      total_sessions: progress.total_sessions,
+      started_at: progress.started_at,
+    },
+    ceremony: null,
+    artifacts: null,
+    pending_follow_ups: null,
+    next_session: null,
+  }
+}
+
 /**
  * Create a full mock intake object
  */
@@ -93,6 +120,7 @@ export async function mockProgressAPI(
   options: MockProgressOptions = {}
 ): Promise<void> {
   const mockProgress = createMockProgress(options)
+  const mockUserStatus = toMockUserStatus(mockProgress)
 
   await page.route('**/api/progress', async (route) => {
     if (route.request().method() === 'GET') {
@@ -100,6 +128,18 @@ export async function mockProgressAPI(
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(mockProgress),
+      })
+    } else {
+      await route.continue()
+    }
+  })
+
+  await page.route('**/api/user/status', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockUserStatus),
       })
     } else {
       await route.continue()

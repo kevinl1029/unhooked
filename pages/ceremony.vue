@@ -59,9 +59,15 @@
 
         <button
           class="btn-primary text-white px-8 py-4 rounded-pill font-semibold shadow-card text-lg"
+          :disabled="isStartingCeremony"
+          :class="{ 'opacity-70 cursor-not-allowed': isStartingCeremony }"
           @click="beginCeremony"
         >
-          Begin Ceremony
+          <span v-if="isStartingCeremony" class="inline-flex items-center gap-2">
+            <span class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+            Preparing ceremony...
+          </span>
+          <span v-else>Begin Ceremony</span>
         </button>
       </div>
     </div>
@@ -72,8 +78,9 @@
         ref="sessionViewRef"
         session-type="ceremony"
         :existing-conversation-id="conversationId"
-        @recording-prompt="handleRecordingPrompt"
+        @recording-prompt="handleRecordingPromptEvent"
         @session-complete="handleSessionComplete"
+        @conversation-id-update="handleConversationIdUpdate"
       />
 
       <!-- Inline recording component (slides in when phase === 'recording') -->
@@ -88,8 +95,8 @@
         <div v-if="ceremonyPhase === 'recording'" class="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-brand-bg-dark via-brand-bg-dark/95 to-transparent pointer-events-none">
           <div class="pointer-events-auto max-w-2xl mx-auto">
             <CeremonyRecordingInline
-              @audio-saved="handleRecordingSaved"
-              @text-saved="handleTextSaved"
+              @audio-saved="handleRecordingSavedEvent"
+              @text-saved="handleTextSavedEvent"
               @error="handleRecordingError"
             />
           </div>
@@ -146,6 +153,8 @@
 </template>
 
 <script setup lang="ts">
+import SessionView from '~/components/voice/SessionView.vue'
+
 definePageMeta({
   middleware: 'auth',
   layout: 'ceremony'
@@ -176,10 +185,15 @@ const {
 
 // Local state for pre-ceremony screen
 const isCheckingStatus = ref(true)
+const isStartingCeremony = ref(false)
 const productType = ref<string | null>(null)
 
 // Template ref for SessionView (to call pause/resume methods)
-const sessionViewRef = ref<{ pause: () => void; resume: () => void } | null>(null)
+const sessionViewRef = ref<{
+  pause: () => void
+  resume: () => void
+  sendTextMessage: (content: string) => Promise<boolean>
+} | null>(null)
 
 // Check if user prefers reduced motion
 const prefersReducedMotion = ref(false)
@@ -235,34 +249,21 @@ onMounted(async () => {
 
 async function checkCeremonyEligibility() {
   try {
-    // Fetch user progress to check program_status
-    const { data: progress, error: progressError } = await useFetch('/api/progress')
-
-    if (progressError.value) {
-      console.error('Error fetching progress:', progressError.value)
-      // On error, stay on page - user might be eligible
-      isCheckingStatus.value = false
-      return
-    }
-
-    const programStatus = progress.value?.program_status
-
-    // If already completed, redirect to dashboard
-    if (programStatus === 'completed') {
-      await navigateTo('/dashboard', { replace: true })
-      return
-    }
-
-    // If not ceremony_ready, redirect to dashboard
-    if (programStatus !== 'ceremony_ready') {
+    // Use the same status contract as dashboard to avoid eligibility mismatches.
+    const status = await $fetch<{ phase: string }>('/api/user/status')
+    if (status?.phase !== 'ceremony_ready') {
       await navigateTo('/dashboard', { replace: true })
       return
     }
 
     // Fetch product type from user intake
-    const { data: intake } = await useFetch('/api/intake')
-    if (intake.value?.product_types) {
-      productType.value = intake.value.product_types
+    try {
+      const intake = await $fetch<{ product_types: string | string[] }>('/api/intake')
+      if (intake?.product_types) {
+        productType.value = intake.product_types
+      }
+    } catch {
+      // Intake fetch failure is non-critical
     }
 
     // User is ceremony_ready - show pre-ceremony screen
@@ -276,7 +277,16 @@ async function checkCeremonyEligibility() {
 
 // Begin ceremony - calls useCeremony().startCeremony()
 async function beginCeremony() {
-  await startCeremony()
+  if (isStartingCeremony.value) {
+    return
+  }
+
+  try {
+    isStartingCeremony.value = true
+    await startCeremony()
+  } finally {
+    isStartingCeremony.value = false
+  }
 }
 
 // Handle recording prompt - pause SessionView and transition to recording phase
@@ -299,6 +309,12 @@ function handleRecordingSavedEvent(path?: string) {
 
   // Transition back to conversation phase
   handleRecordingSaved(path)
+
+  // Continue ceremony automatically after recording is saved.
+  // Without this cue, the model may wait silently for user input.
+  if (sessionViewRef.value) {
+    void sessionViewRef.value.sendTextMessage('I finished that recording.')
+  }
 }
 
 // Handle text saved - resume SessionView and transition back to conversation
@@ -310,6 +326,11 @@ function handleTextSavedEvent(text: string) {
 
   // Transition back to conversation phase
   handleTextSaved(text)
+
+  // Continue ceremony automatically after typed message is saved.
+  if (sessionViewRef.value) {
+    void sessionViewRef.value.sendTextMessage('I finished that recording.')
+  }
 }
 
 // Handle recording error - just log it (recording component handles UI)
@@ -322,6 +343,10 @@ function handleEscapeKeyPress(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     toggleExitDialog()
   }
+}
+
+function handleConversationIdUpdate(id: string | null) {
+  conversationId.value = id
 }
 
 // Cleanup on unmount

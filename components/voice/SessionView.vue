@@ -245,6 +245,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   sessionComplete: [nextIllusion: number | null]
   recordingPrompt: []
+  conversationIdUpdate: [conversationId: string | null]
   error: [message: string]
 }>()
 
@@ -329,14 +330,16 @@ onMounted(() => {
 // Display messages with ceremony tokens stripped
 // Show the live transcript while text is streaming OR while streaming TTS audio is playing
 const displayMessages = computed(() => {
-  const allMessages = messages.value.map(msg => ({
-    ...msg,
-    content: msg.content
-      .replace('[SESSION_COMPLETE]', '')
-      .replace('[RECORDING_PROMPT]', '')
-      .replace('[JOURNEY_GENERATE]', '')
-      .trim()
-  }))
+  const allMessages = messages.value
+    .map(msg => ({
+      ...msg,
+      content: msg.content
+        .replace('[SESSION_COMPLETE]', '')
+        .replace('[RECORDING_PROMPT]', '')
+        .replace('[JOURNEY_GENERATE]', '')
+        .trim()
+    }))
+    .filter(msg => !(msg.role === 'assistant' && msg.content.length === 0))
 
   // Show streaming transcript while text is being streamed OR while streaming TTS audio plays
   // isTextStreaming: text tokens arriving from LLM
@@ -428,6 +431,15 @@ watch(
       scrollToBottom()
     })
   }
+)
+
+// Keep parent in sync with active conversation ID (required for ceremony completion API)
+watch(
+  () => conversationId.value,
+  (id) => {
+    emit('conversationIdUpdate', id)
+  },
+  { immediate: true }
 )
 
 // Watch for session tokens in messages
@@ -559,6 +571,14 @@ const handleSendText = async () => {
   await sendMessage(text, 'text', true)
 }
 
+const sendTextMessage = async (content: string) => {
+  if (!content.trim()) {
+    return false
+  }
+  await preInitAudio()
+  return sendMessage(content, 'text', true)
+}
+
 const handleSessionComplete = async () => {
   // Hide voice controls immediately to avoid "Session complete" text flash
   sessionCompletionTriggered.value = true
@@ -593,6 +613,7 @@ const resume = () => {
 
 defineExpose({
   pause,
-  resume
+  resume,
+  sendTextMessage
 })
 </script>
