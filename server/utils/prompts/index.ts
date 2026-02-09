@@ -3,12 +3,14 @@
 // here to avoid Nuxt auto-import duplicate warnings. Import directly from './base-system' if needed.
 import { BASE_SYSTEM_PROMPT, buildPersonalizationContext as buildPersonalization } from './base-system'
 import type { UserContext } from './base-system'
-import { ILLUSION_1_STRESS_PROMPT } from './illusions/illusion-1-stress'
-import { ILLUSION_2_PLEASURE_PROMPT } from './illusions/illusion-2-pleasure'
-import { ILLUSION_3_WILLPOWER_PROMPT } from './illusions/illusion-3-willpower'
-import { ILLUSION_4_FOCUS_PROMPT } from './illusions/illusion-4-focus'
-import { ILLUSION_5_IDENTITY_PROMPT } from './illusions/illusion-5-identity'
+import { ILLUSION_1_STRESS_PROMPT, OBSERVATION_TEMPLATES as STRESS_TEMPLATES } from './illusions/illusion-1-stress'
+import { ILLUSION_2_PLEASURE_PROMPT, OBSERVATION_TEMPLATES as PLEASURE_TEMPLATES } from './illusions/illusion-2-pleasure'
+import { ILLUSION_3_WILLPOWER_PROMPT, OBSERVATION_TEMPLATES as WILLPOWER_TEMPLATES } from './illusions/illusion-3-willpower'
+import { ILLUSION_4_FOCUS_PROMPT, OBSERVATION_TEMPLATES as FOCUS_TEMPLATES } from './illusions/illusion-4-focus'
+import { ILLUSION_5_IDENTITY_PROMPT, OBSERVATION_TEMPLATES as IDENTITY_TEMPLATES } from './illusions/illusion-5-identity'
+import { LAYER_1_INTELLECTUAL_INSTRUCTIONS, LAYER_2_EMOTIONAL_INSTRUCTIONS, LAYER_3_IDENTITY_INSTRUCTIONS } from './layer-instructions'
 import type { IllusionKey } from '../llm/task-types'
+import { illusionKeyToNumber, illusionNumberToKey } from '../llm/task-types'
 
 // Extended options for buildSystemPrompt
 export interface BuildSystemPromptOptions {
@@ -19,6 +21,8 @@ export interface BuildSystemPromptOptions {
   personalizationContext?: string  // From context-builder.ts
   bridgeContext?: string           // From bridge.ts
   abandonedSessionContext?: string // For abandoned session moments
+  // Evidence-based coaching additions
+  illusionLayer?: 'intellectual' | 'emotional' | 'identity'
 }
 
 export const ILLUSION_NAMES: Record<IllusionKey, string> = {
@@ -35,6 +39,75 @@ const ILLUSION_PROMPTS: Record<IllusionKey, string> = {
   willpower: ILLUSION_3_WILLPOWER_PROMPT,
   focus: ILLUSION_4_FOCUS_PROMPT,
   identity: ILLUSION_5_IDENTITY_PROMPT,
+}
+
+const OBSERVATION_TEMPLATES_MAP: Record<IllusionKey, Record<string, string>> = {
+  stress_relief: STRESS_TEMPLATES,
+  pleasure: PLEASURE_TEMPLATES,
+  willpower: WILLPOWER_TEMPLATES,
+  focus: FOCUS_TEMPLATES,
+  identity: IDENTITY_TEMPLATES,
+}
+
+/**
+ * Get layer instruction block for a given layer
+ */
+function getLayerInstructions(
+  layer: 'intellectual' | 'emotional' | 'identity',
+  illusionKey: IllusionKey
+): string {
+  let layerInstruction = ''
+
+  switch (layer) {
+    case 'intellectual':
+      layerInstruction = LAYER_1_INTELLECTUAL_INSTRUCTIONS
+      break
+    case 'emotional':
+      layerInstruction = LAYER_2_EMOTIONAL_INSTRUCTIONS
+      break
+    case 'identity':
+      layerInstruction = LAYER_3_IDENTITY_INSTRUCTIONS
+      break
+  }
+
+  // Replace observation template placeholder for L1/L2
+  if ((layer === 'intellectual' || layer === 'emotional') && illusionKey) {
+    const templates = OBSERVATION_TEMPLATES_MAP[illusionKey]
+    const template = templates?.[layer] || ''
+    layerInstruction = layerInstruction.replace('{observationTemplate}', template)
+  }
+
+  // Replace next illusion preview placeholder for L3
+  if (layer === 'identity' && illusionKey) {
+    const nextIllusionPreview = getNextIllusionPreview(illusionKey)
+    layerInstruction = layerInstruction.replace('{nextIllusionPreview}', nextIllusionPreview)
+  }
+
+  return layerInstruction
+}
+
+/**
+ * Get next illusion preview text for L3 completion
+ */
+function getNextIllusionPreview(illusionKey: IllusionKey): string {
+  const currentNumber = illusionKeyToNumber(illusionKey)
+  if (!currentNumber) return ''
+
+  // If this is the final illusion (identity = 5), tease the ceremony
+  if (currentNumber === 5) {
+    return 'All five illusions dismantled. Your final ceremony is ready when you are.'
+  }
+
+  // Otherwise, tease the next illusion
+  const nextNumber = currentNumber + 1
+  const nextKey = illusionNumberToKey(nextNumber)
+  const nextName = nextKey ? ILLUSION_NAMES[nextKey] : null
+
+  if (nextName) {
+    return `Next up: ${nextName}. It'll be waiting for you when you're ready.`
+  }
+
+  return ''
 }
 
 /**
@@ -60,6 +133,14 @@ export function buildSystemPrompt(
   const illusionPrompt = ILLUSION_PROMPTS[options.illusionKey]
   if (illusionPrompt) {
     prompt += '\n\n' + illusionPrompt
+  }
+
+  // Add layer instructions after illusion prompt (evidence-based coaching)
+  if (options.illusionLayer) {
+    const layerInstructions = getLayerInstructions(options.illusionLayer, options.illusionKey)
+    if (layerInstructions) {
+      prompt += '\n\n' + layerInstructions
+    }
   }
 
   // Add bridge context for returning users (Phase 4C)
