@@ -53,7 +53,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     // Add user message to local state
     const userMessage: Message = { role: 'user', content }
     messages.value.push(userMessage)
-    console.log('[sendMessage] After push user message, messages.length:', messages.value.length, 'roles:', messages.value.map(m => m.role))
 
     isLoading.value = true
 
@@ -101,7 +100,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
         // Use getTranscriptText which prefers TTS-derived text for consistency with what was displayed
         const assistantContent = voiceSession.getTranscriptText.value
         messages.value.push({ role: 'assistant', content: assistantContent })
-        console.log('[sendMessage] After push assistant message, messages.length:', messages.value.length, 'roles:', messages.value.map(m => m.role))
 
         isLoading.value = false
         useStreamingTTS.value = true
@@ -205,7 +203,6 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
         // Use getTranscriptText which prefers TTS-derived text for consistency with what was displayed
         const assistantContent = voiceSession.getTranscriptText.value
         messages.value.push({ role: 'assistant', content: assistantContent })
-        console.log('[startConversation] After push first assistant message, messages.length:', messages.value.length, 'roles:', messages.value.map(m => m.role))
 
         isLoading.value = false
         useStreamingTTS.value = true

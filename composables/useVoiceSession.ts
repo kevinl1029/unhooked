@@ -59,14 +59,12 @@ export const useVoiceSession = () => {
     },
     onAudioComplete: () => {
       // Audio playback finished - update state
-      console.log('[onAudioComplete] Audio finished - setting isAISpeaking=false, streamingModeFlag=false, isPaused=false')
       isAISpeaking.value = false
       streamingModeFlag.value = false
       isPaused.value = false
     },
     onAudioStart: () => {
       // First audio chunk started playing - update state immediately
-      console.log('[onAudioStart] Audio started - setting isAISpeaking=true, streamingModeFlag=true')
       isAISpeaking.value = true
       streamingModeFlag.value = true
     }
@@ -178,7 +176,6 @@ export const useVoiceSession = () => {
   const playStreamingResponse = async (
     reader: ReadableStreamDefaultReader<Uint8Array>
   ): Promise<{ success: boolean; sessionComplete: boolean; conversationId: string | null }> => {
-    console.log('[playStreamingResponse] START - setting isTextStreaming=true, clearing currentTranscript')
     error.value = null
     streamingTTSResult.value = null
     currentTranscript.value = ''

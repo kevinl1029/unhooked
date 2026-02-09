@@ -726,7 +726,6 @@ async function fetchMomentData(retryCount = 0) {
 
     // Retry once after 2 second delay on failure
     if (retryCount === 0) {
-      console.log('Retrying moment data fetch in 2 seconds...')
       await new Promise(resolve => setTimeout(resolve, 2000))
       await fetchMomentData(1)
       return
