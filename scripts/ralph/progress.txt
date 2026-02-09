@@ -374,3 +374,28 @@ Files changed:
 - Conditional rendering: Use v-if on journeyStatus === 'ready' | 'pending' | 'generating' | 'failed' for state-driven UI
 - The journey card should render conditionally based on journeyStatus, not hasJourneyArtifact computed (which doesn't expose status)
 ---
+## 2026-02-08 - US-016
+- Implemented cheat sheet page with conditional user insights display
+- Created pages/cheat-sheet.vue (new route separate from existing pages/toolkit.vue)
+- Page displays all 5 illusions as vertical scroll list of glass cards
+- Each card shows illusion name (heading), "The Illusion" section (italic quote), "The Truth" section (reframe)
+- Conditionally renders "Your Insight" section when entry.userInsight exists (NOT rendered when absent — card is simply shorter)
+- All 5 illusions always display (stress_relief, pleasure, willpower, focus, identity)
+- Data fetched from GET /api/ceremony/cheat-sheet which returns CheatSheetData structure from content_json
+- Cards use glass card styling with shadow-card, border-brand-border, rounded-card per brand design tokens
+- Footer shows generation date if is_final=true, or "Complete your ceremony to finalize" message if false
+- Build passed (npm run build)
+
+Files changed:
+- pages/cheat-sheet.vue (created - 115 lines)
+- scripts/ralph/prd.json (marked US-016 as passing)
+
+**Learnings for future iterations:**
+- Cheat sheet page pattern: Existing pages/toolkit.vue had most of the implementation already
+- Created separate /cheat-sheet route for post-ceremony access (dashboard links to /cheat-sheet, not /toolkit)
+- Conditional "Your Insight" rendering: Use v-if="entry.userInsight" - field is omitted entirely when absent (not null)
+- CheatSheetData interface: { entries: Array<{ illusionKey, name, illusion, truth, userInsight?, insightMomentId? }>, generatedAt }
+- API endpoint returns { artifact_id, cheat_sheet, generated_at, is_final } where is_final indicates ceremony completion
+- Glass card styling: rounded-card, shadow-card, border-brand-border for consistent brand design
+- The toolkit.vue page serves a similar purpose during in-progress state, cheat-sheet.vue is for post-ceremony
+---

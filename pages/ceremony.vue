@@ -216,6 +216,9 @@ const productDisplayText = computed(() => {
   }
 })
 
+// Pending upload retry
+const { retryPendingUpload } = usePendingUpload()
+
 // Check status and redirect if needed
 onMounted(async () => {
   await checkCeremonyEligibility()
@@ -225,6 +228,9 @@ onMounted(async () => {
 
   // Check prefers-reduced-motion
   prefersReducedMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // Retry pending upload (silent background retry)
+  retryPendingUpload()
 })
 
 async function checkCeremonyEligibility() {

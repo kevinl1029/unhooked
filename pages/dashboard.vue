@@ -413,6 +413,9 @@ const {
 // Timezone detection
 const { detectAndStoreTimezone } = useTimezoneDetection()
 
+// Pending upload retry
+const { retryPendingUpload } = usePendingUpload()
+
 // Audio player state
 const showAudioPlayer = ref(false)
 const audioPlayerTitle = ref('')
@@ -457,6 +460,9 @@ onMounted(async () => {
 
   // Detect and store timezone (for check-in scheduling)
   detectAndStoreTimezone()
+
+  // Retry pending upload (silent background retry)
+  retryPendingUpload()
 
   // Check for pending check-in interstitial (only if not post-ceremony)
   if (!isPostCeremony.value) {
