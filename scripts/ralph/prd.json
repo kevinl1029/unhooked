@@ -343,7 +343,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Can be a utility function or small composable (e.g., `usePendingUpload()`). Call in onMounted of both `pages/ceremony.vue` and `pages/dashboard.vue`. The localStorage key and schema must match what CeremonyRecordingInline writes in US-008 when upload fails 3 times. Use $fetch for the upload. Convert base64 data URL to Blob via fetch(dataUrl).then(r => r.blob()) or manual parsing."
     }
   ]

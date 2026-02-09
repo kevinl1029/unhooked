@@ -215,7 +215,13 @@ test.describe('Reinforcement Sessions', () => {
 
     await page.goto('/reinforcement/focus')
 
-    // Wait for page to load
+    // Dismiss the voice permission overlay if it appears (covers the Exit link)
+    const textOnlyBtn = page.getByRole('button', { name: /use text instead/i })
+    if (await textOnlyBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await textOnlyBtn.click()
+    }
+
+    // Wait for Exit link to be clickable
     await expect(page.getByRole('link', { name: /exit/i })).toBeVisible({ timeout: 10000 })
 
     // Click Exit link

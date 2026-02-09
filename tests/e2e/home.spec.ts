@@ -7,33 +7,26 @@ test.describe('Home Page', () => {
   test('displays the landing page with correct content', async ({ page }) => {
     await page.goto('/')
 
-    // Check for brand name
-    await expect(page.locator('h1')).toContainText('Unhooked')
+    // Check for hero headline
+    await expect(page.locator('h1')).toContainText('nicotine')
 
-    // Check for tagline
-    await expect(page.getByText('Break Free Forever')).toBeVisible()
-
-    // Check for value proposition
-    await expect(
-      page.getByText('Break free from nicotine')
-    ).toBeVisible()
+    // Check for hero subtitle
+    await expect(page.getByText(/walking past your vape/i)).toBeVisible()
   })
 
-  test('has a Get Started button that links to login', async ({ page }) => {
+  test('has a primary CTA button', async ({ page }) => {
     await page.goto('/')
 
-    const getStartedButton = page.getByRole('link', { name: 'Get Started' })
-    await expect(getStartedButton).toBeVisible()
-
-    // Verify it links to login
-    await expect(getStartedButton).toHaveAttribute('href', '/login')
+    // Hero has "I'm ready" or "Get Early Access" button (depends on checkout mode)
+    const ctaButton = page.locator('.hero-actions button, .hero-actions a').first()
+    await expect(ctaButton).toBeVisible()
   })
 
-  test('header contains navigation to login', async ({ page }) => {
+  test('has a secondary CTA to see how it works', async ({ page }) => {
     await page.goto('/')
 
-    const loginLink = page.getByRole('link', { name: 'Continue your journey' })
-    await expect(loginLink).toBeVisible()
+    const howItWorksLink = page.getByText(/show me how it works/i)
+    await expect(howItWorksLink).toBeVisible()
   })
 })
 

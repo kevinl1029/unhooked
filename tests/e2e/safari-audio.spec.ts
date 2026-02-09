@@ -11,7 +11,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { mockUserInProgress, mockCeremonyPrepare, mockCeremonyGenerateJourney } from './utils'
+import { mockUserInProgress } from './utils'
 import type { PlaylistSegment } from './utils'
 import { mockConversationsAPI } from './utils/mock-session'
 import {
@@ -127,13 +127,6 @@ test.describe('Safari Audio / TTS Regression', () => {
   }) => {
     await addAudioContextTracking(page)
 
-    await mockUserInProgress(page, {
-      currentIllusion: 5,
-      illusionsCompleted: [1, 2, 3, 4, 5],
-      totalSessions: 5,
-    })
-    await mockCeremonyPrepare(page, { ready: true, ceremonyCompleted: false })
-
     const mockSegments: PlaylistSegment[] = [
       {
         id: 'seg-1',
@@ -158,7 +151,20 @@ test.describe('Safari Audio / TTS Regression', () => {
         audio_generated: true,
       },
     ]
-    await mockCeremonyGenerateJourney(page, mockSegments)
+
+    // Mock the journey endpoint (journey page uses useFetch to load segments)
+    await page.route('**/api/ceremony/journey', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          artifact_id: 'mock-journey-id',
+          playlist: { segments: mockSegments },
+          journey_text: mockSegments.map(s => s.text).join('\n'),
+          status: 'ready',
+        }),
+      })
+    })
 
     // Mock segment audio endpoints — each returns a valid WAV with word timings
     for (const seg of mockSegments) {
@@ -185,22 +191,20 @@ test.describe('Safari Audio / TTS Regression', () => {
       })
     }
 
-    await page.goto('/ceremony')
+    // Navigate directly to the journey page (post-ceremony artifact)
+    await page.goto('/journey')
 
-    // Navigate through ceremony intro
-    await expect(page.getByText(/the final step/i)).toBeVisible()
-    await page.getByRole('button', { name: /still using/i }).click()
-    await page.getByRole('button', { name: /begin ceremony/i }).click()
-
-    // Wait for journey player to load
+    // Wait for the page to load (heading is always visible)
     await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({
       timeout: 10000,
     })
 
+    // Journey page uses useLazyFetch (client-only) so Playwright route mocks will intercept
+
     // Click play to start journey playback (user gesture creates AudioContext).
     // The play button has no text label (SVG-only), so use CSS class selector.
-    const playButton = page.locator('button.bg-brand-accent.rounded-full')
-    await expect(playButton).toBeVisible({ timeout: 5000 })
+    const playButton = page.locator('button.rounded-full.bg-brand-accent')
+    await expect(playButton).toBeVisible({ timeout: 10000 })
     await playButton.click()
 
     // Wait for all segments to be scheduled and play

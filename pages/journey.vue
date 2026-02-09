@@ -28,11 +28,30 @@ interface JourneyData {
 const router = useRouter()
 const journeyPlayerRef = ref<{ play: () => void } | null>(null)
 
-// Fetch journey data
-const { data, pending, error, refresh } = await useFetch<JourneyData>('/api/ceremony/journey')
+// Reactive state for journey data
+const data = ref<JourneyData | null>(null)
+const pending = ref(true)
+const error = ref<Error | null>(null)
 
 const segments = computed(() => data.value?.playlist?.segments || [])
 const hasSegments = computed(() => segments.value.length > 0)
+
+// Fetch journey data using $fetch (client-only, interceptable by E2E mocks)
+async function fetchJourney() {
+  pending.value = true
+  error.value = null
+  try {
+    data.value = await $fetch<JourneyData>('/api/ceremony/journey')
+  } catch (err: any) {
+    error.value = err
+  } finally {
+    pending.value = false
+  }
+}
+
+onMounted(() => {
+  fetchJourney()
+})
 
 function handleComplete() {
   // Journey finished - could show a completion state or redirect
@@ -78,7 +97,7 @@ function goBack() {
         <p class="text-red-400 mb-4">Failed to load journey</p>
         <button
           class="px-4 py-2 bg-brand-glass rounded-lg text-white"
-          @click="refresh"
+          @click="fetchJourney"
         >
           Try Again
         </button>

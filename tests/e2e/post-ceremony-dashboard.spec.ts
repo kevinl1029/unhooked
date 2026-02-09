@@ -2,11 +2,10 @@
  * Post-Ceremony Dashboard Tests (P2)
  *
  * Verifies that after ceremony completion, the dashboard displays:
- * - Support section with "Get Support Now" button
- * - "Your Journey" section with all 5 illusion chips
- * - Artifact cards (Journey, Toolkit) with correct links
- * - Moment cards when moments exist
- * - Pending follow-up card when scheduled
+ * - "YOU'RE FREE" heading with ceremony date
+ * - Artifact cards (Journey, Cheat Sheet) with correct links
+ * - "Need a boost?" CTA with "Talk to me" button navigating to /support
+ * - "Reinforce Your Freedom" section with 5 illusion cards
  */
 
 import { test, expect } from '@playwright/test'
@@ -21,8 +20,6 @@ interface PostCeremonyOptions {
   hasJourney?: boolean
   hasCheatSheet?: boolean
   hasFinalRecording?: boolean
-  hasMoments?: boolean
-  hasFollowUp?: boolean
 }
 
 /**
@@ -36,8 +33,6 @@ async function setupPostCeremonyDashboard(
     hasJourney = true,
     hasCheatSheet = true,
     hasFinalRecording = false,
-    hasMoments = false,
-    hasFollowUp = false,
   } = options
 
   const completedAt = new Date().toISOString()
@@ -66,15 +61,6 @@ async function setupPostCeremonyDashboard(
     }
   }
 
-  // Build illusion_last_sessions with staggered dates
-  const illusionLastSessions: Record<string, string> = {
-    stress_relief: new Date(Date.now() - 4 * 86400000).toISOString(),
-    pleasure: new Date(Date.now() - 3 * 86400000).toISOString(),
-    willpower: new Date(Date.now() - 2 * 86400000).toISOString(),
-    focus: new Date(Date.now() - 1 * 86400000).toISOString(),
-    identity: new Date().toISOString(),
-  }
-
   await page.route('**/api/user/status', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.continue()
@@ -99,98 +85,80 @@ async function setupPostCeremonyDashboard(
           already_quit: true,
         },
         artifacts: Object.keys(artifacts).length > 0 ? artifacts : null,
-        pending_follow_ups: hasFollowUp
-          ? [{ id: 'follow-up-1', milestone_type: 'day_3', scheduled_for: new Date().toISOString() }]
-          : null,
+        pending_follow_ups: null,
         next_session: null,
-        illusion_last_sessions: illusionLastSessions,
+        illusion_last_sessions: null,
       }),
     })
   })
 
-  await mockIntakeAPI(page)
-  await mockCheckInInterstitial(page, { hasPending: false })
-  await mockTimezoneAPI(page)
-
-  // Mock dashboard moments
-  if (hasMoments) {
-    await page.route('**/api/dashboard/moments', async (route) => {
+  // Mock journey endpoint for polling (dashboard polls /api/ceremony/journey)
+  if (hasJourney) {
+    await page.route('**/api/ceremony/journey', async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue()
+        return
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          moment_id: 'mock-moment-123',
-          quote: 'I realized that nicotine never actually helped my stress — it was creating the cycle all along.',
-          illusion_key: 'stress_relief',
-          illusion_name: 'Stress Relief',
-          relative_time: '2 days ago',
+          journey: {
+            artifact_id: 'mock-journey-id',
+            playlist: {
+              segments: [
+                { id: 'seg-1', type: 'narration', text: 'Your journey.', transcript: 'Your journey.' },
+              ],
+            },
+            journey_text: 'Your reflective journey.',
+            total_duration_ms: 154000,
+            generated_at: completedAt,
+          },
+          status: 'ready',
         }),
       })
     })
   } else {
-    await mockDashboardMoments(page)
+    await page.route('**/api/ceremony/journey', async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Journey not found' }),
+      })
+    })
   }
 
-  // Mock follow-ups endpoint
-  await page.route('**/api/follow-ups/pending', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(
-        hasFollowUp
-          ? [{ id: 'follow-up-1', milestone_type: 'day_3', scheduled_for: new Date().toISOString() }]
-          : [],
-      ),
-    })
-  })
+  await mockIntakeAPI(page)
+  await mockCheckInInterstitial(page, { hasPending: false })
+  await mockTimezoneAPI(page)
+  await mockDashboardMoments(page)
 }
 
 test.describe('Post-Ceremony Dashboard', () => {
-  test('shows support section with "Get Support Now" button', async ({ page }) => {
+  test('shows "YOU\'RE FREE" heading', async ({ page }) => {
     await setupPostCeremonyDashboard(page)
 
     await page.goto('/dashboard')
 
-    // Should show support section heading
-    await expect(page.getByText('Need Support?')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('Reconnect with what you\'ve already discovered')).toBeVisible()
-
-    // "Get Support Now" is a button (uses navigateTo, not a link)
-    const supportButton = page.getByRole('button', { name: /get support now/i })
-    await expect(supportButton).toBeVisible()
+    await expect(page.getByRole('heading', { name: /you're free/i })).toBeVisible({ timeout: 10000 })
   })
 
-  test('"Get Support Now" navigates to /support', async ({ page }) => {
-    await setupPostCeremonyDashboard(page)
+  test('shows cheat sheet card with View link to /cheat-sheet', async ({ page }) => {
+    await setupPostCeremonyDashboard(page, { hasCheatSheet: true })
 
     await page.goto('/dashboard')
 
-    await expect(page.getByText('Need Support?')).toBeVisible({ timeout: 10000 })
+    // Cheat sheet card heading
+    await expect(page.locator('h3', { hasText: 'Illusions Cheat Sheet' })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Quick reference guide')).toBeVisible()
 
-    // Click the support button
-    await page.getByRole('button', { name: /get support now/i }).click()
-
-    // Should navigate to the support page
-    await page.waitForURL(/\/support/, { timeout: 10000 })
+    // "View" link should navigate to /cheat-sheet
+    const viewLink = page.getByRole('link', { name: /view/i })
+    await expect(viewLink).toBeVisible()
+    await expect(viewLink).toHaveAttribute('href', '/cheat-sheet')
   })
 
-  test('shows "Your Journey" section with all 5 illusion chips', async ({ page }) => {
-    await setupPostCeremonyDashboard(page)
-
-    await page.goto('/dashboard')
-
-    // Journey section subtitle (unique text - avoids "Your Journey" appearing in both h2 and h3)
-    await expect(page.getByText('All 5 illusions dismantled')).toBeVisible({ timeout: 10000 })
-
-    // All 5 illusion chips should be visible (buttons include illusion name + days since)
-    await expect(page.getByRole('button', { name: /stress relief/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /pleasure/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /willpower/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /focus/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /identity/i })).toBeVisible()
-  })
-
-  test('journey artifact card links to /journey', async ({ page }) => {
+  test('shows journey artifact card with Play link when journey is ready', async ({ page }) => {
     await setupPostCeremonyDashboard(page, { hasJourney: true })
 
     await page.goto('/dashboard')
@@ -198,7 +166,7 @@ test.describe('Post-Ceremony Dashboard', () => {
     // Journey artifact card heading
     await expect(page.locator('h3', { hasText: 'Your Journey' })).toBeVisible({ timeout: 10000 })
 
-    // Should show duration
+    // Should show duration (154000ms = 2:34)
     await expect(page.getByText('2:34')).toBeVisible()
 
     // "Play" link should navigate to /journey
@@ -207,66 +175,99 @@ test.describe('Post-Ceremony Dashboard', () => {
     await expect(playLink).toHaveAttribute('href', '/journey')
   })
 
-  test('toolkit card links to /toolkit', async ({ page }) => {
-    await setupPostCeremonyDashboard(page, { hasCheatSheet: true })
-
-    await page.goto('/dashboard')
-
-    // Toolkit card heading
-    await expect(page.locator('h3', { hasText: 'Your Toolkit' })).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('Quick reference guide')).toBeVisible()
-
-    // "View" link should navigate to /toolkit
-    const viewLink = page.getByRole('link', { name: /view/i })
-    await expect(viewLink).toBeVisible()
-    await expect(viewLink).toHaveAttribute('href', '/toolkit')
-  })
-
-  test('moment card displays quote with reconnect button', async ({ page }) => {
-    await setupPostCeremonyDashboard(page, { hasMoments: true })
-
-    await page.goto('/dashboard')
-
-    // Moment section heading
-    await expect(page.getByText('Reconnect with Your Insight')).toBeVisible({ timeout: 10000 })
-
-    // Moment quote
-    await expect(
-      page.getByText(/nicotine never actually helped my stress/i),
-    ).toBeVisible()
-
-    // Reconnect button
-    await expect(
-      page.getByRole('button', { name: /reconnect with this/i }),
-    ).toBeVisible()
-  })
-
-  test('illusion chip navigates to reinforcement session', async ({ page }) => {
+  test('shows "Need a boost?" section with "Talk to me" button', async ({ page }) => {
     await setupPostCeremonyDashboard(page)
 
     await page.goto('/dashboard')
 
-    // Wait for journey section to load (use unique subtitle text)
-    await expect(page.getByText('All 5 illusions dismantled')).toBeVisible({ timeout: 10000 })
+    // Should show "Need a boost?" text
+    await expect(page.getByText('Need a boost?')).toBeVisible({ timeout: 10000 })
 
-    // Click an illusion chip
-    await page.getByRole('button', { name: /stress relief/i }).click()
-
-    // Should navigate to reinforcement page
-    await page.waitForURL(/\/reinforcement\/stress_relief/, { timeout: 10000 })
+    // "Talk to me" button (navigates to /support via navigateTo)
+    const talkButton = page.getByRole('button', { name: /talk to me/i })
+    await expect(talkButton).toBeVisible()
   })
 
-  test('pending follow-up card shows with "Open" link', async ({ page }) => {
-    await setupPostCeremonyDashboard(page, { hasFollowUp: true })
+  test('"Talk to me" navigates to /support', async ({ page }) => {
+    await setupPostCeremonyDashboard(page)
+
+    // Mock support page APIs
+    await page.route('**/api/reinforcement/start', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            conversation_id: 'mock-support-conv',
+            session_type: 'boost',
+          }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
 
     await page.goto('/dashboard')
 
-    // Follow-up card
-    await expect(page.getByText('Day 3 Check-in')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Need a boost?')).toBeVisible({ timeout: 10000 })
 
-    // "Open" link
-    const openLink = page.getByRole('link', { name: /open/i })
-    await expect(openLink).toBeVisible()
-    await expect(openLink).toHaveAttribute('href', '/follow-up/follow-up-1')
+    // Click the Talk to me button
+    await page.getByRole('button', { name: /talk to me/i }).click()
+
+    // Should navigate to the support page
+    await page.waitForURL(/\/support/, { timeout: 10000 })
+  })
+
+  test('shows "Reinforce Your Freedom" section with all 5 illusions', async ({ page }) => {
+    await setupPostCeremonyDashboard(page)
+
+    await page.goto('/dashboard')
+
+    // Section heading
+    await expect(page.getByRole('heading', { name: /reinforce your freedom/i })).toBeVisible({ timeout: 10000 })
+
+    // All 5 illusions should be visible as cards with Reinforce buttons
+    await expect(page.locator('h3', { hasText: 'Stress Relief' })).toBeVisible()
+    await expect(page.locator('h3', { hasText: 'Pleasure' })).toBeVisible()
+    await expect(page.locator('h3', { hasText: 'Willpower' })).toBeVisible()
+    await expect(page.locator('h3', { hasText: 'Focus' })).toBeVisible()
+    await expect(page.locator('h3', { hasText: 'Identity' })).toBeVisible()
+
+    // Each should have a "Reinforce" button
+    const reinforceButtons = page.getByRole('button', { name: /reinforce/i })
+    await expect(reinforceButtons).toHaveCount(5)
+  })
+
+  test('reinforcement button navigates to reinforcement session', async ({ page }) => {
+    await setupPostCeremonyDashboard(page)
+
+    // Mock reinforcement start for the target page
+    await page.route('**/api/reinforcement/start', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            conversation_id: 'mock-reinforcement-conv',
+            session_type: 'reinforcement',
+            illusion_key: 'stress_relief',
+            anchor_moment: null,
+          }),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.goto('/dashboard')
+
+    // Wait for reinforcement section
+    await expect(page.getByRole('heading', { name: /reinforce your freedom/i })).toBeVisible({ timeout: 10000 })
+
+    // Click the first Reinforce button (Stress Relief)
+    await page.getByRole('button', { name: /reinforce/i }).first().click()
+
+    // Should navigate to reinforcement page
+    await page.waitForURL(/\/reinforcement\/stress_relief/, { timeout: 10000 })
   })
 })

@@ -399,3 +399,33 @@ Files changed:
 - Glass card styling: rounded-card, shadow-card, border-brand-border for consistent brand design
 - The toolkit.vue page serves a similar purpose during in-progress state, cheat-sheet.vue is for post-ceremony
 ---
+## 2026-02-08 - US-017
+- Implemented localStorage upload retry queue for ceremony recordings
+- Created composables/usePendingUpload.ts with retryPendingUpload() function
+- Function checks localStorage key 'unhooked:pending-ceremony-upload' for pending uploads
+- Converts base64 data URL back to Blob via fetch(blobDataUrl).then(r => r.blob())
+- Attempts upload to POST /api/ceremony/save-final-recording using FormData
+- On success: removes pending upload from localStorage
+- On failure: increments retryCount and saves back to localStorage
+- After 10 total retries (retryCount >= 10): removes from localStorage gracefully (silent degradation, no error shown)
+- Retry runs silently in background with no UI indicators (console logs only)
+- PendingUpload schema matches CeremonyRecordingInline: { userId, blobDataUrl, timestamp, retryCount }
+- Integrated into pages/ceremony.vue and pages/dashboard.vue onMounted hooks
+- Build passed (npm run build)
+
+Files changed:
+- composables/usePendingUpload.ts (created - 77 lines)
+- pages/ceremony.vue (added retryPendingUpload call in onMounted)
+- pages/dashboard.vue (added retryPendingUpload call in onMounted)
+- scripts/ralph/prd.json (marked US-017 as passing)
+
+**Learnings for future iterations:**
+- localStorage retry pattern: Check for pending data on page mount, attempt upload, increment retry count on failure, remove after max retries
+- Base64 to Blob conversion: Use fetch(dataUrl).then(r => r.blob()) for clean async conversion
+- FormData pattern: Create FormData, append blob with filename hint for server MIME type detection
+- Silent retry philosophy: No UI indicators for background retries - graceful degradation after max attempts
+- The schema must match what CeremonyRecordingInline writes when upload fails 3 times (US-008)
+- Composable returns object with function: { retryPendingUpload } for clean API
+- Only run in browser: Check typeof window !== 'undefined' to prevent SSR errors
+- MAX_RETRIES = 10 provides sufficient retry attempts without infinite loops
+---

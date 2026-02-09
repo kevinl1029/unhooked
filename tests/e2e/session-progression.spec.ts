@@ -90,12 +90,12 @@ test.describe('Session Progression & Program State', () => {
     await page.goto('/dashboard')
 
     // Should show the ceremony-ready CTA
-    await expect(page.getByText(/you're ready for the final step/i)).toBeVisible({
+    await expect(page.getByText(/seen through all five illusions/i)).toBeVisible({
       timeout: 10000,
     })
 
-    // Should have a "Begin Ceremony" link
-    const ceremonyLink = page.getByRole('link', { name: /begin ceremony/i })
+    // Should have a "Begin Ceremony Now" link
+    const ceremonyLink = page.getByRole('link', { name: /begin ceremony now/i })
     await expect(ceremonyLink).toBeVisible()
     await expect(ceremonyLink).toHaveAttribute('href', '/ceremony')
   })
@@ -139,10 +139,10 @@ test.describe('Session Progression & Program State', () => {
 
       await page.goto('/dashboard')
 
-      await expect(page.getByText(/you're ready for the final step/i)).toBeVisible({
+      await expect(page.getByText(/seen through all five illusions/i)).toBeVisible({
         timeout: 10000,
       })
-      await expect(page.getByRole('link', { name: /begin ceremony/i })).toBeVisible()
+      await expect(page.getByRole('link', { name: /begin ceremony now/i })).toBeVisible()
 
       // Should NOT show "Begin First Session" (that's for not_started)
       await expect(page.getByRole('link', { name: /begin first session/i })).not.toBeVisible()
@@ -206,17 +206,29 @@ test.describe('Session Progression & Program State', () => {
         })
       })
 
+      // Mock journey endpoint (dashboard polls this for journey status)
+      await page.route('**/api/ceremony/journey', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            journey: { id: 'mock-journey-id', content_json: { segments: [] } },
+            status: 'ready',
+          }),
+        })
+      })
+
       await page.goto('/dashboard')
 
-      // Post-ceremony should NOT show "Begin First Session" or "Begin Ceremony"
+      // Post-ceremony should NOT show "Begin First Session" or "Begin Ceremony Now"
       await expect(page.getByRole('link', { name: /begin first session/i })).not.toBeVisible({
         timeout: 10000,
       })
-      await expect(page.getByRole('link', { name: /begin ceremony/i })).not.toBeVisible()
+      await expect(page.getByRole('link', { name: /begin ceremony now/i })).not.toBeVisible()
 
-      // Should show artifact cards (Your Journey, Your Toolkit)
+      // Should show artifact cards (Your Journey, Illusions Cheat Sheet)
       await expect(page.getByText(/your journey/i).first()).toBeVisible({ timeout: 10000 })
-      await expect(page.getByText(/your toolkit/i)).toBeVisible()
+      await expect(page.getByText(/illusions cheat sheet/i)).toBeVisible()
     })
   })
 })

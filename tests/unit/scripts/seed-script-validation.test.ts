@@ -22,8 +22,8 @@ const prepareEndpoint = readFileSync(
   'utf-8'
 )
 
-const generateJourneyEndpoint = readFileSync(
-  join(__dirname, '../../../server/api/ceremony/generate-journey.post.ts'),
+const generateJourneyUtilSource = readFileSync(
+  join(__dirname, '../../../server/utils/ceremony/generate-journey.ts'),
   'utf-8'
 )
 
@@ -181,8 +181,8 @@ describe('Seed script validation: seed-ceremony-test-user.sql', () => {
     })
 
     it('ceremony requires minimum 3 moments', () => {
-      // The generate-journey endpoint requires at least 3 moments
-      expect(generateJourneyEndpoint).toContain('allMoments.length < 3')
+      // The generate-journey utility requires at least 3 moments
+      expect(generateJourneyUtilSource).toContain('allMoments.length < 3')
     })
 
     it('seed script creates at least 3 moments', () => {

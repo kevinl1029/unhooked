@@ -1,7 +1,7 @@
 /**
  * Contract tests for journey data consistency
  *
- * These tests verify that generate-journey.post.ts and journey.get.ts
+ * These tests verify that the generate-journey utility and journey.get.ts
  * use consistent data structures and column names. This prevents bugs
  * where one endpoint writes to a different column than the other reads.
  */
@@ -10,7 +10,12 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 // Read the actual source files to verify consistency
-const generateJourneySource = readFileSync(
+// Generation logic lives in the reusable utility (called by generate-journey.post.ts)
+const generateJourneyUtilSource = readFileSync(
+  join(__dirname, '../../../server/utils/ceremony/generate-journey.ts'),
+  'utf-8'
+)
+const generateJourneyEndpointSource = readFileSync(
   join(__dirname, '../../../server/api/ceremony/generate-journey.post.ts'),
   'utf-8'
 )
@@ -21,18 +26,18 @@ const getJourneySource = readFileSync(
 
 describe('Journey data contract', () => {
   describe('Database column consistency', () => {
-    it('generate-journey writes to "playlist" column', () => {
-      // Verify generate-journey.post.ts upserts to the playlist column
-      expect(generateJourneySource).toContain('playlist: playlistSegments')
+    it('generate-journey utility writes segments to content_json', () => {
+      // Verify utility stores playlist segments in content_json column
+      expect(generateJourneyUtilSource).toContain('content_json: { segments: playlistSegments }')
     })
 
-    it('journey.get reads from "playlist" column', () => {
-      // Verify journey.get.ts selects the playlist column
-      expect(getJourneySource).toContain("select('id, playlist, content_text")
+    it('journey.get reads from content_json column', () => {
+      // Verify journey.get.ts selects the content_json column
+      expect(getJourneySource).toContain("select('id, content_json, content_text")
     })
 
-    it('both endpoints use the same artifact_type', () => {
-      const generateArtifactType = generateJourneySource.match(/artifact_type:\s*['"]([^'"]+)['"]/)?.[1]
+    it('both use the same artifact_type', () => {
+      const generateArtifactType = generateJourneyUtilSource.match(/artifact_type:\s*['"]([^'"]+)['"]/)?.[1]
       // journey.get uses .eq('artifact_type', 'value') syntax
       const getArtifactType = getJourneySource.match(/\.eq\(['"]artifact_type['"],\s*['"]([^'"]+)['"]\)/)?.[1]
 
@@ -42,12 +47,12 @@ describe('Journey data contract', () => {
   })
 
   describe('Playlist segment structure consistency', () => {
-    it('generate-journey creates segments with required fields', () => {
-      // PlaylistSegment interface in generate-journey.post.ts
-      expect(generateJourneySource).toContain('id: string')
-      expect(generateJourneySource).toContain("type: 'narration' | 'user_moment'")
-      expect(generateJourneySource).toContain('text: string')
-      expect(generateJourneySource).toContain('transcript: string')
+    it('generate-journey utility creates segments with required fields', () => {
+      // PlaylistSegment interface in the utility
+      expect(generateJourneyUtilSource).toContain('id: string')
+      expect(generateJourneyUtilSource).toContain("type: 'narration' | 'user_moment'")
+      expect(generateJourneyUtilSource).toContain('text: string')
+      expect(generateJourneyUtilSource).toContain('transcript: string')
     })
 
     it('journey.get expects segments with the same fields', () => {
@@ -60,10 +65,10 @@ describe('Journey data contract', () => {
   })
 
   describe('Response structure consistency', () => {
-    it('generate-journey returns playlist.segments structure', () => {
+    it('generate-journey endpoint returns playlist.segments structure', () => {
       // The API response wraps segments in a playlist object
-      expect(generateJourneySource).toContain('playlist: {')
-      expect(generateJourneySource).toContain('segments: playlistSegments')
+      expect(generateJourneyEndpointSource).toContain('playlist: {')
+      expect(generateJourneyEndpointSource).toContain('segments,')
     })
 
     it('journey.get returns playlist.segments structure', () => {
@@ -91,9 +96,9 @@ describe('Journey segment type definitions', () => {
     'moment_id',
   ]
 
-  it('all required fields are present in generate-journey interface', () => {
+  it('all required fields are present in generate-journey utility interface', () => {
     for (const field of expectedSegmentFields) {
-      expect(generateJourneySource).toContain(`${field}:`)
+      expect(generateJourneyUtilSource).toContain(`${field}:`)
     }
   })
 
@@ -106,7 +111,7 @@ describe('Journey segment type definitions', () => {
   it('optional fields are marked as optional in both', () => {
     for (const field of optionalSegmentFields) {
       // Optional fields have ? suffix
-      expect(generateJourneySource).toContain(`${field}?:`)
+      expect(generateJourneyUtilSource).toContain(`${field}?:`)
       expect(getJourneySource).toContain(`${field}?:`)
     }
   })

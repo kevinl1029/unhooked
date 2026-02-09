@@ -115,7 +115,7 @@ test.describe('Dashboard', () => {
       await page.goto('/dashboard')
 
       // Should show ceremony-ready CTA
-      await expect(page.getByText(/you're ready for the final step/i)).toBeVisible()
+      await expect(page.getByText(/seen through all five illusions/i)).toBeVisible()
     })
 
     test('shows all 5 illusions completed in progress carousel', async ({ page }) => {
