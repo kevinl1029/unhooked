@@ -7,6 +7,7 @@ interface PendingCheckIn {
   id: string
   prompt: string
   type: string
+  illusion_key?: string | null
 }
 
 interface InterstitialCheckIn {
@@ -69,11 +70,18 @@ export function useCheckIns() {
   function respondToCheckIn(id: string) {
     showInterstitial.value = false
     const prompt = pendingCheckIn.value?.prompt
+    const illusionKey = pendingCheckIn.value?.illusion_key
+    const params = new URLSearchParams()
+
     if (prompt) {
-      navigateTo(`/check-in/${id}?prompt=${encodeURIComponent(prompt)}`)
-    } else {
-      navigateTo(`/check-in/${id}`)
+      params.set('prompt', prompt)
     }
+    if (illusionKey) {
+      params.set('illusionKey', illusionKey)
+    }
+
+    const query = params.toString()
+    navigateTo(query ? `/check-in/${id}?${query}` : `/check-in/${id}`)
   }
 
   /**

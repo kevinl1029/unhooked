@@ -50,7 +50,6 @@
         @continue="handleContinue"
         @continue-layer="handleContinueLayer"
         @dashboard="handleDashboard"
-        @finish="handleFinish"
       />
     </div>
   </div>
@@ -100,6 +99,12 @@ const displayMessages = computed(() => {
     content: msg.content.replace('[SESSION_COMPLETE]', '').trim()
   }))
 })
+
+function buildSessionCompleteSubtext(observationAssignment: string | null): string {
+  const genericFallback = 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
+  if (!observationAssignment) return genericFallback
+  return `Great work. Take a moment to let this settle. ${observationAssignment.trim()} Your next session will be ready tomorrow.`
+}
 
 onMounted(async () => {
   if (!isValidIllusionKey.value) {
@@ -421,8 +426,7 @@ async function handleSessionComplete() {
     // Configure SessionCompleteCard based on layer completion response
     if (result.isIllusionComplete === false) {
       // L1 or L2 completion - show observation assignment and continue CTA
-      sessionCompleteSubtext.value = result.observationAssignment
-        || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
+      sessionCompleteSubtext.value = buildSessionCompleteSubtext(result.observationAssignment ?? null)
       showContinueToNextLayer.value = true
       nextIllusion.value = result.nextIllusion ?? null
     } else {
@@ -464,8 +468,7 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
       // Configure SessionCompleteCard based on layer completion response
       if (result.isIllusionComplete === false) {
         // L1 or L2 completion - show observation assignment and continue CTA
-        sessionCompleteSubtext.value = result.observationAssignment
-          || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
+        sessionCompleteSubtext.value = buildSessionCompleteSubtext(result.observationAssignment ?? null)
         showContinueToNextLayer.value = true
         nextIllusion.value = result.nextIllusion ?? null
       } else {
@@ -547,10 +550,6 @@ async function handleContinueLayer() {
 
 function handleDashboard() {
   router.push('/dashboard')
-}
-
-function handleFinish() {
-  router.push('/ceremony')
 }
 
 function handleStreamError({

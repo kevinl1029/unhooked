@@ -2,6 +2,7 @@
  * User Status Composable
  * Provides comprehensive user status for dashboard rendering
  */
+import type { IllusionLayer } from '~/server/utils/llm/task-types'
 
 export interface UserStatus {
   phase: 'not_started' | 'in_progress' | 'ceremony_ready' | 'post_ceremony'
@@ -10,6 +11,7 @@ export interface UserStatus {
     current_illusion: number
     illusions_completed: number[]
     illusion_order: number[]
+    layer_progress: Record<string, IllusionLayer[]>
     total_sessions: number
     started_at: string | null
   } | null

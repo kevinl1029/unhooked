@@ -29,10 +29,17 @@ onMounted(async () => {
     // Redirect to check-in page with prompt in query (avoids redundant display)
     const checkInId = response.check_in?.id
     const prompt = response.prompt
-    if (checkInId && prompt) {
-      await navigateTo(`/check-in/${checkInId}?prompt=${encodeURIComponent(prompt)}`)
-    } else if (checkInId) {
-      await navigateTo(`/check-in/${checkInId}`)
+    const illusionKey = response.check_in?.trigger_illusion_key
+    if (checkInId) {
+      const params = new URLSearchParams()
+      if (prompt) {
+        params.set('prompt', prompt)
+      }
+      if (illusionKey) {
+        params.set('illusionKey', illusionKey)
+      }
+      const query = params.toString()
+      await navigateTo(query ? `/check-in/${checkInId}?${query}` : `/check-in/${checkInId}`)
     } else {
       throw new Error('Invalid check-in response')
     }

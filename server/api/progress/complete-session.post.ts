@@ -101,20 +101,6 @@ export default defineEventHandler(async (event) => {
 
   const conversationLayer = conversation?.illusion_layer
 
-  // Mark conversation as completed
-  const { error: convError } = await supabase
-    .from('conversations')
-    .update({
-      session_completed: true,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', body.conversationId)
-    .eq('user_id', user.sub)
-
-  if (convError) {
-    throw createError({ statusCode: 500, message: convError.message })
-  }
-
   // Fetch current progress
   const { data: currentProgress, error: fetchError } = await supabase
     .from('user_progress')
@@ -206,6 +192,20 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, message: updateError.message })
       }
 
+      // Mark conversation as completed after successful layer validation + progress update
+      const { error: convError } = await supabase
+        .from('conversations')
+        .update({
+          session_completed: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', body.conversationId)
+        .eq('user_id', user.sub)
+
+      if (convError) {
+        throw createError({ statusCode: 500, message: convError.message })
+      }
+
       // Cancel any pending evidence_bridge check-ins for this illusion (L3 completion)
       // Per US-008 AC: "Any pending evidence_bridge check-ins for this user/illusion are cancelled with reason 'illusion_completed'"
       try {
@@ -270,6 +270,9 @@ export default defineEventHandler(async (event) => {
       const observationAssignment = conversation.observation_assignment
         || OBSERVATION_TEMPLATES_MAP[effectiveIllusionKey]?.[illusionLayer]
         || null
+      const canonicalObservationAssignment = OBSERVATION_TEMPLATES_MAP[effectiveIllusionKey]?.[illusionLayer]
+        || observationAssignment
+        || null
 
       const updateData: any = {
         layer_progress: updatedLayerProgress,
@@ -289,6 +292,20 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, message: updateError.message })
       }
 
+      // Mark conversation as completed after successful layer validation + progress update
+      const { error: convError } = await supabase
+        .from('conversations')
+        .update({
+          session_completed: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', body.conversationId)
+        .eq('user_id', user.sub)
+
+      if (convError) {
+        throw createError({ statusCode: 500, message: convError.message })
+      }
+
       // Schedule evidence bridge check-in for L1/L2 completions
       // Non-blocking: Don't fail session completion if scheduling fails
       const timezone = currentProgress.timezone || 'America/New_York'
@@ -296,7 +313,7 @@ export default defineEventHandler(async (event) => {
         supabase,
         user.sub,
         effectiveIllusionKey,
-        observationAssignment,
+        canonicalObservationAssignment,
         new Date(),
         timezone
       ).then((scheduled) => {
@@ -371,6 +388,20 @@ export default defineEventHandler(async (event) => {
 
   if (updateError) {
     throw createError({ statusCode: 500, message: updateError.message })
+  }
+
+  // Mark conversation as completed after successful legacy progress update
+  const { error: convError } = await supabase
+    .from('conversations')
+    .update({
+      session_completed: true,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', body.conversationId)
+    .eq('user_id', user.sub)
+
+  if (convError) {
+    throw createError({ statusCode: 500, message: convError.message })
   }
 
   // Schedule post-session check-in (non-blocking)

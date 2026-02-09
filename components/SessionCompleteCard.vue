@@ -39,14 +39,6 @@
       >
         Continue to Next Session
       </button>
-      <button
-        v-else-if="!ceremonyTease && !showContinue"
-        type="button"
-        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors border border-brand-border hover:border-brand-border-strong"
-        @click="$emit('finish')"
-      >
-        Complete the Program
-      </button>
     </div>
   </div>
 </template>
@@ -81,6 +73,5 @@ defineEmits<{
   continue: [illusionNumber: number]
   'continue-layer': []
   dashboard: []
-  finish: []
 }>()
 </script>

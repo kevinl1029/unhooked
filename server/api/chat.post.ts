@@ -171,7 +171,22 @@ export default defineEventHandler(async (event) => {
   const router = getModelRouter()
   const supabase = serverSupabaseServiceRole(event)
 
-  const compatibleIllusionKey = providedIllusionKey || null
+  let compatibleIllusionKey = providedIllusionKey || null
+
+  // For check-ins, backfill illusion context from check_in_schedule when client does not pass it.
+  // This preserves evidence capture continuity even for older clients.
+  if (sessionType === 'check_in' && !compatibleIllusionKey && checkInId) {
+    const { data: checkInContext, error: checkInContextError } = await supabase
+      .from('check_in_schedule')
+      .select('trigger_illusion_key')
+      .eq('id', checkInId)
+      .eq('user_id', user.sub)
+      .single()
+
+    if (!checkInContextError && checkInContext?.trigger_illusion_key) {
+      compatibleIllusionKey = checkInContext.trigger_illusion_key as IllusionKey
+    }
+  }
 
   // For core sessions, build illusion-specific system prompt from key
   let processedMessages = messages
@@ -215,7 +230,7 @@ export default defineEventHandler(async (event) => {
     ]
   } else if (sessionType === 'core' && !compatibleIllusionKey) {
     throw createError({ statusCode: 400, message: 'illusionKey is required for core sessions' })
-  } else if (compatibleIllusionKey) {
+  } else if (sessionType === 'core' && compatibleIllusionKey) {
     // Fetch basic intake data
     const { data: intake } = await supabase
       .from('user_intake')
@@ -277,6 +292,7 @@ export default defineEventHandler(async (event) => {
       personalizationContext,
       bridgeContext,
       abandonedSessionContext,
+      illusionLayer,
     })
 
     // Prepend system message

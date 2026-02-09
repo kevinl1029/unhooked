@@ -4,6 +4,7 @@
  * For when user accesses check-in from dashboard interstitial or magic link
  * Prompt is passed via query param to avoid redundant API fetch
  */
+import { ILLUSION_KEYS, type IllusionKey } from '~/server/utils/llm/task-types'
 
 definePageMeta({
   middleware: 'auth',
@@ -12,6 +13,7 @@ definePageMeta({
 const route = useRoute()
 const checkInId = route.params.id as string
 const promptFromQuery = route.query.prompt as string | undefined
+const illusionKeyFromQuery = route.query.illusionKey as string | undefined
 
 // Check-in states
 type CheckInState = 'loading' | 'error' | 'ready' | 'recording' | 'processing' | 'speaking' | 'complete'
@@ -20,6 +22,7 @@ const errorMessage = ref('')
 
 // The prompt - from query or fetched from API as fallback
 const prompt = ref<string>('')
+const checkInIllusionKey = ref<IllusionKey | undefined>(undefined)
 
 // Toast state
 const showToast = ref(false)
@@ -40,6 +43,10 @@ const updateAudioLevel = () => {
 }
 
 onMounted(async () => {
+  if (illusionKeyFromQuery && ILLUSION_KEYS.includes(illusionKeyFromQuery as IllusionKey)) {
+    checkInIllusionKey.value = illusionKeyFromQuery as IllusionKey
+  }
+
   // If prompt came from query (interstitial or magic link flow), use it directly
   if (promptFromQuery) {
     prompt.value = decodeURIComponent(promptFromQuery)
@@ -48,10 +55,27 @@ onMounted(async () => {
     try {
       const response = await $fetch<{ check_in: any; prompt: string }>(`/api/check-ins/${checkInId}`)
       prompt.value = response.prompt
+      const triggerIllusionKey = response.check_in?.trigger_illusion_key as string | undefined
+      if (triggerIllusionKey && ILLUSION_KEYS.includes(triggerIllusionKey as IllusionKey)) {
+        checkInIllusionKey.value = triggerIllusionKey as IllusionKey
+      }
     } catch (err: any) {
       errorMessage.value = err.data?.message || 'Check-in not found'
       state.value = 'error'
       return
+    }
+  }
+
+  // Ensure illusion context is available for evidence capture, even when prompt came via query.
+  if (!checkInIllusionKey.value) {
+    try {
+      const response = await $fetch<{ check_in: any }>(`/api/check-ins/${checkInId}`)
+      const triggerIllusionKey = response.check_in?.trigger_illusion_key as string | undefined
+      if (triggerIllusionKey && ILLUSION_KEYS.includes(triggerIllusionKey as IllusionKey)) {
+        checkInIllusionKey.value = triggerIllusionKey as IllusionKey
+      }
+    } catch {
+      // Non-blocking: check-in chat can continue without illusion context.
     }
   }
 
@@ -60,6 +84,7 @@ onMounted(async () => {
     sessionType: 'check_in',
     checkInId: checkInId,
     checkInPrompt: prompt.value,
+    illusionKey: checkInIllusionKey.value,
   })
 
   // Destructure preInitAudio for use in gesture handlers

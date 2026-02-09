@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
       id: readyCheckIn.id,
       prompt: readyCheckIn.prompt_template,
       type: readyCheckIn.check_in_type,
+      illusion_key: readyCheckIn.trigger_illusion_key,
     },
   }
 })

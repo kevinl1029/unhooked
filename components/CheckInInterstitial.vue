@@ -5,11 +5,13 @@
  * Supports inline voice recording without navigation
  * Dismissal: swipe down on mobile, click outside on desktop (only in ready state)
  */
+import { ILLUSION_KEYS, type IllusionKey } from '~/server/utils/llm/task-types'
 
 interface CheckIn {
   id: string
   prompt: string
   type: string
+  illusion_key?: string | null
 }
 
 const props = defineProps<{
@@ -45,11 +47,16 @@ const updateAudioLevel = () => {
 }
 
 onMounted(() => {
+  const checkInIllusionKey = props.checkIn.illusion_key && ILLUSION_KEYS.includes(props.checkIn.illusion_key as IllusionKey)
+    ? props.checkIn.illusion_key as IllusionKey
+    : undefined
+
   // Initialize voice chat
   voiceChat = useVoiceChat({
     sessionType: 'check_in',
     checkInId: props.checkIn.id,
     checkInPrompt: props.checkIn.prompt,
+    illusionKey: checkInIllusionKey,
   })
 
   // Watch recording state

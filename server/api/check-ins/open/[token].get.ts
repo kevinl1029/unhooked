@@ -7,7 +7,6 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 import {
   getCheckInByToken,
   markCheckInOpened,
-  getPendingCheckIns,
 } from '~/server/utils/scheduling/check-in-scheduler'
 import { isMagicLinkExpired, isCheckInExpired } from '~/server/utils/scheduling/check-in-expiration'
 
@@ -29,40 +28,20 @@ export default defineEventHandler(async (event) => {
 
   // Check if magic link is expired (24 hours)
   if (isMagicLinkExpired(checkIn.email_sent_at)) {
-    // Redirect to most recent pending check-in
-    const { nextCheckIn } = await getPendingCheckIns(supabase, checkIn.user_id)
-
-    if (nextCheckIn && !isCheckInExpired(nextCheckIn.scheduled_for, nextCheckIn.timezone)) {
-      return {
-        redirect: true,
-        redirect_to: `/check-in/${nextCheckIn.id}`,
-        message: 'Your link has expired. Redirecting to your most recent check-in.',
-      }
+    return {
+      redirect: true,
+      redirect_to: '/dashboard',
+      message: 'Your link has expired. Redirecting to dashboard.',
     }
-
-    throw createError({
-      statusCode: 410,
-      message: 'This check-in link has expired and no pending check-ins are available.',
-    })
   }
 
   // Check if check-in window has expired
   if (isCheckInExpired(checkIn.scheduled_for, checkIn.timezone)) {
-    // Redirect to most recent pending check-in
-    const { nextCheckIn } = await getPendingCheckIns(supabase, checkIn.user_id)
-
-    if (nextCheckIn && !isCheckInExpired(nextCheckIn.scheduled_for, nextCheckIn.timezone)) {
-      return {
-        redirect: true,
-        redirect_to: `/check-in/${nextCheckIn.id}`,
-        message: 'This check-in window has closed. Redirecting to your most recent check-in.',
-      }
+    return {
+      redirect: true,
+      redirect_to: '/dashboard',
+      message: 'This check-in window has closed. Redirecting to dashboard.',
     }
-
-    throw createError({
-      statusCode: 410,
-      message: 'This check-in window has closed and no pending check-ins are available.',
-    })
   }
 
   // Mark as opened

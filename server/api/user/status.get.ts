@@ -119,6 +119,7 @@ export default defineEventHandler(async (event) => {
       current_illusion: progress.current_illusion,
       illusions_completed: progress.illusions_completed || [],
       illusion_order: progress.illusion_order || [1, 2, 3, 4, 5],
+      layer_progress: progress.layer_progress || {},
       total_sessions: progress.total_sessions,
       started_at: progress.started_at,
     } : null,
