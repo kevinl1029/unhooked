@@ -131,6 +131,24 @@
           <h3 class="text-xl font-semibold text-white mb-2">
             Continue: The {{ focusedIllusion.name }} Illusion
           </h3>
+
+          <!-- Layer progress line -->
+          <div class="flex items-center justify-center gap-2 mb-2">
+            <p class="text-sm text-white-65">Session {{ currentLayerSessionNumber }} of 3</p>
+            <div class="flex items-center gap-1" :aria-label="`${currentLayersCompleted.length} of 3 sessions complete`">
+              <div
+                v-for="(layer, index) in ['intellectual', 'emotional', 'identity']"
+                :key="layer"
+                class="rounded-full bg-white transition-all duration-200"
+                :style="{
+                  width: currentLayersCompleted.includes(layer) ? '9px' : '8px',
+                  height: currentLayersCompleted.includes(layer) ? '9px' : '8px',
+                  opacity: currentLayersCompleted.includes(layer) ? 1 : 0.35
+                }"
+              />
+            </div>
+          </div>
+
           <p class="text-white-65 mb-4">{{ focusedIllusion.description }}</p>
           <button
             class="w-full rounded-full py-3 px-6 font-semibold text-white transition-all hover:-translate-y-0.5"
@@ -168,6 +186,7 @@ const props = defineProps<{
   illusionOrder: number[]
   illusionsCompleted: number[]
   currentIllusion: number
+  layerProgress: Record<string, string[]>
 }>()
 
 // Illusion data
@@ -256,6 +275,18 @@ const focusedIllusion = computed(() => illusions.value[focusedIndex.value])
 const isFirstIllusion = computed(() => focusedIndex.value === 0)
 const isLastIllusion = computed(() => focusedIndex.value === illusions.value.length - 1)
 const completedCount = computed(() => illusions.value.filter((i: Illusion) => i.status === 'completed').length)
+
+// Layer progress computed properties
+const currentLayersCompleted = computed<string[]>(() => {
+  if (!focusedIllusion.value || focusedIllusion.value.status !== 'current') {
+    return []
+  }
+  return props.layerProgress[focusedIllusion.value.key] || []
+})
+
+const currentLayerSessionNumber = computed<number>(() => {
+  return currentLayersCompleted.value.length + 1
+})
 
 // Methods
 function isFocused(index: number): boolean {
