@@ -24,6 +24,7 @@
           :existing-conversation-id="existingConversationId"
           :existing-messages="existingMessages"
           @session-complete="handleVoiceSessionComplete"
+          @conversation-id-update="handleConversationIdUpdate"
           @error="handleError"
         />
 
@@ -449,15 +450,16 @@ async function handleSessionComplete() {
 // Voice session handlers
 async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
   // Fetch the conversation layer and complete session
-  if (existingConversationId.value) {
+  const activeConversationId = existingConversationId.value
+  if (activeConversationId) {
     try {
-      const { data: conversationData } = await useFetch(`/api/conversations/${existingConversationId.value}`)
+      const { data: conversationData } = await useFetch(`/api/conversations/${activeConversationId}`)
       if (conversationData.value && conversationData.value.illusion_layer) {
         illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
       }
 
       // Complete the session with layer tracking
-      const result = await completeSessionWithRecovery(existingConversationId.value)
+      const result = await completeSessionWithRecovery(activeConversationId)
 
       // Configure SessionCompleteCard based on layer completion response
       if (result.isIllusionComplete === false) {
@@ -493,6 +495,10 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
 
 function handleError(message: string) {
   error.value = message
+}
+
+function handleConversationIdUpdate(id: string | null) {
+  existingConversationId.value = id
 }
 
 async function handleContinue(nextIllusionNumber: number) {

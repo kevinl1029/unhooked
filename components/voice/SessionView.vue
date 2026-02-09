@@ -321,9 +321,6 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
-// Progress tracking
-const { completeSession } = useProgress()
-
 // Wake lock to prevent screen dimming during session
 const { request: requestWakeLock, release: releaseWakeLock } = useWakeLock()
 
@@ -669,23 +666,8 @@ const handleSessionComplete = async () => {
   // Hide voice controls immediately to avoid "Session complete" text flash
   sessionCompletionTriggered.value = true
 
-  if (!conversationId.value) {
-    console.error('No conversationId available for session completion')
-    emit('sessionComplete', null)
-    return
-  }
-  if (!props.illusionKey) {
-    emit('sessionComplete', null)
-    return
-  }
-
-  try {
-    const result = await completeSession(conversationId.value, props.illusionKey)
-    emit('sessionComplete', result.nextIllusion)
-  } catch (err) {
-    console.error('Error completing session:', err)
-    emit('sessionComplete', null)
-  }
+  // Parent routes own completion behavior by session type.
+  emit('sessionComplete', null)
 }
 
 // Expose pause/resume methods for ceremony orchestration
