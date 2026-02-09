@@ -226,3 +226,25 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - The observationAssignment from complete-session response is used for subtext display with a fallback message
 - Both voice and text session completion paths must handle layer-aware completion (DRY violation noted, but acceptable for now)
 ---
+## 2026-02-09 00:35 EST - US-011
+- Configured SessionCompleteCard to display ceremony-specific copy for final illusion (Identity L3)
+- Added isProgramComplete ref to track when all illusions are complete (isComplete=true from API)
+- Updated SessionCompleteCard ceremonyTease prop to use isProgramComplete flag instead of checking current state
+- L3 of non-final illusions: Shows "Great work. Take a moment to let this settle." with no continue CTA
+- L3 of final illusion (Identity): Shows "All Five Illusions Dismantled" heading and "Your final ceremony is ready." subtext
+- Both handleSessionComplete (text mode) and handleVoiceSessionComplete (voice mode) check result.isComplete flag
+- handleContinueLayer resets isProgramComplete flag when user continues to next layer
+- Build passes with no TypeScript errors
+
+**Files changed:**
+- pages/session/[illusion].vue (added isProgramComplete ref, updated both completion handlers, updated ceremonyTease prop)
+- scripts/ralph/prd.json (marked US-011 as passes=true)
+
+**Learnings for future iterations:**
+- The isComplete flag from complete-session API response indicates program completion (all 5 illusions done)
+- isIllusionComplete indicates a single illusion L3 completion (may or may not be final illusion)
+- SessionCompleteCard's ceremonyTease prop triggers special copy via computed displayHeading/displaySubtext
+- Must update BOTH handleSessionComplete and handleVoiceSessionComplete to keep text/voice modes in sync
+- State flags like isProgramComplete must be reset in handleContinueLayer to avoid stale state
+---
+
