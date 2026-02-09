@@ -50,3 +50,25 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - L3 marks illusion completion conversationally and previews next content
 - Build passes with no TypeScript errors — Nuxt 3 auto-detects exports from utils/ folder
 ---
+## 2026-02-08 23:45 EST - US-003
+- Added OBSERVATION_TEMPLATES export to all 5 illusion prompt files
+- Each file exports a Record<string, string> with 'intellectual' and 'emotional' keys (no 'identity' key per spec)
+- Templates are complete, conversational sentences ready to display as-is on session-complete screens
+- 10 templates total (5 illusions × 2 layers with assignments; Layer 3 has none)
+- Templates match the themes from the spec's Per-Illusion Journey Summary table
+
+**Files changed:**
+- server/utils/prompts/illusions/illusion-1-stress.ts
+- server/utils/prompts/illusions/illusion-2-pleasure.ts
+- server/utils/prompts/illusions/illusion-3-willpower.ts
+- server/utils/prompts/illusions/illusion-4-focus.ts
+- server/utils/prompts/illusions/illusion-5-identity.ts
+- scripts/ralph/prd.json (marked US-003 as passes=true)
+
+**Learnings for future iterations:**
+- Auto-import conflict warnings are expected when multiple files export the same symbol name (OBSERVATION_TEMPLATES) — these templates will be imported explicitly by path, not through auto-import
+- Templates are co-located with illusion content per REQ-24 for easy maintenance
+- Each template targets a specific experiential domain (intellectual vs emotional observation focus)
+- Templates serve dual purpose: AI personalization reference AND fallback text if personalization fails
+- The Record<string, string> type ensures type safety when looking up templates by layer name
+---

@@ -68,7 +68,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Files are in server/utils/prompts/illusions/. 10 templates total (5 illusions x 2 layers). See the spec's Observation Templates section for exact template text. Templates match the themes in the Per-Illusion Journey Summary table."
     },
     {
