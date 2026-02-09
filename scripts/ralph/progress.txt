@@ -362,3 +362,25 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Dashboard already has multiple status-dependent views (hasNotStarted, isInProgress, isCeremonyReady, isPostCeremony)
 ---
 
+## 2026-02-09 06:00 EST - US-017
+- Updated moment detection prompt to include classification guidance for evidence bridge responses
+- Added examples of REAL_WORLD_OBSERVATION moments in the prompt (e.g., stress-nicotine connection, sensation tracking, focus tracking)
+- Added explicit guidance: evidence bridge responses should be classified as REAL_WORLD_OBSERVATION, not generic INSIGHT or RATIONALIZATION
+- Verified context builder already includes real_world_observation moments:
+  - Line 241: getMomentsByType('real_world_observation') populates recentObservations
+  - Lines 306-308: Observations appear in KEY MOMENTS section as "They observed: ..."
+- Evidence bridge check-in responses will now be correctly classified and surfaced in session context
+
+**Files changed:**
+- server/utils/llm/tasks/moment-detection.ts (enhanced REAL_WORLD_OBSERVATION classification guidance)
+- scripts/ralph/prd.json (marked US-017 as passes=true)
+
+**Learnings for future iterations:**
+- Context builder was already correctly configured for real_world_observation moments (no code changes needed)
+- Moment detection prompt lists all moment types with descriptions on lines 55-63
+- Classification guidance should include specific examples to help the AI recognize the pattern
+- The IMPORTANT section at the end of moment type list provides extra classification rules
+- getMomentsByType helper (line 214) filters moments by type and takes the top 1 per type
+- Evidence bridge responses reporting observations (e.g., "I noticed...", "I observed...") are now correctly classified
+---
+

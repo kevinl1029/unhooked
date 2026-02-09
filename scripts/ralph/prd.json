@@ -315,7 +315,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Files: server/utils/personalization/context-builder.ts, server/utils/llm/tasks/moment-detection.ts. Verify existing context builder includes real_world_observation in its moment selection. Update moment detection prompt to recognize the new type with classification guidance for evidence bridge responses."
     },
     {
