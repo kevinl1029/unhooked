@@ -8,7 +8,7 @@
  * - Exit link navigates back to dashboard
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { mockIntakeAPI } from './utils'
 import { mockChatAPI, mockConversationsAPI } from './utils/mock-session'
 import {

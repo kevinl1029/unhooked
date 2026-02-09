@@ -8,7 +8,7 @@
  * - "Reinforce Your Freedom" section with 5 illusion cards
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { mockIntakeAPI } from './utils'
 import {
   mockCheckInInterstitial,

@@ -1,26 +1,45 @@
 import type { Page } from '@playwright/test'
+import fs from 'fs'
+import path from 'path'
 
 // Test user credentials from environment
 const E2E_TEST_EMAIL = process.env.E2E_TEST_EMAIL || 'e2e-test-user@test.local'
 const E2E_TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || ''
 
+const SESSION_FILE = path.join(process.cwd(), 'playwright/.auth/session.json')
+
 /**
- * Login as test user
+ * Login as test user by injecting the saved session into localStorage.
  *
- * NOTE: With the Playwright storageState setup, tests already have auth.
- * This function is mainly for tests that explicitly need to re-authenticate
- * or for backwards compatibility.
+ * NOTE: With the custom fixture's addInitScript, tests already have auth
+ * injected before every page load. This function is for tests that need
+ * to re-authenticate mid-test (e.g., after clearing cookies).
+ *
+ * Falls back to the /test-login page if the session file isn't available.
  */
 export async function loginAsTestUser(page: Page): Promise<void> {
+  // Prefer session file injection (fast, no UI dependency)
+  if (fs.existsSync(SESSION_FILE)) {
+    const { storageKey, session } = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf-8'))
+    if (storageKey && session) {
+      await page.evaluate(
+        ({ key, sessionData }) => {
+          window.localStorage.setItem(key, JSON.stringify(sessionData))
+        },
+        { key: storageKey, sessionData: session }
+      )
+      await page.reload()
+      await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 15000 })
+      return
+    }
+  }
+
+  // Fallback: use the /test-login page
   if (!E2E_TEST_PASSWORD) {
     throw new Error('E2E_TEST_PASSWORD environment variable is required')
   }
-
-  // Navigate to the test login page with credentials
   const loginUrl = `/test-login?email=${encodeURIComponent(E2E_TEST_EMAIL)}&password=${encodeURIComponent(E2E_TEST_PASSWORD)}&redirect=/dashboard`
   await page.goto(loginUrl)
-
-  // Wait for redirect to dashboard or onboarding
   await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 15000 })
 }
 

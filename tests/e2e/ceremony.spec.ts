@@ -8,7 +8,7 @@
  * - Error state when ceremony preparation fails
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import {
   mockUserInProgress,
   mockCeremonyPrepare,

@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 test.describe('Navigation', () => {
   // Navigation tests need unauthenticated state
-  test.use({ storageState: { cookies: [], origins: [] } })
+  test.use({ storageState: { cookies: [], origins: [] }, noAuth: true })
 
   test('clicking brand logo navigates to home', async ({ page }) => {
     await page.goto('/login')
