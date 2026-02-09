@@ -22,6 +22,7 @@ interface FailedTurn {
   content: string
   inputModality: 'text' | 'voice'
   speakResponse: boolean
+  assistantFirst?: boolean
 }
 
 interface StreamingAttemptResult {
@@ -396,11 +397,15 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
 
     try {
       if (enableStreamingTTS) {
-        // Assistant-first turn isn't retryable via UI, so replayableTurn is null.
-        const success = await runStreamingWithResilience('text', null)
+        const success = await runStreamingWithResilience('text', {
+          content: '',
+          inputModality: 'text',
+          speakResponse: true,
+          assistantFirst: true
+        })
         isLoading.value = false
 
-        if (!success) {
+        if (!success && !hasFailedTurn.value) {
           error.value = 'Failed to start conversation'
         }
 

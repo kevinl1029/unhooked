@@ -103,6 +103,7 @@ export default defineNuxtConfig({
     chatSecondaryProvider: process.env.CHAT_SECONDARY_PROVIDER || defaultSecondaryProvider,
     chatRetryBackoffMinMs: Number(process.env.CHAT_RETRY_BACKOFF_MIN_MS || 600),
     chatRetryBackoffMaxMs: Number(process.env.CHAT_RETRY_BACKOFF_MAX_MS || 1200),
+    chatResilienceDevFaultMode: process.env.CHAT_RESILIENCE_DEV_FAULT_MODE || 'off',
 
     // Groq Configuration (Primary LLM Provider)
     groqApiKey: process.env.GROQ_API_KEY,

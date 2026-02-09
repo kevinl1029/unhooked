@@ -36,7 +36,7 @@
     <div class="flex-1 flex flex-col min-h-0 relative">
       <!-- Messages Area -->
       <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-4">
-        <template v-if="messages.length === 0 && !isProcessing">
+        <template v-if="messages.length === 0 && !isProcessing && !hasFailedTurn">
           <div class="h-full flex items-center justify-center">
             <p class="text-white-65">Starting conversation...</p>
           </div>
@@ -98,7 +98,10 @@
           </div>
 
           <!-- Retry/failover status bubble -->
-          <div v-if="retryStatusCopy && !hasFailedTurn" class="flex justify-start mb-4">
+          <div
+            v-if="retryStatusCopy && !hasFailedTurn && isProcessing && !isAISpeaking && !showStreamingTranscript"
+            class="flex justify-start mb-4"
+          >
             <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3">
               <p class="text-white-65">{{ retryStatusCopy }}</p>
             </div>
@@ -110,7 +113,7 @@
               <div class="glass border border-brand-border rounded-2xl rounded-bl-sm px-4 py-3">
                 <p class="text-white mb-3">{{ failedTurnMessage }}</p>
                 <button
-                  class="btn-primary px-5 py-2 rounded-pill font-semibold"
+                  class="btn-primary btn-primary-compact rounded-pill font-semibold"
                   :disabled="isProcessing"
                   @click="handleRetryFailedTurn"
                 >
@@ -129,7 +132,10 @@
 
       <!-- Voice Controls - fixed min-height to prevent layout jumps between states -->
       <!-- Hide entirely once session completion is triggered to avoid "Session complete" text flash -->
-      <div v-if="!readOnly && !hideVoiceControls" class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center">
+      <div
+        v-if="!readOnly && !hideVoiceControls && !hasFailedTurn"
+        class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center"
+      >
         <!-- AI Speaking State - always show pause/skip while AI is speaking, even during session end -->
         <div v-if="isAISpeaking" class="text-center space-y-3">
           <VoiceAudioWaveform
@@ -236,6 +242,47 @@
             @click="textMode = false"
           >
             Switch to voice
+          </button>
+        </div>
+      </div>
+
+      <!-- Failed turn controls: keep one primary in-chat CTA (Retry) and a quieter alternate path -->
+      <div
+        v-else-if="!readOnly && !hideVoiceControls && hasFailedTurn"
+        class="px-4 py-4 border-t border-brand-border min-h-[136px] flex flex-col justify-center"
+      >
+        <div v-if="!textMode" class="text-center">
+          <button
+            class="text-white-65 text-sm hover:text-white transition"
+            @click="textMode = true"
+          >
+            Send a new message instead
+          </button>
+        </div>
+
+        <div v-else class="mt-2">
+          <div class="flex gap-2">
+            <input
+              v-model="textInput"
+              type="text"
+              class="flex-1 glass-input rounded-pill px-4 py-3 text-white placeholder-white-65"
+              placeholder="Type your message..."
+              :disabled="isProcessing || isPausedByCeremony"
+              @keyup.enter="handleSendText"
+            />
+            <button
+              class="btn-primary px-6 py-3 rounded-pill"
+              :disabled="!textInput.trim() || isProcessing || isPausedByCeremony"
+              @click="handleSendText"
+            >
+              Send
+            </button>
+          </div>
+          <button
+            class="mt-2 text-white-65 text-sm hover:text-white transition"
+            @click="textMode = false"
+          >
+            Back to Retry
           </button>
         </div>
       </div>
@@ -404,6 +451,10 @@ const displayMessages = computed(() => {
   }
 
   return allMessages
+})
+
+const showStreamingTranscript = computed(() => {
+  return Boolean((isTextStreaming.value || isStreamingMode.value || isPaused.value) && currentTranscript.value)
 })
 
 // Initialize on mount

@@ -63,11 +63,28 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
   const defaultModel = getDefaultModel()
+  const runtimeConfig = useRuntimeConfig()
   const classifyError = (status?: number): 'transient' | 'non_transient' => {
     if (!status) return 'transient'
     if (status === 400 || status === 401 || status === 403) return 'non_transient'
     if (status === 503 || status === 408 || status === 429 || status >= 500) return 'transient'
     return 'non_transient'
+  }
+  const shouldInjectResilienceDevFault = (
+    mode: string,
+    attemptNumber?: number,
+  ) => {
+    const attempt = attemptNumber ?? 1
+    switch (mode) {
+      case 'attempt1_503':
+        return attempt === 1
+      case 'attempt12_503':
+        return attempt === 1 || attempt === 2
+      case 'always_503':
+        return true
+      default:
+        return false
+    }
   }
   const {
     messages,
@@ -112,6 +129,9 @@ export default defineEventHandler(async (event) => {
     debugRequestId
     || (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
   const requestStartedAt = Date.now()
+  const devFaultMode = (runtimeConfig.chatResilienceDevFaultMode as string | undefined) || 'off'
+  const canInjectDevFault = process.env.NODE_ENV !== 'production'
+    && shouldInjectResilienceDevFault(devFaultMode, resilienceAttempt)
 
   console.log('[chat] Request received', {
     requestId,
@@ -125,13 +145,24 @@ export default defineEventHandler(async (event) => {
     conversationId: conversationId || null,
     messagesCount: messages.length,
     lastMessageRole: messages[messages.length - 1]?.role || null,
-    lastMessageLength: messages[messages.length - 1]?.content?.length || 0
+    lastMessageLength: messages[messages.length - 1]?.content?.length || 0,
+    devFaultMode: canInjectDevFault ? devFaultMode : 'off',
   })
   if (Object.prototype.hasOwnProperty.call(body, 'illusionNumber')) {
     throw createError({ statusCode: 400, message: 'illusionNumber is no longer supported. Send illusionKey instead.' })
   }
   if (providedIllusionKey && !ILLUSION_KEYS.includes(providedIllusionKey as IllusionKey)) {
     throw createError({ statusCode: 400, message: 'Invalid illusionKey' })
+  }
+
+  if (canInjectDevFault) {
+    console.warn('[chat] Injecting dev resilience fault', {
+      requestId,
+      resilienceAttempt: resilienceAttempt ?? null,
+      resilienceRoute: resilienceRoute ?? null,
+      devFaultMode,
+    })
+    throw createError({ statusCode: 503, message: 'Injected dev resilience fault' })
   }
 
   // Allow empty messages array for assistant-first conversations
