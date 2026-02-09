@@ -342,3 +342,23 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Gap utilities (gap-1, gap-2) provide consistent spacing for inline elements
 ---
 
+## 2026-02-09 05:50 EST - US-016
+- Dashboard page now imports layerProgress from useProgress composable
+- Added layerProgress prop to both ProgressCarousel instances:
+  - In-progress dashboard (isInProgress state)
+  - Ceremony-ready dashboard (isCeremonyReady state)
+- After session completion and navigation to dashboard, carousel reflects updated layer progress via reactive computed property
+- Build passes with no TypeScript errors
+
+**Files changed:**
+- pages/dashboard.vue (imported useProgress, passed layerProgress prop to ProgressCarousel)
+- scripts/ralph/prd.json (marked US-016 as passes=true)
+
+**Learnings for future iterations:**
+- Dashboard fetches progress data via useUserStatus composable (status.value?.progress)
+- useProgress composable must be called separately to access layer_progress computed property
+- The layerProgress computed property returns Record<string, IllusionLayer[]> from progress.value.layer_progress
+- Props need to be passed to BOTH ProgressCarousel instances (in-progress and ceremony-ready states have separate carousel renders)
+- Dashboard already has multiple status-dependent views (hasNotStarted, isInProgress, isCeremonyReady, isPostCeremony)
+---
+
