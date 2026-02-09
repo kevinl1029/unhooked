@@ -151,3 +151,26 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - Helper functions like getCurrentIllusionKey() keep computed properties clean and focused
 - Import IllusionLayer type and helper utilities from task-types.ts for consistency across the codebase
 ---
+## 2026-02-09 00:15 EST - US-008
+- Completed layer progression logic for L3 (identity layer) in complete-session API
+- L3 completion now cancels any pending evidence_bridge check-ins for the completed illusion
+- Cancellation query updates status='cancelled' and cancellation_reason='illusion_completed'
+- Cancellation is non-blocking (errors logged, doesn't fail session completion)
+- Cancellation happens before post-session check-in scheduling
+- L3 response already included isIllusionComplete=true, nextLayer=null, observationAssignment=null from US-007
+- Conviction assessment already records illusion_layer='identity' via handleSessionComplete (session-complete.ts line 116)
+- All 359 unit tests pass
+- Build passes with no type errors
+
+**Files changed:**
+- server/api/progress/complete-session.post.ts (added evidence_bridge cancellation logic)
+- scripts/ralph/prd.json (marked US-008 as passes=true)
+
+**Learnings for future iterations:**
+- Evidence bridge check-ins are cancelled using status IN ('scheduled', 'sent') filter
+- The cancellation_reason field provides audit trail for why check-ins were cancelled
+- Check-in cancellation uses trigger_illusion_key and check_in_type='evidence_bridge' filters
+- Non-blocking error pattern: catch errors, log them, but don't fail the main operation
+- L3 completion is the only point where illusion is marked complete and next illusion is unlocked
+- The conviction assessment layer tracking was already implemented in session-complete.ts handler
+---

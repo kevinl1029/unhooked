@@ -202,6 +202,31 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, message: updateError.message })
       }
 
+      // Cancel any pending evidence_bridge check-ins for this illusion (L3 completion)
+      // Per US-008 AC: "Any pending evidence_bridge check-ins for this user/illusion are cancelled with reason 'illusion_completed'"
+      try {
+        const { error: cancelError } = await supabase
+          .from('check_in_schedule')
+          .update({
+            status: 'cancelled',
+            cancellation_reason: 'illusion_completed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.sub)
+          .eq('trigger_illusion_key', effectiveIllusionKey)
+          .eq('check_in_type', 'evidence_bridge')
+          .in('status', ['scheduled', 'sent'])
+
+        if (cancelError) {
+          console.error('[complete-session] Failed to cancel evidence_bridge check-ins:', cancelError)
+        } else {
+          console.log(`[complete-session] Cancelled evidence_bridge check-ins for ${effectiveIllusionKey}`)
+        }
+      } catch (cancelErr) {
+        // Non-blocking: don't fail session completion if cancellation fails
+        console.error('[complete-session] Error cancelling evidence_bridge check-ins:', cancelErr)
+      }
+
       // Schedule post-session check-in (if not complete)
       if (!isComplete) {
         const timezone = currentProgress.timezone || 'America/New_York'

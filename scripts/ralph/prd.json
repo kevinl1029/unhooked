@@ -145,7 +145,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/progress/complete-session.post.ts. Derives current layer from layer_progress (next incomplete in ordered list). Validates against request. Uses jsonb_set or app-level merge for layer_progress JSONB. Read observation_assignment from conversations table for the conversationId."
     },
     {
@@ -162,7 +162,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/progress/complete-session.post.ts. This is the L3 branch of the layer progression logic added in US-007. When identity illusion L3 completes, set program_status='ceremony_ready' and ceremony_ready_at=now() (existing behavior from ceremony spec)."
     },
     {
