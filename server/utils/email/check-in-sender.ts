@@ -136,8 +136,18 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
     from: `${FROM_NAME} <${FROM_EMAIL}>`,
     to: checkIn.user.email,
     subject,
-    html: buildEmailHtml(magicLink, checkIn.check_in_type, checkIn.observation_assignment),
-    text: buildEmailText(magicLink, checkIn.check_in_type, checkIn.observation_assignment),
+    html: buildEmailHtml(
+      magicLink,
+      checkIn.check_in_type,
+      checkIn.prompt_template,
+      checkIn.observation_assignment
+    ),
+    text: buildEmailText(
+      magicLink,
+      checkIn.check_in_type,
+      checkIn.prompt_template,
+      checkIn.observation_assignment
+    ),
   })
 
   if (error) {
@@ -152,10 +162,15 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
  * Evidence bridge emails include observation assignment text
  * Other check-ins use generic copy
  */
-function buildEmailHtml(magicLink: string, checkInType: string, observationAssignment: string | null): string {
-  // Evidence bridge check-ins show the observation assignment
-  const bodyText = checkInType === 'evidence_bridge' && observationAssignment
-    ? observationAssignment
+function buildEmailHtml(
+  magicLink: string,
+  checkInType: string,
+  promptTemplate: string | null,
+  observationAssignment: string | null
+): string {
+  // Evidence bridge emails should use prompt_template as the source of truth.
+  const bodyText = checkInType === 'evidence_bridge'
+    ? (promptTemplate || observationAssignment || 'Take a moment to reflect on how things are going.')
     : 'Take a moment to reflect on how things are going.'
 
   return `
@@ -214,10 +229,15 @@ function buildEmailHtml(magicLink: string, checkInType: string, observationAssig
 /**
  * Build plain text email content
  */
-function buildEmailText(magicLink: string, checkInType: string, observationAssignment: string | null): string {
-  // Evidence bridge check-ins show the observation assignment
-  const bodyText = checkInType === 'evidence_bridge' && observationAssignment
-    ? observationAssignment
+function buildEmailText(
+  magicLink: string,
+  checkInType: string,
+  promptTemplate: string | null,
+  observationAssignment: string | null
+): string {
+  // Evidence bridge emails should use prompt_template as the source of truth.
+  const bodyText = checkInType === 'evidence_bridge'
+    ? (promptTemplate || observationAssignment || 'Take a moment to reflect on how things are going.')
     : 'Take a moment to reflect on how things are going.'
 
   return `UNHOOKED

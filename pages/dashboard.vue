@@ -401,8 +401,7 @@ const {
   ceremonyDate,
 } = useUserStatus()
 
-// Import layerProgress from useProgress composable
-const { layerProgress } = useProgress()
+const layerProgress = computed(() => status.value?.progress?.layer_progress || {})
 
 // Check-in interstitial
 const {
