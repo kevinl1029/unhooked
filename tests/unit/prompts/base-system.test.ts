@@ -27,17 +27,9 @@ describe('BASE_SYSTEM_PROMPT', () => {
       expect(BASE_SYSTEM_PROMPT).toContain('summarize what they discovered')
       expect(BASE_SYSTEM_PROMPT).toContain('warm closing')
     })
-
-    it('should include good and bad examples', () => {
-      expect(BASE_SYSTEM_PROMPT).toContain('Example good ending')
-      expect(BASE_SYSTEM_PROMPT).toContain('Example bad ending')
-      // Bad example should show a question
-      expect(BASE_SYSTEM_PROMPT).toContain('So what do you think about that now?')
-      expect(BASE_SYSTEM_PROMPT).toContain("(user can't respond!)")
-    })
   })
 
-  describe('Core Allen Carr methodology', () => {
+  describe('Core coaching methodology contract', () => {
     it('should include core philosophy about nicotine creating the problem', () => {
       expect(BASE_SYSTEM_PROMPT).toContain('Nicotine creates the problem it appears to solve')
     })
@@ -49,8 +41,22 @@ describe('BASE_SYSTEM_PROMPT', () => {
 
     it('should warn against willpower-based approaches', () => {
       expect(BASE_SYSTEM_PROMPT).toContain('No willpower talk')
-      expect(BASE_SYSTEM_PROMPT).toContain('Never suggest they need to')
-      expect(BASE_SYSTEM_PROMPT).toContain('be strong')
+      expect(BASE_SYSTEM_PROMPT).toContain('Never suggest they "be strong" or "resist cravings."')
+    })
+
+    it('should include one-question-at-a-time guidance', () => {
+      expect(BASE_SYSTEM_PROMPT).toContain('Ask one question at a time')
+      expect(BASE_SYSTEM_PROMPT).toContain('Never stack multiple questions in one message')
+    })
+
+    it('should include recovery physiology guidance', () => {
+      expect(BASE_SYSTEM_PROMPT).toContain('Dopamine receptor density normalizes within weeks')
+      expect(BASE_SYSTEM_PROMPT).toContain('Physical symptoms peak at 48-72 hours')
+    })
+
+    it('should include crisis support guidance', () => {
+      expect(BASE_SYSTEM_PROMPT).toContain('988 Suicide & Crisis Lifeline')
+      expect(BASE_SYSTEM_PROMPT).toContain('visit 988lifeline.org')
     })
   })
 })
