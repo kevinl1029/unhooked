@@ -10,7 +10,7 @@
  * These tests ONLY run in WebKit and Mobile Safari projects.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { mockUserInProgress, mockCeremonyPrepare, mockCeremonyGenerateJourney } from './utils'
 import type { PlaylistSegment } from './utils'
 import { mockConversationsAPI } from './utils/mock-session'

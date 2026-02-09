@@ -7,7 +7,7 @@
  * - Dashboard renders correctly for each program state
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { mockIntakeAPI, mockUserInProgress } from './utils'
 import { mockChatAPI, mockConversationsAPI, mockUserStatusAPI } from './utils/mock-session'
 import {

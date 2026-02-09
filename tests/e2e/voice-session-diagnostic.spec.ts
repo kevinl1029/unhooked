@@ -8,7 +8,7 @@
  * It mocks API endpoints but lets the real streaming code run against the mock.
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { mockProgressAPI, mockIntakeAPI } from './utils/mock-progress'
 
 // Store all console messages with timestamps

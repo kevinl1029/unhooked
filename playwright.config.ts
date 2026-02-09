@@ -1,8 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
 import dotenv from 'dotenv'
 
-// Load test environment variables
+// Load environment variables: .env.test first (test credentials), then .env.local/.env
+// for SUPABASE_URL and other infra vars. dotenv won't override already-set values.
 dotenv.config({ path: '.env.test' })
+dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env' })
 
 export default defineConfig({
   testDir: './tests/e2e',
