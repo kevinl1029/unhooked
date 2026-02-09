@@ -11,14 +11,18 @@
 1. [Overview](#overview)
 2. [Scope](#scope)
 3. [Content Sources](#content-sources)
-4. [Expanded Base System Prompt](#expanded-base-system-prompt)
-5. [Expanded Illusion Prompts](#expanded-illusion-prompts)
+4. [Source of Truth and Precedence](#source-of-truth-and-precedence)
+5. [Exact File Mapping](#exact-file-mapping)
+6. [Prompt Contract (Must Preserve)](#prompt-contract-must-preserve)
+7. [Expanded Base System Prompt](#expanded-base-system-prompt)
+8. [Expanded Illusion Prompts](#expanded-illusion-prompts)
    - [Illusion 1: Stress Relief](#illusion-1-the-stress-relief-illusion)
    - [Illusion 2: Pleasure](#illusion-2-the-pleasure-illusion)
    - [Illusion 3: Willpower](#illusion-3-the-willpower-illusion)
    - [Illusion 4: Focus](#illusion-4-the-focus-illusion)
    - [Illusion 5: Identity](#illusion-5-the-identity-illusion)
-6. [Future Sequencing](#future-sequencing)
+9. [Test Update Requirements](#test-update-requirements)
+10. [Acceptance Criteria](#acceptance-criteria)
 
 ---
 
@@ -53,9 +57,9 @@ The result: the AI has more angles to draw from in a single conversation, less r
 ### Out of Scope
 
 - No program structure changes (3-layer model, evidence loops, observation assignments)
-- No Phase 2+ therapeutic content (ACT, MBRP, Narrative Therapy)
+- No Phase 2+ therapeutic content from the coaching framework roadmap (e.g., ACT, MBRP, Narrative Therapy); this content pass is scoped to the evidence-based coaching spec implementation only
 - No changes to conversation-architecture-guide.md, prompt assembly logic, or any other code
-- No layer-differentiated content (that requires the prompt architecture spec — see [Future Sequencing](#future-sequencing))
+- No layer-differentiated content in this pass; layer-specific variants are part of later evidence-based architecture sequencing, not this content replacement scope
 
 ---
 
@@ -69,6 +73,51 @@ All expanded content is drawn from the [coaching framework guide](../guides/coac
 | **CBT** (new) | Distortion names, cognitive restructuring moves, evidence examination, behavioral experiments |
 | **Neuroscience** (new) | Dopamine cycle, cortisol/withdrawal physiology, wanting vs. liking, neuroplasticity, recovery timelines |
 | **MI** (new) | Reflective listening moves, developing discrepancy, self-efficacy building, rolling with resistance, OARS |
+
+---
+
+## Source of Truth and Precedence
+
+This specification is the source of truth for the literal prompt text introduced in the content-library expansion.
+
+Document precedence for this implementation:
+
+1. **Content-library-expansion spec (this doc)** owns prompt content and wording contracts.
+2. **Evidence-based-coaching spec** owns runtime behavior, orchestration, data model, and layering architecture.
+3. **Coaching framework guide** is methodology reference source material, not an implementation contract.
+
+If wording in code diverges from this document during the content pass, this document takes precedence for prompt strings. If architectural behavior conflicts arise, the evidence-based-coaching spec takes precedence.
+
+---
+
+## Exact File Mapping
+
+The following mappings define exact implementation targets for this content pass:
+
+| Spec Section | Target File | Export/Contract |
+|---|---|---|
+| Expanded Base System Prompt | `server/utils/prompts/base-system.ts` | Replace `BASE_SYSTEM_PROMPT` string only |
+| Illusion 1: The Stress Relief Illusion | `server/utils/prompts/illusions/illusion-1-stress.ts` | Replace `ILLUSION_1_STRESS_PROMPT` string only |
+| Illusion 2: The Pleasure Illusion | `server/utils/prompts/illusions/illusion-2-pleasure.ts` | Replace `ILLUSION_2_PLEASURE_PROMPT` string only |
+| Illusion 3: The Willpower Illusion | `server/utils/prompts/illusions/illusion-3-willpower.ts` | Replace `ILLUSION_3_WILLPOWER_PROMPT` string only |
+| Illusion 4: The Focus Illusion | `server/utils/prompts/illusions/illusion-4-focus.ts` | Replace `ILLUSION_4_FOCUS_PROMPT` string only |
+| Illusion 5: The Identity Illusion | `server/utils/prompts/illusions/illusion-5-identity.ts` | Replace `ILLUSION_5_IDENTITY_PROMPT` string only |
+
+No new files, no export renames, and no prompt-assembly changes are in scope for this content implementation.
+
+---
+
+## Prompt Contract (Must Preserve)
+
+The following implementation invariants are required:
+
+- Preserve token contract: `[SESSION_COMPLETE]` must still be instructed as end-of-final-message behavior.
+- Preserve closing contract: final message must not end with a question when session completion is signaled.
+- Preserve safety contract: crisis guidance language and escalation path (988 call/text and 988lifeline.org) must remain in `BASE_SYSTEM_PROMPT`.
+- Preserve API contract: existing prompt export names and imports remain unchanged to avoid breaking prompt assembly.
+- Preserve non-content logic in `server/utils/prompts/base-system.ts`: `UserContext` interface and `buildPersonalizationContext()` behavior remain unchanged.
+
+Note: Observation template behavior is intentionally owned by the evidence-based-coaching implementation scope, not this content-library expansion contract.
 
 ---
 
@@ -590,6 +639,36 @@ Multiple angles:
 **Completion Signal:**
 When they can clearly articulate that they're not fundamentally different or broken — that they were tricked by an addictive substance, just like anyone else could be — and they seem hopeful (not defeated), the session is complete.
 ```
+
+---
+
+## Test Update Requirements
+
+The content pass requires prompt-unit test alignment to contract-level assertions.
+
+Required test updates:
+
+- Update `tests/unit/prompts/base-system.test.ts` to assert stable prompt contracts instead of legacy phrase fragments tied to old copy.
+- Remove assertions that require deprecated examples from the old draft (for example, "Example good ending" / "Example bad ending"), since those lines are not part of the new base prompt text.
+- Keep assertions for behavioral invariants: `[SESSION_COMPLETE]`, end-of-message completion behavior, no-final-question completion constraint, core anti-willpower framing, and safety guidance presence.
+
+Minimum validation before merge:
+
+1. Run prompt/unit tests covering base system prompt contracts.
+2. Run targeted session-flow smoke coverage (unit and/or e2e) to verify no regressions in completion signaling behavior.
+
+---
+
+## Acceptance Criteria
+
+This spec is considered implemented when all of the following are true:
+
+1. `BASE_SYSTEM_PROMPT` in `server/utils/prompts/base-system.ts` matches this document's expanded base prompt content.
+2. All five illusion prompt exports in `server/utils/prompts/illusions/` match this document's expanded illusion content.
+3. Prompt contract invariants defined in [Prompt Contract (Must Preserve)](#prompt-contract-must-preserve) remain satisfied.
+4. `tests/unit/prompts/base-system.test.ts` is updated to contract-based assertions and passes.
+5. Validation in [Test Update Requirements](#test-update-requirements) is completed with no regressions attributable to prompt content replacement.
+6. No architectural, assembly, API, or database changes are introduced as part of this content pass.
 
 ---
 
