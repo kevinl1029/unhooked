@@ -1,8 +1,8 @@
 # Evidence-Based Coaching Spec
 
 **Created:** 2026-02-08
-**Status:** Draft
-**Version:** 1.5
+**Status:** Ready for Development
+**Version:** 1.6
 **Document Type:** Feature Specification (PRD)
 
 ---
@@ -1120,14 +1120,14 @@ This is the final session for this illusion. There is NO observation assignment.
 ### Illusion Completion
 In your closing message:
 1. Mark the illusion completion conversationally: "You've seen through the [Illusion Name]. That one's done."
-2. Include a brief, natural preview of the next illusion (or ceremony tease for the final illusion)
+2. {nextIllusionPreview}
 3. Then output [SESSION_COMPLETE]
 
 Do NOT output [OBSERVATION_ASSIGNMENT: ...] for Layer 3.
 `
 ```
 
-**Note:** The `{observationTemplate}` placeholder is replaced at assembly time with the actual template text from the illusion file's `OBSERVATION_TEMPLATES` map.
+**Note:** The `{observationTemplate}` placeholder is replaced at assembly time with the actual template text from the illusion file's `OBSERVATION_TEMPLATES` map. The `{nextIllusionPreview}` placeholder in L3 instructions is replaced by `buildSystemPrompt` with a natural next-illusion preview (e.g., "Include a brief, natural preview: Next time, we'll explore the Pleasure Illusion.") or the ceremony tease for the final illusion (per ceremony-spec.md).
 
 #### Observation Templates (in each illusion file)
 
@@ -1227,6 +1227,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 5. Given an existing user with `illusions_completed = [1, 2]`, when the migration runs, then `layer_progress` contains `{"stress_relief": ["intellectual", "emotional", "identity"], "pleasure": ["intellectual", "emotional", "identity"]}`
 6. Given an existing user with `program_status = 'in_progress'` and a completed core conversation for the current illusion, when the migration runs, then `layer_progress` contains the current illusion key with `["intellectual"]` (current layer derives to `'emotional'`)
 7. Given a new user with no progress, when the migration runs, then `layer_progress = '{}'` (current layer derives to `'intellectual'`)
+8. Given an existing user with `program_status = 'in_progress'` and NO completed core conversations for the current illusion (started but never finished a session), when the migration runs, then `layer_progress` does NOT include that illusion key (current layer derives to `'intellectual'`)
 
 **Technical Notes:**
 - Migration file: `supabase/migrations/20260209_evidence_based_coaching.sql`
@@ -1291,12 +1292,15 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 3. Given `buildSystemPrompt` is called with `illusionLayer: 'identity'`, when the prompt is assembled, then Layer 3 instructions appear with no observation template
 4. Given `buildSystemPrompt` is called without `illusionLayer`, when the prompt is assembled, then no layer instructions are injected (backwards compatible)
 5. Given the assembled prompt, when tokens are counted, then the total stays under 4000 tokens for the system prompt portion
+6. Given `illusionLayer: 'identity'` and `illusionKey: 'focus'` (4th illusion), when the prompt is assembled, then L3 instructions contain a natural next-illusion preview referencing the Identity Illusion (e.g., "Include a brief, natural preview: Next time, we'll explore the Identity Illusion.")
+7. Given `illusionLayer: 'identity'` and `illusionKey: 'identity'` (final illusion), when the prompt is assembled, then L3 instructions contain the ceremony tease instead of a next-illusion preview (per ceremony-spec.md)
 
 **Technical Notes:**
 - File: `server/utils/prompts/index.ts`
 - Add `illusionLayer?: IllusionLayer` to `BuildSystemPromptOptions`
 - Import layer instructions and observation templates
 - Insert after illusion prompt, before bridge context (REQ-36)
+- L3 instructions contain `{nextIllusionPreview}` placeholder — replaced with next illusion name or ceremony tease based on illusion order position
 
 **Dependencies:** Story 2.1, Story 2.2
 **Test Requirements:** Unit test verifying prompt assembly order with each layer
@@ -1365,6 +1369,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 - Fetch progress on mount using `useProgress`
 - Store `illusionLayer` in a ref, pass to all chat API calls
 - Also update `VoiceSessionView` to accept and use `illusionLayer` prop
+- Thread `illusionLayer` through `useVoiceSession` composable — voice sessions use the same `/api/chat.post.ts` endpoint, so the layer needs to be passed from the session page → `VoiceSessionView` props → `useVoiceSession` → chat API request body
 
 **Dependencies:** Story 2.3 (prompt assembly uses layer), useProgress composable changes (Story 5.1)
 **Test Requirements:** E2E test verifying correct layer is passed to chat API
@@ -1380,6 +1385,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 3. Given L3 of the final illusion (Identity) completes, when SessionCompleteCard is shown, then heading/subtext match ceremony-spec format
 4. Given the user taps "Continue to Next Session" (L1/L2), when the session page handles the event, then it re-initializes for the next layer (fetches updated progress, starts new session)
 5. Given the observation assignment is `null` (extraction failed), when SessionCompleteCard is shown, then the generic settling message with spacing recommendation is used as fallback
+6. Given L3 of the Identity illusion completes (program complete, `isComplete=true`), when SessionCompleteCard is shown, then heading is "Session Complete" and subtext is "All five illusions dismantled. Your final ceremony is ready." with only "Return to Dashboard" CTA (per ceremony-spec.md)
 
 **Technical Notes:**
 - Files: `pages/session/[illusion].vue`, `components/SessionCompleteCard.vue`
@@ -1404,6 +1410,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 3. Given a Layer 2 session completes, when check-ins are scheduled, then an `evidence_bridge` check-in with the L2 observation is scheduled
 4. Given a Layer 3 session completes, when check-ins are scheduled, then NO evidence bridge check-in is scheduled (L3 has no observation)
 5. Given the observation text is `null` (extraction failed), when the check-in is scheduled, then the template fallback text is used for both `observation_assignment` and `prompt_template`
+6. Given the check-in scheduling insert fails (e.g., Supabase error), when the error is caught, then the session completion still succeeds (check-in scheduling is non-blocking) and the error is logged for monitoring
 
 **Technical Notes:**
 - File: `server/utils/scheduling/check-in-scheduler.ts`
@@ -1528,16 +1535,18 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 2. Given multiple observation moments exist, when context is assembled, then the most recent observations for this illusion are included (within the existing 5-8 moment budget)
 3. Given no observation moments exist, when context is assembled, then the context is still valid (no errors)
 4. Given a user submits a response to an `evidence_bridge` check-in, when the moment detection pipeline processes it, then it creates a `captured_moment` with `moment_type = 'real_world_observation'` and the correct `illusion_key`
+5. Given the moment detection prompt/task definition, when updated, then it includes `real_world_observation` as a recognized moment type with classification guidance for evidence bridge check-in responses (distinct from generic `insight` or `reflection`)
+6. Given a user responds to an evidence bridge check-in with an observation like "I noticed my stress was from the situation, not nicotine", when moment detection runs, then the response is classified as `real_world_observation` (not generic `insight` or `reflection`)
 
 **Technical Notes:**
-- File: `server/utils/personalization/context-builder.ts`
+- Files: `server/utils/personalization/context-builder.ts`, `server/utils/llm/tasks/moment-detection.ts`
 - The existing context builder already surfaces moments by type. `real_world_observation` is already a valid moment type in the schema.
-- This story may require no code changes for surfacing — just verification that the existing moment selection includes `real_world_observation` moments. If the existing selection logic filters to specific types, add `real_world_observation` to the allowed types.
-- AC#4 may require verification or modification of the moment detection pipeline to ensure evidence bridge check-in responses are classified as `real_world_observation` (not the generic check-in moment type).
+- The moment detection pipeline's prompt/task definition needs to be updated to recognize `real_world_observation` as a valid moment type and provide classification guidance (AC#5).
+- Verify that the existing moment selection in context-builder includes `real_world_observation` moments. If the existing selection logic filters to specific types, add `real_world_observation` to the allowed types.
 
 **Dependencies:** Story 4.1 (check-ins capture observations as moments)
-**Test Requirements:** Unit test verifying `real_world_observation` moments appear in context output
-**Estimated Complexity:** S — Likely verification only, minor code change if needed
+**Test Requirements:** Unit test verifying `real_world_observation` moments appear in context output; unit test for moment detection classification of evidence bridge responses
+**Estimated Complexity:** M — Requires moment detection prompt update + context builder verification
 
 ---
 
@@ -1610,6 +1619,8 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 | `does not inject layer instructions when illusionLayer omitted` | Call without `illusionLayer`, verify no layer instruction text |
 | `prompt order: illusion before layer before bridge` | Call with all options, verify ordering by searching for section markers |
 | `L3 has no observation template placeholder` | Call with `illusionLayer: 'identity'`, verify no `{observationTemplate}` remains |
+| `L3 injects next illusion preview` | Call with `illusionLayer: 'identity'`, `illusionKey: 'focus'`, verify L3 instructions contain next-illusion preview referencing Identity Illusion |
+| `L3 of final illusion injects ceremony tease` | Call with `illusionLayer: 'identity'`, `illusionKey: 'identity'`, verify L3 instructions contain ceremony tease instead of next-illusion preview |
 
 #### API Tests
 **File:** `tests/unit/api/complete-session.test.ts`
@@ -1657,6 +1668,10 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 | `skips scheduling for Layer 3` | Pass layer='identity', verify no check-in created |
 | `stores observation_assignment on check-in record` | Verify field is populated with template text |
 | `uses template fallback when observation is null` | Pass null observation, verify template text used |
+| `cancels scheduled check-in on next session start` | Mock scheduled evidence_bridge check-in, start new core session for same illusion, verify status='cancelled' with cancellation_reason |
+| `cancels sent check-in on next session start` | Mock sent evidence_bridge check-in, start new core session, verify status='cancelled' |
+| `does not cancel check-ins for reinforcement sessions` | Mock scheduled evidence_bridge check-in, start reinforcement session, verify check-in status unchanged |
+| `cancelled check-in is not re-scheduled on layer abandonment` | Mock cancelled check-in + abandoned next layer, verify no new check-in created |
 
 ### E2E Tests
 
@@ -1820,6 +1835,22 @@ No open questions remain. All questions have been resolved through UX refinement
 
 ## Changelog
 
+### v1.6 — Readiness Review (2026-02-08)
+
+<!-- READINESS-REVIEWED: Full traceability audit across UX→Requirements→Stories→Acceptance Criteria -->
+
+Definition of Ready review — 3-layer traceability audit (UX → Requirements → Stories → Acceptance Criteria). 12 gaps found, all resolved:
+
+- **Story 1.1 (Schema Migration):** Added AC#8 — in-progress users with no completed conversations have empty `layer_progress` for that illusion (current layer derives to `'intellectual'`)
+- **Story 2.3 (Prompt Assembly):** Added AC#6 (next-illusion preview in L3 instructions) and AC#7 (ceremony tease for final illusion). Added `{nextIllusionPreview}` placeholder to L3 layer instruction prompt and technical note for placeholder replacement logic.
+- **Story 3.3 (Pass Layer to Chat API):** Added technical note for voice session path — thread `illusionLayer` through `VoiceSessionView` props → `useVoiceSession` composable → chat API request body
+- **Story 3.4 (SessionCompleteCard):** Added AC#6 — program-complete state (L3 of Identity illusion) shows ceremony-specific heading/subtext per ceremony-spec.md
+- **Story 4.1 (Schedule Check-Ins):** Added AC#6 — check-in scheduling failure is non-blocking (session completion succeeds, error logged)
+- **Story 6.1 (Observation Evidence):** Expanded from verification to implementation scope. Added AC#5 (moment detection prompt update to recognize `real_world_observation` type) and AC#6 (classification behavior for evidence bridge responses). Updated complexity S→M. Added `moment-detection.ts` to technical notes.
+- **Test specification:** Added 4 cancellation test cases to `evidence-bridge.test.ts`. Added 2 prompt assembly test cases for L3 next-illusion preview and ceremony tease.
+- **Confirmed existing schema:** `conversations.illusion_layer` and `captured_moments.illusion_layer` columns already exist in production — no migration needed for these. Entity relationship diagram is accurate.
+- **Confirmed UX decision:** Dashboard CTA has no spacing indicators — spacing recommendation lives only on the session-complete screen copy.
+
 ### v1.5 — User Story Completeness Review (2026-02-08)
 
 Reviewed spec for completeness across three dimensions: requirements vs. UX, user stories vs. requirements, and acceptance criteria per story. Changes made:
@@ -1900,3 +1931,24 @@ Added based on structured UX audit across 12 dimensions:
 - UX overview for dashboard, session, session-complete, and check-in screens
 - 13 key requirements (REQ-1 through REQ-13)
 - Scope, dependencies, constraints, open questions
+
+---
+
+## Readiness Summary
+
+| Field | Value |
+|-------|-------|
+| **Review Date** | 2026-02-08 |
+| **Readiness Assessment** | Ready for Development |
+| **Gaps Found** | 12 |
+| **Gaps Resolved** | 12 |
+| **Deferred Items** | None |
+
+**Traceability status:**
+- UX → Requirements: Complete. All flows, screens, interactions, states, and data displays have backing requirements (REQ-1 through REQ-51).
+- Requirements → Stories: Complete. All requirements map to user stories across 7 epics (15 stories).
+- Stories → Acceptance Criteria: Complete. All stories have testable acceptance criteria covering happy paths, error scenarios, edge cases, and cross-references to dependent specs.
+
+**Follow-up actions:**
+- Update [conversation-architecture-guide.md](../guides/conversation-architecture-guide.md) to reflect layer-aware prompt assembly order after implementation
+- Update [check-in-spec.md](check-in-spec.md) with evidence bridge check-in type and 24-hour timing after implementation
