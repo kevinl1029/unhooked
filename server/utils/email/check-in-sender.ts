@@ -9,6 +9,7 @@ import { getResendClient, getEmailSubject } from './resend-client'
 // From email address
 const FROM_EMAIL = 'coach@getunhooked.app'
 const FROM_NAME = 'Unhooked Coach'
+export const UNSENT_CHECK_IN_EXPIRY_HOURS = 48
 
 interface CheckInToSend {
   id: string
@@ -23,6 +24,15 @@ interface CheckInToSend {
   }
 }
 
+export function shouldExpireUnsentCheckIn(
+  scheduledFor: string | Date,
+  now: Date = new Date()
+): boolean {
+  const scheduled = scheduledFor instanceof Date ? scheduledFor : new Date(scheduledFor)
+  const ageMs = now.getTime() - scheduled.getTime()
+  return ageMs >= UNSENT_CHECK_IN_EXPIRY_HOURS * 60 * 60 * 1000
+}
+
 /**
  * Process scheduled check-ins that are due
  * Called by Vercel Cron daily
@@ -33,12 +43,8 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
   errors: string[]
 }> {
   const now = new Date()
-  // Look back 24 hours to catch any check-ins that were missed (e.g., scheduled_for already passed)
-  // and forward 24 hours for upcoming ones
-  const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago
-  const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours from now
 
-  // Find check-ins due to be sent (includes past-due ones that weren't sent yet)
+  // Find all due scheduled check-ins. Keep retrying until sent or expired.
   const { data: checkIns, error } = await supabase
     .from('check_in_schedule')
     .select(`
@@ -51,8 +57,7 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
       observation_assignment
     `)
     .eq('status', 'scheduled')
-    .lte('scheduled_for', windowEnd.toISOString())
-    .gte('scheduled_for', windowStart.toISOString())
+    .lte('scheduled_for', now.toISOString())
 
   if (error) {
     console.error('[check-in-sender] Failed to query check-ins:', error)
@@ -69,6 +74,22 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
   // Process each check-in
   for (const checkIn of checkIns) {
     try {
+      if (shouldExpireUnsentCheckIn(checkIn.scheduled_for, now)) {
+        const { error: expireError } = await supabase
+          .from('check_in_schedule')
+          .update({
+            status: 'expired',
+            expired_at: now.toISOString(),
+          })
+          .eq('id', checkIn.id)
+
+        if (expireError) {
+          errors.push(`Failed to expire stale check-in ${checkIn.id}: ${expireError.message}`)
+          console.error(`[check-in-sender] Failed to expire stale check-in ${checkIn.id}:`, expireError)
+        }
+        continue
+      }
+
       // Get user email
       const { data: userData, error: userError } = await supabase
         .from('auth.users')

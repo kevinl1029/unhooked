@@ -71,17 +71,7 @@ export function useCheckIns() {
     showInterstitial.value = false
     const prompt = pendingCheckIn.value?.prompt
     const illusionKey = pendingCheckIn.value?.illusion_key
-    const params = new URLSearchParams()
-
-    if (prompt) {
-      params.set('prompt', prompt)
-    }
-    if (illusionKey) {
-      params.set('illusionKey', illusionKey)
-    }
-
-    const query = params.toString()
-    navigateTo(query ? `/check-in/${id}?${query}` : `/check-in/${id}`)
+    navigateTo(buildCheckInResponsePath(id, prompt, illusionKey))
   }
 
   /**
@@ -103,6 +93,22 @@ export function useCheckIns() {
     respondToCheckIn,
     completeCheckInInline,
   }
+}
+
+export function buildCheckInResponsePath(
+  id: string,
+  prompt?: string | null,
+  illusionKey?: string | null
+): string {
+  const params = new URLSearchParams()
+  if (prompt) {
+    params.set('prompt', prompt)
+  }
+  if (illusionKey) {
+    params.set('illusionKey', illusionKey)
+  }
+  const query = params.toString()
+  return query ? `/check-in/${id}?${query}` : `/check-in/${id}`
 }
 
 /**

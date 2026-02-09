@@ -44,11 +44,9 @@ describe('SessionCompleteCard', () => {
       })
 
       const buttons = wrapper.findAll('button')
-
-      // Second button should be "Complete the Program" with secondary styling
-      const completeButton = buttons[1]
-      expect(completeButton.text()).toBe('Complete the Program')
-      expect(completeButton.classes()).not.toContain('btn-primary')
+      expect(buttons).toHaveLength(1)
+      expect(buttons[0].text()).toBe('Return to Dashboard')
+      expect(wrapper.text()).not.toContain('Complete the Program')
     })
   })
 
@@ -81,18 +79,15 @@ describe('SessionCompleteCard', () => {
       expect(wrapper.emitted('continue')?.[0]).toEqual([3])
     })
 
-    it('emits finish event when Complete the Program is clicked', async () => {
+    it('does not expose finish event path when nextIllusion is null', async () => {
       const wrapper = await mountSuspended(SessionCompleteCard, {
         props: {
           nextIllusion: null
         }
       })
 
-      const completeButton = wrapper.findAll('button')[1]
-      await completeButton.trigger('click')
-
-      expect(wrapper.emitted('finish')).toBeTruthy()
-      expect(wrapper.emitted('finish')?.length).toBe(1)
+      expect(wrapper.emitted('finish')).toBeFalsy()
+      expect(wrapper.text()).not.toContain('Complete the Program')
     })
   })
 
