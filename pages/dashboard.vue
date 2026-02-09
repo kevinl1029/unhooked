@@ -235,6 +235,7 @@
           :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
           :illusions-completed="status?.progress?.illusions_completed || []"
           :current-illusion="5"
+          :layer-progress="layerProgress"
         />
 
         <!-- Moment cards section (secondary - if moments exist) -->
@@ -266,6 +267,7 @@
           :illusion-order="status?.progress?.illusion_order || [1, 2, 3, 4, 5]"
           :illusions-completed="status?.progress?.illusions_completed || []"
           :current-illusion="status?.progress?.current_illusion || 1"
+          :layer-progress="layerProgress"
         />
 
         <!-- Moment cards section (only if moments exist) -->
@@ -398,6 +400,9 @@ const {
   illusionsCompletedCount,
   ceremonyDate,
 } = useUserStatus()
+
+// Import layerProgress from useProgress composable
+const { layerProgress } = useProgress()
 
 // Check-in interstitial
 const {
