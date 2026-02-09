@@ -43,7 +43,7 @@
         v-if="sessionComplete"
         class="flex-shrink-0"
         :next-illusion="nextIllusion"
-        :ceremony-tease="illusionKey === 'identity' && illusionLayer === 'identity'"
+        :ceremony-tease="isProgramComplete"
         :subtext="sessionCompleteSubtext"
         :show-continue="showContinueToNextLayer"
         @continue="handleContinue"
@@ -87,6 +87,7 @@ const nextIllusion = ref<number | null>(null)
 const illusionLayer = ref<IllusionLayer>('intellectual')
 const sessionCompleteSubtext = ref<string>('')
 const showContinueToNextLayer = ref(false)
+const isProgramComplete = ref(false)
 
 // For voice session view
 const existingConversationId = ref<string | null>(null)
@@ -386,8 +387,16 @@ async function handleSessionComplete() {
         || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
       showContinueToNextLayer.value = true
     } else {
-      // L3 completion - generic settling message, no continue CTA
-      sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
+      // L3 completion
+      if (result.isComplete) {
+        // Final illusion L3 - ceremony tease
+        // The ceremony tease subtext is handled by SessionCompleteCard's computed displaySubtext
+        sessionCompleteSubtext.value = '' // Will be overridden by ceremonyTease
+        isProgramComplete.value = true
+      } else {
+        // Non-final illusion L3 - generic settling message, no continue CTA
+        sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
+      }
       showContinueToNextLayer.value = false
     }
 
@@ -419,8 +428,16 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
           || 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'
         showContinueToNextLayer.value = true
       } else {
-        // L3 completion - generic settling message, no continue CTA
-        sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
+        // L3 completion
+        if (result.isComplete) {
+          // Final illusion L3 - ceremony tease
+          // The ceremony tease subtext is handled by SessionCompleteCard's computed displaySubtext
+          sessionCompleteSubtext.value = '' // Will be overridden by ceremonyTease
+          isProgramComplete.value = true
+        } else {
+          // Non-final illusion L3 - generic settling message, no continue CTA
+          sessionCompleteSubtext.value = 'Great work. Take a moment to let this settle.'
+        }
         showContinueToNextLayer.value = false
       }
 
@@ -469,6 +486,7 @@ async function handleContinueLayer() {
   nextIllusion.value = null
   sessionCompleteSubtext.value = ''
   showContinueToNextLayer.value = false
+  isProgramComplete.value = false
   existingConversationId.value = null
   existingMessages.value = []
 

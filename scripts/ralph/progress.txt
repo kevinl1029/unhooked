@@ -198,3 +198,31 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - useVoiceChat threads illusionLayer through to both streaming (streamTTS=true) and non-streaming modes
 - Text-based chat mode requires manual illusionLayer insertion in fetch() call bodies (not handled by composable)
 ---
+## 2026-02-09 00:30 EST - US-010
+- Configured SessionCompleteCard to display observation assignments and Continue CTA for L1/L2 completions
+- Added showContinue boolean prop to control visibility of "Continue to Next Session" button
+- Added continue-layer event emit (distinct from existing continue event for next illusion)
+- Updated session page to configure card based on complete-session API response:
+  - L1/L2: Shows observation assignment text (or fallback) + Continue CTA
+  - L3: Shows generic settling text, no Continue CTA
+- Implemented handleContinueLayer function to re-initialize session for next layer:
+  - Resets all session state (messages, conversation ID, session complete flags)
+  - Fetches updated progress to derive new current layer
+  - Re-initializes session (text mode explicitly, voice mode reactive)
+- Both handleSessionComplete (text mode) and handleVoiceSessionComplete (voice mode) now call completeSession with illusionLayer parameter
+- All 359 unit tests pass
+- Build passes with no TypeScript errors
+
+**Files changed:**
+- components/SessionCompleteCard.vue (added showContinue prop, continue-layer emit, conditional rendering)
+- pages/session/[illusion].vue (added sessionCompleteSubtext/showContinueToNextLayer state, handleContinueLayer handler, layer-aware completion logic)
+- scripts/ralph/prd.json (marked US-010 as passes=true)
+
+**Learnings for future iterations:**
+- SessionCompleteCard uses conditional rendering to show different CTAs based on context (layer vs illusion vs ceremony)
+- The continue-layer event is distinct from the continue event (layer progression vs illusion progression)
+- Layer re-initialization requires resetting ALL session state, not just messages/conversation ID
+- Voice mode re-initializes reactively when state changes; text mode requires explicit initializeSession() call
+- The observationAssignment from complete-session response is used for subtext display with a fallback message
+- Both voice and text session completion paths must handle layer-aware completion (DRY violation noted, but acceptable for now)
+---

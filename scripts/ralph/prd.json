@@ -196,7 +196,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Files: components/SessionCompleteCard.vue, pages/session/[illusion].vue. Session page uses isIllusionComplete and observationAssignment from complete-session response to configure the card. Generic fallback: 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'"
     },
     {
