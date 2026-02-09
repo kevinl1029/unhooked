@@ -9,7 +9,7 @@
  * - Pending follow-up card when scheduled
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { mockIntakeAPI } from './utils'
 import {
   mockCheckInInterstitial,

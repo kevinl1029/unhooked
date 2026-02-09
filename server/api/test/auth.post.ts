@@ -65,13 +65,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'No session returned' })
   }
 
-  // Return the session tokens for the client to use
+  // Return the full session for Playwright's addInitScript to inject into localStorage.
+  // The complete session object (with expires_at, token_type, user, etc.) is required
+  // for Supabase's client-side JS to recognize it as a valid session.
   return {
     success: true,
-    session: {
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    },
+    session: data.session,
     user: {
       id: data.user?.id,
       email: data.user?.email,

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { getMockUser } from './utils'
 import { mockNewUser, mockIntakeAPI } from './utils'
 import { mockUserStatusAPI } from './utils/mock-session'
@@ -25,7 +25,7 @@ async function setupDashboard(
 test.describe('Authentication', () => {
   test.describe('Protected Routes', () => {
     // These tests need to bypass the storageState auth
-    test.use({ storageState: { cookies: [], origins: [] } })
+    test.use({ storageState: { cookies: [], origins: [] }, noAuth: true })
 
     test('unauthenticated user is redirected from dashboard to login', async ({ page }) => {
       await page.goto('/dashboard')
