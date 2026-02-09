@@ -2,7 +2,7 @@
 
 **Created:** 2026-02-08
 **Status:** Draft
-**Version:** 1.4
+**Version:** 1.5
 **Document Type:** Feature Specification (PRD)
 
 ---
@@ -334,7 +334,7 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 
 - **REQ-14:** Observation assignments use a **hybrid generation model**: a template per illusion per layer provides guaranteed structure (see Per-Illusion Journey Summary table for themes), and the AI personalizes the assignment with user-specific details from the session conversation. If AI personalization fails, the system falls back to the hardcoded template for that illusion/layer.
 - **REQ-15:** Layers are **forward-only**. Once a layer is completed, the user cannot redo it. Users can revisit the illusion later via reinforcement sessions after completing all 3 layers.
-- **REQ-16:** Low conviction scores after Layer 3 are **flagged internally only**. The user is not told their conviction is low, and progression to the next illusion is not gated. Reinforcement sessions exist for users who want to return.
+- **REQ-16:** Low conviction scores after Layer 3 are **not user-visible** and do not gate progression to the next illusion. Reinforcement sessions exist for users who want to return. Internal flagging of low conviction scores is **deferred to REQ-49** (analytics infrastructure).
 - **REQ-17:** Cross-illusion evidence is **not surfaced**. Observations remain scoped to the illusion they were collected for. Cross-references happen naturally through the personalization engine's broader user context, not through explicit observation routing.
 - **REQ-18:** The illusion completion transition uses **both conversational and UI elements**: the AI marks the completion conversationally at the end of Layer 3 ("You've seen through the [Illusion Name]. That one's done."), and the session-complete screen confirms it. The dashboard updates when the user returns.
 - **REQ-19:** Check-in emails are sent **~24 hours after session completion**. If the user starts the next layer before the check-in is sent, the check-in is **cancelled**.
@@ -358,7 +358,7 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 
 #### Layer Progress & State (State Management)
 
-- **REQ-29:** Layer state is **computed, not stored explicitly**: `not_started` (layer not in `layers_completed` and no active conversation), `in_progress` (active conversation exists for this layer), `completed` (layer value present in `layers_completed` array). A `current_layer` field is added to the illusion progress object, using internal layer names (`'intellectual'`, `'emotional'`, `'identity'`) matching the existing `layers_completed` values. The frontend maps these to "Session 1/2/3 of 3" for display.
+- **REQ-29:** Layer state is **fully derived from `layer_progress`**: `not_started` (layer not in `layers_completed` and no active conversation), `in_progress` (active conversation exists for this layer), `completed` (layer value present in `layers_completed` array). The current layer is **computed** as the next incomplete layer in the ordered list `['intellectual', 'emotional', 'identity']` — no stored `current_layer` column. This computation is only performed for non-completed illusions (illusions already in `illusions_completed` are never queried for current layer). Internal layer names (`'intellectual'`, `'emotional'`, `'identity'`) match the existing `layers_completed` values. The frontend maps these to "Session 1/2/3 of 3" for display.
 - **REQ-30:** Abandoned layer sessions appear **identically to not-yet-started sessions** on the dashboard. The CTA remains "Continue" with the same "Session X of 3" display. When tapped, a new conversation starts (clean restart) with abandoned session moments injected — the user doesn't see a difference. No "Resume" indicator.
 - **REQ-31:** Conviction scores are **point-in-time, immutable snapshots**. Each layer's conviction score is recorded at session completion and never updated retroactively. The system can read the trajectory across layers (e.g., L1: 5, L2: 7, L3: 9) to assess deepening conviction.
 
@@ -374,17 +374,17 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 
 #### Prompt Assembly (Integration)
 
-- **REQ-36:** Layer-specific instructions are injected in the prompt assembly order **after the illusion prompt and before bridge context**: base → personalization → illusion prompt → **layer instructions** → bridge context → abandoned session context. Layer instructions refine the illusion prompt's approach (analytical for L1, emotional holding for L2, identity-forward for L3).
+- **REQ-36:** Layer-specific instructions are injected in the prompt assembly order **after the illusion prompt and before bridge context**: base → personalization → **cross-layer context** (Layer 2+ only: prior layer insights, breakthroughs, conviction history — already implemented in `cross-layer-context.ts`) → illusion prompt → **layer instructions** → bridge context → abandoned session context → opening instruction. Layer instructions refine the illusion prompt's approach (analytical for L1, emotional holding for L2, identity-forward for L3).
 
 #### Data Storage (Data)
 
 - **REQ-37:** The observation assignment text is stored as a new `observation_assignment` text field on the existing `check_in_schedule` table. This field is populated when the check-in is scheduled after session completion. The check-in email builder and context builder read it directly.
 - **REQ-38:** Check-in observation responses are captured as **moments with type `'real_world_observation'`** via the existing moment detection pipeline. No new schema needed — the context builder already surfaces moments by type.
-- **REQ-39:** The progress API response nests layer data **within existing illusion progress objects**: each object gains `current_layer` (string) alongside the existing `layers_completed` (array) and `status` fields. No new top-level API fields.
+- **REQ-39:** The progress API response nests layer data **within existing illusion progress objects**: the existing `layer_progress` JSONB (containing `layers_completed` arrays per illusion) is returned as-is. The current layer is **derived client-side** by computing the next incomplete layer from the ordered list. No new top-level API fields.
 
 #### Business Rules (Logic)
 
-- **REQ-40:** Low conviction after Layer 3 is defined as a score **≤ 5 out of 10**. Scores at or below this threshold are flagged internally for analytics and future reinforcement targeting. The flag is not user-visible and does not gate progression (per REQ-16).
+- **REQ-40:** Low conviction after Layer 3 is defined as a score **≤ 5 out of 10**. Implementation of flagging and targeting based on this threshold is **deferred to REQ-49** (analytics infrastructure). The threshold definition is preserved here for when analytics is implemented. Low conviction does not gate progression (per REQ-16).
 
 <!-- REQ-REFINED: Added error handling, edge cases, observability, and migration requirements -->
 
@@ -450,12 +450,12 @@ The following decisions were made during technical design and inform all section
 | Check-in type for evidence bridge | New `'evidence_bridge'` type on `check_in_schedule` | Explicit separation from existing `post_session` check-ins, different timing (24hr vs 2hr) |
 | Migration strategy | SQL migration script | Auditable, atomic, runs at deploy. Existing completed illusions honored per REQ-50 |
 | Session complete API | Evolve existing `complete-session.post.ts` | Accepts `illusionLayer`, handles layer-within-illusion progression. Backwards compatible |
-| Layer routing | From progress data (not URL) | Session page fetches progress on mount, reads `current_layer`. URL stays clean |
+| Layer routing | From progress data (not URL) | Session page fetches progress on mount, derives current layer from `layer_progress`. URL stays clean |
 | Continue flow (L1/L2) | Reload same session page | Page re-fetches progress, sees layer advanced, starts new layer. Simple, stateless |
 | Complete response shape | Extend existing response | Add `layerCompleted`, `nextLayer`, `isIllusionComplete`, `observationAssignment` fields |
 | Prompt template injection | Observation template embedded in layer instruction block | L1/L2 layer instructions include the template text + `[OBSERVATION_ASSIGNMENT: ...]` token instructions |
 | Token rendering | Client ignores post-SESSION_COMPLETE content | No streaming handler changes needed. Server extracts token in session-complete post-processing |
-| Composable API | Add computed properties to `useProgress` | `currentLayer`, `layersCompletedForIllusion(key)`, `layerSessionNumber` — centralizes layer logic |
+| Composable API | Add computed properties to `useProgress` | `currentLayer` (derived from `layer_progress`), `layersCompletedForIllusion(key)`, `layerSessionNumber` — centralizes layer logic |
 | Evidence bridge email prompt | Compose around observation at scheduling time | `prompt_template` = "You were going to [observation] — what did you observe?" — follows existing pattern |
 | Prompt token budget | Within acceptable limits (3000-4000 tokens total) | No optimization needed for current models |
 | Migration file structure | Single migration file | All schema changes + data migration in `20260209_evidence_based_coaching.sql` |
@@ -470,8 +470,8 @@ The evidence-based coaching feature evolves 5 existing system layers. No new ser
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLIENT (Nuxt 3 / Vue 3)                                       │
 │                                                                 │
-│  pages/session/[illusion].vue  ──→  Fetches current_layer       │
-│       │                              from useProgress           │
+│  pages/session/[illusion].vue  ──→  Derives current layer        │
+│       │                              from layer_progress via    │
 │       │                              composable on mount        │
 │       ▼                                                         │
 │  components/                                                    │
@@ -568,7 +568,7 @@ opening instruction (new conversations only)
 
 5. **Session page → `complete-session.post.ts`**: Send `illusionLayer` in request body. Receive `nextLayer`, `isIllusionComplete`, `observationAssignment` in response.
 
-6. **Session page mount → progress API**: Fetch progress to determine `current_layer` before starting the session.
+6. **Session page mount → progress API**: Fetch progress to derive current layer from `layer_progress` before starting the session.
 
 7. **Next session start → check-in cancellation**: When a new conversation is created for the next layer, cancel any pending `evidence_bridge` check-in for the same user/illusion.
 
@@ -675,22 +675,26 @@ SET layer_progress = (
 WHERE array_length(illusions_completed, 1) > 0;
 
 -- In-progress illusions with 1+ completed conversations under old model:
--- Map to Layer 1 complete, current_layer = 'emotional'
+-- Map to Layer 1 complete (current layer will derive to 'emotional' from layer_progress)
 UPDATE user_progress up
 SET
   layer_progress = COALESCE(layer_progress, '{}'::jsonb) || jsonb_build_object(
     (SELECT illusion_key FROM illusions WHERE illusion_number = up.current_illusion),
     '["intellectual"]'::jsonb
-  ),
-  current_layer = 'emotional'
+  )
 WHERE program_status = 'in_progress'
-AND current_layer = 'intellectual'
 AND EXISTS (
   SELECT 1 FROM conversations c
   WHERE c.user_id = up.user_id
   AND c.session_completed = true
   AND c.session_type = 'core'
   AND c.illusion_key = (
+    SELECT illusion_key FROM illusions WHERE illusion_number = up.current_illusion
+  )
+)
+AND NOT EXISTS (
+  -- Guard: don't overwrite if layer_progress already has data for this illusion
+  SELECT 1 WHERE layer_progress ? (
     SELECT illusion_key FROM illusions WHERE illusion_number = up.current_illusion
   )
 );
@@ -701,7 +705,7 @@ AND EXISTS (
 ```
 user_progress (1)
   └── layer_progress JSONB ─── tracks layers completed per illusion
-  └── current_layer TEXT ────── current layer within current illusion
+  │                            (current layer derived: next incomplete in ordered list)
 
 conversations (many per user)
   └── illusion_layer TEXT ───── layer this conversation was for
@@ -779,14 +783,14 @@ interface CompleteSessionResponse {
 
 **Server logic changes:**
 ```
-1. Validate illusionLayer is correct (matches current_layer on user_progress)
+1. Derive current layer from layer_progress for this illusion (next incomplete in ordered list)
+   Validate illusionLayer matches the derived current layer
    - If mismatch: return 409 with correct layer (stale client, REQ-46)
 
 2. Read observation_assignment from conversations table for this conversationId
 
 3. If illusionLayer is NOT 'identity' (i.e., L1 or L2):
    - Add completed layer to layer_progress JSONB
-   - Advance current_layer to next layer
    - Determine next layer: intellectual→emotional, emotional→identity
    - Return: isIllusionComplete=false, nextLayer, observationAssignment
    - Observation assignment: use conversation's extracted text, fall back to template
@@ -795,7 +799,6 @@ interface CompleteSessionResponse {
    - Add 'identity' to layer_progress JSONB
    - Add illusion to illusions_completed array
    - Calculate next illusion (existing logic)
-   - Reset current_layer to 'intellectual' for next illusion
    - Return: isIllusionComplete=true, nextLayer=null, nextIllusion, observationAssignment=null
 
 5. Cancel any pending evidence_bridge check-ins for this user/illusion
@@ -876,7 +879,6 @@ defineProps<{
   illusionsCompleted: number[]
   currentIllusion: number
   layerProgress?: Record<string, string[]>  // NEW: e.g., {"stress_relief": ["intellectual"]}
-  currentLayer?: string                      // NEW: current layer for current illusion
 }>()
 ```
 
@@ -910,7 +912,7 @@ const layerSessionNumber = computed(() => completedLayerCount.value + 1)
 
 **Changes:**
 
-1. **On mount:** Fetch progress, read `current_layer` for the current illusion from `layer_progress` + `current_layer`. Store in `illusionLayer` ref.
+1. **On mount:** Fetch progress, derive current layer for the current illusion from `layer_progress` (next incomplete in ordered list). Store in `illusionLayer` ref.
 
 2. **Pass `illusionLayer` to chat API** in `sendOpeningMessage()` and `handleSend()`.
 
@@ -929,8 +931,15 @@ const layerSessionNumber = computed(() => completedLayerCount.value + 1)
 ```typescript
 // New exports from useProgress:
 
-/** Current layer for the active illusion ('intellectual' | 'emotional' | 'identity') */
-const currentLayer = computed(() => progress.value?.current_layer ?? 'intellectual')
+/** Current layer for the active illusion ('intellectual' | 'emotional' | 'identity') — derived from layer_progress */
+const LAYER_ORDER = ['intellectual', 'emotional', 'identity'] as const
+
+const currentLayer = computed(() => {
+  if (!progress.value) return 'intellectual'
+  const currentKey = getCurrentIllusionKey()
+  const completed = layersCompletedForIllusion(currentKey)
+  return LAYER_ORDER.find(l => !completed.includes(l)) ?? 'intellectual'
+})
 
 /** Get completed layers array for a given illusion key */
 function layersCompletedForIllusion(illusionKey: string): string[] {
@@ -981,10 +990,10 @@ Client: detects sessionComplete=true in SSE done event
 Session page: calls completeSession(convId, illusionKey, illusionLayer)
   ↓
 complete-session.post.ts:
-  - Validates layer state
+  - Derives current layer from layer_progress, validates against request
   - Reads observation_assignment from conversations table
-  - Updates layer_progress JSONB
-  - Advances current_layer (or completes illusion)
+  - Updates layer_progress JSONB (appends completed layer)
+  - If L3: also adds illusion to illusions_completed
   - Returns response with observationAssignment
   ↓
 Session page: configures SessionCompleteCard with subtext + showContinue
@@ -993,7 +1002,7 @@ User taps "Continue to Next Session" (L1/L2):
   - Emits continue-layer
   - Session page reloads / re-initializes
   - Fetches updated progress
-  - Sees new current_layer
+  - Derives new current layer from updated layer_progress
   - Starts new layer session
 ```
 
@@ -1170,7 +1179,7 @@ export const OBSERVATION_TEMPLATES: Record<string, string> = {
 
 ### Security Considerations
 
-- **Server-side layer validation (REQ-46):** `complete-session.post.ts` validates that the requested `illusionLayer` matches `current_layer` in `user_progress`. Prevents stale clients from advancing to wrong layers.
+- **Server-side layer validation (REQ-46):** `complete-session.post.ts` derives the current layer from `layer_progress` and validates that the requested `illusionLayer` matches. Prevents stale clients from advancing to wrong layers.
 - **No new auth surface:** All endpoints already require Supabase auth. Layer data follows existing RLS policies.
 - **Input validation:** `illusionLayer` validated against allowed values (`'intellectual' | 'emotional' | 'identity'`). Invalid values return 400.
 - **JSONB injection:** `layer_progress` updates use parameterized queries through Supabase client, not string concatenation.
@@ -1216,8 +1225,8 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 3. Given the migration runs, when I inspect `check_in_schedule`, then `observation_assignment TEXT`, `cancellation_reason TEXT` columns exist
 4. Given the migration runs, when I inspect `check_in_schedule` constraints, then `check_in_type` accepts `'evidence_bridge'` and `status` accepts `'cancelled'`
 5. Given an existing user with `illusions_completed = [1, 2]`, when the migration runs, then `layer_progress` contains `{"stress_relief": ["intellectual", "emotional", "identity"], "pleasure": ["intellectual", "emotional", "identity"]}`
-6. Given an existing user with `program_status = 'in_progress'` and a completed core conversation for the current illusion, when the migration runs, then `layer_progress` contains the current illusion key with `["intellectual"]` and `current_layer = 'emotional'`
-7. Given a new user with no progress, when the migration runs, then `layer_progress = '{}'` and `current_layer = 'intellectual'` (defaults)
+6. Given an existing user with `program_status = 'in_progress'` and a completed core conversation for the current illusion, when the migration runs, then `layer_progress` contains the current illusion key with `["intellectual"]` (current layer derives to `'emotional'`)
+7. Given a new user with no progress, when the migration runs, then `layer_progress = '{}'` (current layer derives to `'intellectual'`)
 
 **Technical Notes:**
 - Migration file: `supabase/migrations/20260209_evidence_based_coaching.sql`
@@ -1302,13 +1311,15 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 **Description:** As a developer, I want `complete-session.post.ts` to handle layer-within-illusion progression, so that completing L1 advances to L2 (not to the next illusion).
 
 **Acceptance Criteria:**
-1. Given a request with `illusionLayer: 'intellectual'`, when the session is completed, then `layer_progress` is updated to include `'intellectual'` and `current_layer` advances to `'emotional'`
-2. Given a request with `illusionLayer: 'emotional'`, when the session is completed, then `layer_progress` is updated to include `'emotional'` and `current_layer` advances to `'identity'`
-3. Given a request with `illusionLayer: 'identity'`, when the session is completed, then `layer_progress` includes all 3 layers, the illusion is added to `illusions_completed`, `current_layer` resets to `'intellectual'` for the next illusion
-4. Given a request with `illusionLayer` that doesn't match `current_layer` in `user_progress`, when the request is processed, then the server returns 409 Conflict with the correct current layer
+1. Given a request with `illusionLayer: 'intellectual'`, when the session is completed, then `layer_progress` is updated to include `'intellectual'` for that illusion (derived current layer becomes `'emotional'`)
+2. Given a request with `illusionLayer: 'emotional'`, when the session is completed, then `layer_progress` is updated to include `'emotional'` for that illusion (derived current layer becomes `'identity'`)
+3. Given a request with `illusionLayer: 'identity'`, when the session is completed, then `layer_progress` includes all 3 layers, the illusion is added to `illusions_completed`
+4. Given a request with `illusionLayer` that doesn't match the derived current layer (from `layer_progress`), when the request is processed, then the server returns 409 Conflict with the correct current layer
 5. Given a successful completion, when the response is returned, then it includes `layerCompleted`, `nextLayer`, `isIllusionComplete`, and `observationAssignment` fields
 6. Given `observation_assignment` is `null` on the conversation (token not extracted), when the response is built, then `observationAssignment` falls back to the template text for that illusion/layer
 7. Given `illusionLayer` is not provided (legacy client), when the request is processed, then it behaves as before (marks entire illusion complete) for backwards compatibility
+8. Given a layer session completes, when the conviction assessment runs, then the recorded score includes the `illusion_layer` value identifying which layer it was assessed at
+9. Given a request with `illusionLayer: 'identity'` for the final illusion (identity), when the session is completed, then `isComplete=true` is returned and `nextIllusion=null`
 
 **Technical Notes:**
 - File: `server/api/progress/complete-session.post.ts`
@@ -1344,8 +1355,8 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 **Description:** As a developer, I want the session page to determine the current layer from progress data and pass it to the chat API, so that the AI receives the correct layer instructions.
 
 **Acceptance Criteria:**
-1. Given a user opens `/session/stress_relief`, when the page mounts, then it fetches progress and reads `current_layer` for the stress_relief illusion
-2. Given `current_layer` is `'emotional'`, when a chat message is sent, then the request body includes `illusionLayer: 'emotional'`
+1. Given a user opens `/session/stress_relief`, when the page mounts, then it fetches progress and derives the current layer for the stress_relief illusion from `layer_progress`
+2. Given the derived current layer is `'emotional'`, when a chat message is sent, then the request body includes `illusionLayer: 'emotional'`
 3. Given the opening message is requested (empty messages array), then the request body includes the correct `illusionLayer`
 4. Given the voice session view, then it also receives and passes the correct `illusionLayer`
 
@@ -1430,14 +1441,16 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 **Acceptance Criteria:**
 1. Given an `evidence_bridge` check-in with `prompt_template = "You were going to notice your stress — what did you observe?"`, when the email is sent, then the email body uses this prompt
 2. Given the check-in conversation starts, when the AI responds, then it speaks the check-in prompt naturally as its opening
+3. Given the check-in cron job runs, when it queries for pending check-ins, then `evidence_bridge` type check-ins are included in the results
+4. Given an `evidence_bridge` check-in with `observation_assignment` text, when the email is rendered, then the observation text appears in the email body
 
 **Technical Notes:**
 - The existing email template and check-in conversation flow already use `prompt_template`
 - This story may require no code changes if the existing check-in email builder reads `prompt_template` correctly for the new type
-- Verify that the cron job's query includes `'evidence_bridge'` in its status filter
+- Verify that the cron job's query includes `'evidence_bridge'` in its type filter — if it filters to specific types, `evidence_bridge` must be added
 
 **Dependencies:** Story 4.1 (scheduling creates the records)
-**Test Requirements:** E2E test verifying email content matches observation prompt
+**Test Requirements:** E2E test verifying email content matches observation prompt; unit test verifying cron query includes `evidence_bridge` type
 **Estimated Complexity:** S — May require no changes, just verification
 
 ---
@@ -1449,7 +1462,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 **Description:** As a developer, I want the `useProgress` composable to expose layer-specific computed properties, so that components can display layer progress without duplicating logic.
 
 **Acceptance Criteria:**
-1. Given progress is loaded, when `currentLayer` is accessed, then it returns the `current_layer` value from user_progress (e.g., `'emotional'`)
+1. Given progress is loaded with `layer_progress: {"stress_relief": ["intellectual"]}` for the current illusion, when `currentLayer` is accessed, then it returns `'emotional'` (the next incomplete layer in the ordered list)
 2. Given progress is loaded with `layer_progress: {"stress_relief": ["intellectual"]}`, when `layersCompletedForIllusion('stress_relief')` is called, then it returns `['intellectual']`
 3. Given progress is loaded with 1 layer completed for the current illusion, when `layerSessionNumber` is accessed, then it returns `2`
 4. Given `completeSession` is called with `illusionLayer` parameter, when the API responds, then the composable refreshes progress data
@@ -1477,7 +1490,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 
 **Technical Notes:**
 - File: `components/dashboard/ProgressCarousel.vue`
-- Add `layerProgress` and `currentLayer` props
+- Add `layerProgress` prop (current layer is derived from `layerProgress` data, not passed separately)
 - Add computed `completedLayerCount` and `layerSessionNumber`
 - Dots: filled = completed layer, empty = not yet. Subtle size difference (9px filled, 8px empty) for color vision support (REQ accessibility)
 
@@ -1490,13 +1503,13 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 **Description:** As a developer, I want the dashboard page to pass layer progress data to the ProgressCarousel component, so that layer dots render correctly.
 
 **Acceptance Criteria:**
-1. Given the dashboard loads, when ProgressCarousel is rendered, then `layerProgress` and `currentLayer` props are passed from `useProgress`
+1. Given the dashboard loads, when ProgressCarousel is rendered, then `layerProgress` prop is passed from `useProgress`
 2. Given progress data refreshes after session completion, when the dashboard is viewed, then the carousel reflects the updated layer progress
 
 **Technical Notes:**
 - File: `pages/dashboard.vue`
-- Import `layerProgress` and `currentLayer` from `useProgress`
-- Pass as props to `<ProgressCarousel>`
+- Import `layerProgress` from `useProgress`
+- Pass as prop to `<ProgressCarousel>`
 
 **Dependencies:** Story 5.1, Story 5.2
 **Test Requirements:** E2E test verifying dashboard shows correct layer progress
@@ -1514,11 +1527,13 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 1. Given a user submitted a check-in response that was captured as a `real_world_observation` moment, when the next session's context is built, then the observation appears in the "KEY MOMENTS" section
 2. Given multiple observation moments exist, when context is assembled, then the most recent observations for this illusion are included (within the existing 5-8 moment budget)
 3. Given no observation moments exist, when context is assembled, then the context is still valid (no errors)
+4. Given a user submits a response to an `evidence_bridge` check-in, when the moment detection pipeline processes it, then it creates a `captured_moment` with `moment_type = 'real_world_observation'` and the correct `illusion_key`
 
 **Technical Notes:**
 - File: `server/utils/personalization/context-builder.ts`
 - The existing context builder already surfaces moments by type. `real_world_observation` is already a valid moment type in the schema.
-- This story may require no code changes — just verification that the existing moment selection includes `real_world_observation` moments. If the existing selection logic filters to specific types, add `real_world_observation` to the allowed types.
+- This story may require no code changes for surfacing — just verification that the existing moment selection includes `real_world_observation` moments. If the existing selection logic filters to specific types, add `real_world_observation` to the allowed types.
+- AC#4 may require verification or modification of the moment detection pipeline to ensure evidence bridge check-in responses are classified as `real_world_observation` (not the generic check-in moment type).
 
 **Dependencies:** Story 4.1 (check-ins capture observations as moments)
 **Test Requirements:** Unit test verifying `real_world_observation` moments appear in context output
@@ -1601,14 +1616,16 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 
 | Test Case | Description |
 |-----------|-------------|
-| `advances layer from intellectual to emotional` | Send L1 completion, verify `current_layer` updates to `'emotional'` |
-| `advances layer from emotional to identity` | Send L2 completion, verify `current_layer` updates to `'identity'` |
-| `completes illusion on identity layer` | Send L3 completion, verify illusion added to `illusions_completed`, `current_layer` reset to `'intellectual'` |
+| `advances layer from intellectual to emotional` | Send L1 completion, verify `layer_progress` updated (derived current layer becomes `'emotional'`) |
+| `advances layer from emotional to identity` | Send L2 completion, verify `layer_progress` updated (derived current layer becomes `'identity'`) |
+| `completes illusion on identity layer` | Send L3 completion, verify illusion added to `illusions_completed`, `layer_progress` includes all 3 layers |
 | `returns observationAssignment from conversation` | Mock conversation with observation text, verify response includes it |
 | `falls back to template when observation is null` | Mock conversation with null observation, verify template text returned |
-| `returns 409 on stale layer` | Send `illusionLayer: 'identity'` when `current_layer` is `'intellectual'`, verify 409 |
+| `returns 409 on stale layer` | Send `illusionLayer: 'identity'` when derived current layer is `'intellectual'`, verify 409 |
 | `backwards compatible without illusionLayer` | Send without `illusionLayer`, verify old behavior (full illusion complete) |
 | `updates layer_progress JSONB correctly` | Verify JSONB is updated with new layer appended to correct illusion key |
+| `records conviction score with illusion_layer` | Send layer completion, verify conviction assessment includes `illusion_layer` value |
+| `returns isComplete=true for final illusion L3` | Send L3 for identity illusion, verify `isComplete=true` and `nextIllusion=null` |
 
 **File:** `tests/unit/api/chat-observation-extraction.test.ts`
 
@@ -1624,8 +1641,8 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 
 | Test Case | Description |
 |-----------|-------------|
-| `currentLayer returns current_layer from progress` | Mock progress with `current_layer: 'emotional'`, verify computed returns `'emotional'` |
-| `currentLayer defaults to intellectual when null` | Mock progress with null, verify `'intellectual'` |
+| `currentLayer derives next incomplete layer` | Mock `layer_progress: {"stress_relief": ["intellectual"]}` for current illusion, verify computed returns `'emotional'` |
+| `currentLayer defaults to intellectual when layer_progress empty` | Mock progress with `layer_progress: {}`, verify `'intellectual'` |
 | `layersCompletedForIllusion returns correct array` | Mock `layer_progress: {"stress_relief": ["intellectual"]}`, verify returns `['intellectual']` |
 | `layersCompletedForIllusion returns empty array for unknown key` | Mock without the key, verify `[]` |
 | `layerSessionNumber computes correctly` | Mock 1 completed layer, verify returns `2` |
@@ -1687,7 +1704,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 5. Verify layer dots have correct opacity (filled=1, empty=0.35)
 
 #### Flow 5: Stale Client Recovery (REQ-46)
-**Setup:** Mock user with `current_layer: 'emotional'`, but client sends `illusionLayer: 'intellectual'`
+**Setup:** Mock user with `layer_progress: {"stress_relief": ["intellectual"]}` (derived current layer = `'emotional'`), but client sends `illusionLayer: 'intellectual'`
 **Steps:**
 1. Mock complete-session API to return 409
 2. Verify client refreshes progress and re-syncs
@@ -1803,6 +1820,21 @@ No open questions remain. All questions have been resolved through UX refinement
 
 ## Changelog
 
+### v1.5 — User Story Completeness Review (2026-02-08)
+
+Reviewed spec for completeness across three dimensions: requirements vs. UX, user stories vs. requirements, and acceptance criteria per story. Changes made:
+
+- **REQ-29 updated:** `current_layer` changed from stored column to **derived from `layer_progress`** (next incomplete layer in ordered list `['intellectual', 'emotional', 'identity']`). Computation only performed for non-completed illusions. All stored `current_layer` references removed throughout technical design, API logic, composable code, migration SQL, test specifications, and component props.
+- **REQ-36 updated:** Prompt assembly order now includes **cross-layer context** (already implemented in `cross-layer-context.ts`) between personalization and illusion prompt, matching the actual codebase.
+- **REQ-16/REQ-40 deferred:** Low conviction flagging moved to deferred analytics (REQ-49). Threshold definition preserved for future implementation. Scores are still recorded; flagging/targeting is the deferred part.
+- **REQ-39 updated:** Progress API response reflects derivation model — `layer_progress` JSONB returned as-is, current layer derived client-side.
+- **Story 3.1:** Added AC#8 (conviction assessment records `illusion_layer`) and AC#9 (`isComplete=true` for final illusion L3). Updated ACs 1-4 to reference derivation instead of stored column.
+- **Story 4.3:** Added AC#3 (cron query includes `evidence_bridge` type) and AC#4 (observation text renders in email body).
+- **Story 6.1:** Added AC#4 (evidence bridge check-in responses create `real_world_observation` moments).
+- **ProgressCarousel:** Removed `currentLayer` prop (derived from `layerProgress` data internally).
+- **Migration SQL:** Removed `current_layer = 'emotional'` writes from existing-user migration. Added guard to prevent overwriting existing `layer_progress` data.
+- **Test specifications:** Updated API tests (2 new test cases for conviction layer and final illusion), composable tests (derivation-based descriptions), and E2E stale client test (uses `layer_progress` data).
+
 ### v1.4 — Technical Design (2026-02-08)
 
 Added complete technical architecture through structured design interview across 12 dimensions:
@@ -1812,7 +1844,7 @@ Added complete technical architecture through structured design interview across
 - **Data modeling:** Schema changes for `user_progress` (layer_progress JSONB), `conversations` (observation_assignment), `check_in_schedule` (observation_assignment, cancellation_reason, evidence_bridge type, cancelled status). Migration SQL including existing user data migration (REQ-50).
 - **API design:** Evolved `complete-session.post.ts` (accepts illusionLayer, returns layerCompleted/nextLayer/isIllusionComplete/observationAssignment). Observation extraction via `[OBSERVATION_ASSIGNMENT: ...]` token in `chat.post.ts`. Check-in cancellation on session start.
 - **Prompt design:** 3 layer instruction blocks (layer-instructions.ts). 10 observation templates (exported maps in illusion files). `{observationTemplate}` placeholder replacement at assembly time.
-- **Component architecture:** SessionCompleteCard gains `showContinue` prop and `continue-layer` emit. ProgressCarousel gains `layerProgress` and `currentLayer` props for layer dots. Session page determines layer from progress data on mount.
+- **Component architecture:** SessionCompleteCard gains `showContinue` prop and `continue-layer` emit. ProgressCarousel gains `layerProgress` prop for layer dots (current layer derived from data). Session page determines layer from progress data on mount.
 - **State management:** `useProgress` composable gains `currentLayer`, `layersCompletedForIllusion()`, `layerSessionNumber`, `layerProgress` computed properties.
 - **Error handling:** Mapped REQ-41 through REQ-47 to specific code locations and fallback behaviors.
 - **User stories:** 15 stories across 7 epics with Given/When/Then acceptance criteria, technical notes, dependencies, test requirements, and complexity estimates.
@@ -1829,7 +1861,7 @@ Added based on structured requirements audit across 12 dimensions (functional co
 
 - **Observation delivery mechanism:** Prompt instruction model — AI includes assignment in final message via layer-aware system prompt. Templates stored in illusion prompt files (REQ-23, REQ-24, REQ-25)
 - **Check-in scheduling:** Schedule-then-cancel pattern with audit trail. Cancelled check-ins not re-scheduled on layer abandonment (REQ-26, REQ-27, REQ-28)
-- **Layer state model:** Computed states (not_started, in_progress, completed) from existing data. Added `current_layer` field using internal names. Abandoned layers show identically to not-started (REQ-29, REQ-30)
+- **Layer state model:** Computed states (not_started, in_progress, completed) from existing data. Current layer derived from `layer_progress` (next incomplete in ordered list). Abandoned layers show identically to not-started (REQ-29, REQ-30)
 - **Conviction scoring:** Point-in-time immutable snapshots. Low conviction threshold defined as ≤ 5/10 (REQ-31, REQ-40)
 - **Illusion transitions:** Auto-unlock on dashboard return. AI previews next illusion at Layer 3 close. Revisit triggers reinforcement sessions, not 3-layer replay (REQ-32, REQ-33, REQ-34)
 - **Spacing CTAs:** Both CTAs always fully visible, no dimming (REQ-35)
