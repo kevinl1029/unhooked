@@ -102,3 +102,52 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - L3 ceremony tease matches existing ceremony spec copy: "All five illusions dismantled. Your final ceremony is ready when you are."
 - Build warnings about duplicated OBSERVATION_TEMPLATES imports are expected and harmless (noted in US-003)
 ---
+## 2026-02-09 00:00 EST - US-005
+- Implemented observation assignment extraction in chat streaming handler
+- Added regex pattern `/\[OBSERVATION_ASSIGNMENT:\s*([\s\S]*?)\]/` to extract observation text after [SESSION_COMPLETE] token
+- Extraction logic works in both streaming (onComplete callback) and non-streaming response paths
+- When observation token is found, extracted text is trimmed and stored on conversations.observation_assignment
+- When token is NOT found, conversations.observation_assignment is set to null
+- Multi-line observation text is handled correctly by the `[\s\S]*?` regex pattern (whitespace-trimmed, content preserved)
+- Observation extraction only runs when sessionComplete is true (guarded by conditional)
+
+**Files changed:**
+- server/api/chat.post.ts
+- scripts/ralph/prd.json (marked US-005 as passes=true)
+
+**Learnings for future iterations:**
+- The chat.post.ts handler has two parallel paths: streaming (lines ~388-584) and non-streaming (lines ~585-676)
+- Both paths detect [SESSION_COMPLETE] token and update conversations table - any new session-complete logic must be added to BOTH paths
+- Session complete detection happens at the onComplete callback level, after the full AI response is assembled
+- The regex pattern `[\s\S]*?` matches any character including newlines (unlike `.` which stops at newlines by default)
+- The `?` makes the match non-greedy so it stops at the first `]` closing bracket
+- Database updates during session complete are batched in a single .update() call for efficiency
+- All 359 unit tests pass with the changes
+---
+## 2026-02-09 00:05 EST - US-006
+- Evolved useProgress composable to expose layer-specific computed properties
+- Added layer_progress: Record<string, IllusionLayer[]> field to Progress interface
+- Updated CompleteSessionResponse interface with layerCompleted, nextLayer, isIllusionComplete, observationAssignment fields
+- Created LAYER_ORDER constant: ['intellectual', 'emotional', 'identity']
+- Implemented getCurrentIllusionKey() helper using illusionNumberToKey() from task-types.ts
+- Implemented currentLayer computed property that derives next incomplete layer from layer_progress
+- Implemented layerSessionNumber computed that returns completed layers count + 1
+- Implemented layersCompletedForIllusion(illusionKey) function returning string[]
+- Implemented layerProgress computed returning the full layer_progress object
+- Updated completeSession method to accept optional illusionLayer parameter and pass it to API
+- All computed properties return safe defaults when progress is null
+- All 359 unit tests pass
+
+**Files changed:**
+- composables/useProgress.ts
+- scripts/ralph/prd.json (marked US-006 as passes=true)
+
+**Learnings for future iterations:**
+- useProgress composable uses Vue's `computed()` for reactive properties that depend on progress state
+- Layer derivation pattern: find first incomplete layer in LAYER_ORDER that's not in completedLayers array
+- Safe defaults pattern: return sensible fallbacks (empty arrays, 'intellectual', 1, {}) when progress.value is null
+- The Progress interface needs layer_progress field added to match the database schema from US-001 migration
+- CompleteSessionResponse interface is extended with optional fields for backwards compatibility
+- Helper functions like getCurrentIllusionKey() keep computed properties clean and focused
+- Import IllusionLayer type and helper utilities from task-types.ts for consistency across the codebase
+---

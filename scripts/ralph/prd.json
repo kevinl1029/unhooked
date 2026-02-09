@@ -105,7 +105,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/chat.post.ts. Regex: /\\[OBSERVATION_ASSIGNMENT:\\s*([\\s\\S]*?)\\]/. Store alongside existing session_completed=true update. Look for existing [SESSION_COMPLETE] detection pattern and add observation extraction after it."
     },
     {
@@ -125,7 +125,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "File: composables/useProgress.ts. Current layer is derived (next incomplete in ordered list ['intellectual', 'emotional', 'identity']), not stored. See REQ-29. Uses getCurrentIllusionKey() helper for deriving the illusion key from illusion_order + current_illusion."
     },
     {
