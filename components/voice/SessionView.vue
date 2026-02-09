@@ -222,7 +222,7 @@
 
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
-import type { IllusionKey } from '~/server/utils/llm/task-types'
+import type { IllusionKey, IllusionLayer } from '~/server/utils/llm/task-types'
 
 interface Props {
   readOnly?: boolean
@@ -230,6 +230,7 @@ interface Props {
   existingMessages?: Message[]
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
   illusionKey?: IllusionKey
+  illusionLayer?: IllusionLayer
   anchorMoment?: { id: string; transcript: string } | null
 }
 
@@ -239,6 +240,7 @@ const props = withDefaults(defineProps<Props>(), {
   existingMessages: () => [],
   sessionType: 'core',
   illusionKey: undefined,
+  illusionLayer: 'intellectual',
   anchorMoment: null
 })
 
@@ -289,6 +291,7 @@ const {
 } = useVoiceChat({
   sessionType: props.sessionType,
   illusionKey: props.illusionKey,
+  illusionLayer: props.illusionLayer,
   anchorMoment: props.anchorMoment,
   initialConversationId: props.existingConversationId,
   onSessionComplete: () => {

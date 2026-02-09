@@ -1,8 +1,9 @@
 import type { Message } from '~/server/utils/llm/types'
-import type { IllusionKey } from '~/server/utils/llm/task-types'
+import type { IllusionKey, IllusionLayer } from '~/server/utils/llm/task-types'
 
 interface VoiceChatOptions {
   illusionKey?: IllusionKey
+  illusionLayer?: IllusionLayer
   sessionType?: 'core' | 'check_in' | 'ceremony' | 'reinforcement' | 'boost'
   checkInId?: string
   checkInPrompt?: string
@@ -15,6 +16,7 @@ interface VoiceChatOptions {
 export const useVoiceChat = (options: VoiceChatOptions = {}) => {
   const {
     illusionKey,
+    illusionLayer = 'intellectual',
     sessionType = 'core',
     checkInId,
     checkInPrompt,
@@ -69,6 +71,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: messages.value,
             conversationId: conversationId.value,
             illusionKey,
+            illusionLayer,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -113,6 +116,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: messages.value,
             conversationId: conversationId.value,
             illusionKey,
+            illusionLayer,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -173,6 +177,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: [],
             conversationId: conversationId.value,
             illusionKey,
+            illusionLayer,
             sessionType,
             checkInId,
             checkInPrompt,
@@ -216,6 +221,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             messages: [],
             conversationId: conversationId.value,
             illusionKey,
+            illusionLayer,
             sessionType,
             checkInId,
             checkInPrompt,

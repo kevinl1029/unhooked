@@ -19,6 +19,7 @@
         <VoiceSessionView
           v-if="!isTranscriptView && !useTextMode"
           :illusion-key="illusionKey"
+          :illusion-layer="illusionLayer"
           :read-only="sessionComplete"
           :existing-conversation-id="existingConversationId"
           :existing-messages="existingMessages"
@@ -65,7 +66,7 @@ definePageMeta({
 
 const route = useRoute()
 const router = useRouter()
-const { completeSession, fetchProgress } = useProgress()
+const { completeSession, fetchProgress, currentLayer } = useProgress()
 
 const rawIllusionParam = computed(() => route.params.illusion as string)
 const illusionKey = computed(() => rawIllusionParam.value as IllusionKey)
@@ -98,6 +99,12 @@ onMounted(async () => {
     error.value = 'Invalid session. Please return to the dashboard and try again.'
     return
   }
+
+  // Fetch progress to derive current layer
+  await fetchProgress()
+
+  // Set illusionLayer from derived progress (currentLayer is computed)
+  illusionLayer.value = currentLayer.value
 
   // Voice session view handles its own initialization
   // Only initialize for transcript view or text mode
@@ -163,6 +170,7 @@ async function sendOpeningMessage() {
       body: JSON.stringify({
         messages: [], // Empty array - no user message to start
         illusionKey: illusionKey.value,
+        illusionLayer: illusionLayer.value,
         stream: true
       })
     })
@@ -278,6 +286,7 @@ async function handleSend(message: string) {
         messages: messages.value,
         conversationId: conversationId.value,
         illusionKey: illusionKey.value,
+        illusionLayer: illusionLayer.value,
         stream: true
       })
     })
