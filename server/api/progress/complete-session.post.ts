@@ -1,5 +1,5 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
-import { scheduleCheckIns } from '~/server/utils/scheduling/check-in-scheduler'
+import { scheduleCheckIns, scheduleEvidenceBridgeCheckIn } from '~/server/utils/scheduling/check-in-scheduler'
 import { ILLUSION_KEYS, illusionKeyToNumber, type IllusionKey, type IllusionLayer } from '~/server/utils/llm/task-types'
 import {
   OBSERVATION_TEMPLATES as STRESS_TEMPLATES
@@ -284,6 +284,24 @@ export default defineEventHandler(async (event) => {
       if (updateError) {
         throw createError({ statusCode: 500, message: updateError.message })
       }
+
+      // Schedule evidence bridge check-in for L1/L2 completions
+      // Non-blocking: Don't fail session completion if scheduling fails
+      const timezone = currentProgress.timezone || 'America/New_York'
+      scheduleEvidenceBridgeCheckIn(
+        supabase,
+        user.sub,
+        effectiveIllusionKey,
+        observationAssignment,
+        new Date(),
+        timezone
+      ).then((scheduled) => {
+        if (scheduled) {
+          console.log(`[complete-session] Scheduled evidence bridge check-in for user ${user.sub}`)
+        }
+      }).catch((err) => {
+        console.error('[complete-session] Failed to schedule evidence bridge check-in:', err)
+      })
 
       // L1/L2 response
       return {

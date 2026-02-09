@@ -159,7 +159,8 @@ async function createCheckIn(
   timezone: string,
   triggerIllusionKey?: string,
   triggerSessionId?: string,
-  promptTemplate?: string
+  promptTemplate?: string,
+  observationAssignment?: string
 ): Promise<ScheduledCheckIn | null> {
   const magicLinkToken = generateMagicLinkToken()
 
@@ -173,6 +174,7 @@ async function createCheckIn(
       trigger_illusion_key: triggerIllusionKey || null,
       trigger_session_id: triggerSessionId || null,
       prompt_template: promptTemplate || getDefaultPromptTemplate(type),
+      observation_assignment: observationAssignment || null,
       magic_link_token: magicLinkToken,
       status: 'scheduled',
     })
@@ -202,8 +204,54 @@ function getDefaultPromptTemplate(type: CheckInType): string {
       return "Day's winding down. Anything on your mind from today?"
     case 'post_session':
       return 'Had any thoughts since we last talked?'
+    case 'evidence_bridge':
+      return 'What did you observe?'
     default:
       return 'Quick check-in. How are things going?'
+  }
+}
+
+/**
+ * Schedule an evidence bridge check-in for layer completions (L1/L2)
+ * Uses 24-hour timing and observation-specific prompts
+ */
+export async function scheduleEvidenceBridgeCheckIn(
+  supabase: SupabaseClient,
+  userId: string,
+  illusionKey: string,
+  observationAssignment: string | null,
+  sessionEndTime: Date,
+  timezone: string
+): Promise<ScheduledCheckIn | null> {
+  try {
+    // Schedule for 24 hours later
+    const twentyFourHoursLater = addHours(sessionEndTime, 24)
+
+    // Build the prompt template wrapping the observation
+    const promptTemplate = observationAssignment
+      ? `You were going to ${observationAssignment.toLowerCase().replace(/^(notice|pay attention to|track)/i, 'notice')} — what did you observe?`
+      : 'What did you observe?'
+
+    const checkIn = await createCheckIn(
+      supabase,
+      userId,
+      'evidence_bridge',
+      twentyFourHoursLater,
+      timezone,
+      illusionKey,
+      undefined, // no session ID for evidence bridge
+      promptTemplate,
+      observationAssignment || undefined
+    )
+
+    if (checkIn) {
+      console.log(`[check-in-scheduler] Scheduled evidence_bridge check-in for ${twentyFourHoursLater.toISOString()}`)
+    }
+
+    return checkIn
+  } catch (err) {
+    console.error('[check-in-scheduler] Failed to schedule evidence bridge check-in:', err)
+    return null
   }
 }
 
