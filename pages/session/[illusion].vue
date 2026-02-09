@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import type { Message } from '~/server/utils/llm/types'
 import { ILLUSION_NAMES } from '~/server/utils/prompts'
-import { ILLUSION_KEYS, illusionNumberToKey, type IllusionKey } from '~/server/utils/llm/task-types'
+import { ILLUSION_KEYS, illusionNumberToKey, type IllusionKey, type IllusionLayer } from '~/server/utils/llm/task-types'
 import { stripChatControlTokens } from '~/utils/chat-control-tokens'
 
 type ClientMessage = Message
@@ -396,8 +396,24 @@ async function completeSessionWithRecovery(targetConversationId: string) {
     return completeSession(targetConversationId, illusionKey.value, layer)
   }
 
+  const resolveConversationLayer = async (): Promise<IllusionLayer | null> => {
+    try {
+      const conversationData = await $fetch<{ illusion_layer?: string | null }>(`/api/conversations/${targetConversationId}`)
+      const layer = conversationData?.illusion_layer
+      if (layer === 'intellectual' || layer === 'emotional' || layer === 'identity') {
+        return layer
+      }
+    } catch (err) {
+      console.warn('[session] Failed to resolve conversation layer before completion', err)
+    }
+    return null
+  }
+
   try {
-    return await attemptComplete(illusionLayer.value)
+    const resolvedLayer = await resolveConversationLayer()
+    const initialLayer = resolvedLayer || illusionLayer.value
+    illusionLayer.value = initialLayer
+    return await attemptComplete(initialLayer)
   } catch (err: any) {
     const status = err?.statusCode || err?.status
     const message = String(err?.data?.message || err?.message || '')
@@ -416,12 +432,6 @@ async function handleSessionComplete() {
   if (!conversationId.value) return
 
   try {
-    // First, fetch conversation to get illusionLayer before completing
-    const { data: conversationData } = await useFetch(`/api/conversations/${conversationId.value}`)
-    if (conversationData.value && conversationData.value.illusion_layer) {
-      illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
-    }
-
     const result = await completeSessionWithRecovery(conversationId.value)
 
     // Configure SessionCompleteCard based on layer completion response
@@ -454,16 +464,10 @@ async function handleSessionComplete() {
 
 // Voice session handlers
 async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
-  // Fetch the conversation layer and complete session
+  // Complete using authoritative conversation-layer lookup inside recovery helper.
   const activeConversationId = existingConversationId.value
   if (activeConversationId) {
     try {
-      const { data: conversationData } = await useFetch(`/api/conversations/${activeConversationId}`)
-      if (conversationData.value && conversationData.value.illusion_layer) {
-        illusionLayer.value = conversationData.value.illusion_layer as IllusionLayer
-      }
-
-      // Complete the session with layer tracking
       const result = await completeSessionWithRecovery(activeConversationId)
 
       // Configure SessionCompleteCard based on layer completion response
@@ -487,7 +491,7 @@ async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
         nextIllusion.value = null
       }
     } catch (err) {
-      console.error('Error fetching conversation layer:', err)
+      console.error('Error completing voice session:', err)
     }
   } else {
     nextIllusion.value = nextIllusionNum

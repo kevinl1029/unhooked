@@ -1,5 +1,6 @@
 import type { Message } from '~/server/utils/llm/types'
 import type { IllusionKey, IllusionLayer } from '~/server/utils/llm/task-types'
+import { stripChatControlTokens } from '~/utils/chat-control-tokens'
 import type { ModelType } from '~/server/utils/llm/types'
 
 interface VoiceChatOptions {
@@ -356,9 +357,10 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
 
       // Play the response with TTS if requested
       if (speakResponse && assistantContent.length > 0) {
-        // Strip the [SESSION_COMPLETE] token before speaking
-        const textToSpeak = assistantContent.replace('[SESSION_COMPLETE]', '').trim()
-        await voiceSession.playAIResponse(textToSpeak)
+        const textToSpeak = stripChatControlTokens(assistantContent)
+        if (textToSpeak.length > 0) {
+          await voiceSession.playAIResponse(textToSpeak)
+        }
       }
 
       return assistantContent.length > 0

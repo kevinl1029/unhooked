@@ -507,6 +507,7 @@ export default defineEventHandler(async (event) => {
 
         // Initialize streaming TTS components if enabled
         const sentenceDetector = useStreamingTTS ? createSentenceDetector() : null
+        let suppressTTSAfterObservationToken = false
 
         // Create sequential TTS processor - guarantees chunks are sent in order
         // by processing one sentence at a time (no parallel synthesis)
@@ -536,10 +537,24 @@ export default defineEventHandler(async (event) => {
 
               // If streaming TTS enabled, detect sentences and enqueue for sequential synthesis
               if (sentenceDetector && ttsProcessor) {
+                if (!suppressTTSAfterObservationToken && fullResponse.includes('[OBSERVATION_ASSIGNMENT:')) {
+                  // Observation assignment is UI-only (completion card); do not synthesize it.
+                  suppressTTSAfterObservationToken = true
+                  sentenceDetector.reset()
+                }
+
+                if (suppressTTSAfterObservationToken) {
+                  return
+                }
+
                 const sentences = sentenceDetector.addToken(token)
                 for (const sentence of sentences) {
+                  // Remove control tokens before synthesis in case they appear near sentence boundaries.
+                  const cleanSentence = stripControlTokens(sentence)
+                  if (!cleanSentence) continue
+
                   // Each sentence is enqueued and will be processed in strict order
-                  ttsProcessor.enqueueSentence(sentence, false)
+                  ttsProcessor.enqueueSentence(cleanSentence, false)
                 }
               }
             },
@@ -559,7 +574,9 @@ export default defineEventHandler(async (event) => {
                 if (sentenceDetector && ttsProcessor) {
                   const fallbackSentences = sentenceDetector.addToken(finalResponse)
                   for (const sentence of fallbackSentences) {
-                    ttsProcessor.enqueueSentence(sentence, false)
+                    const cleanSentence = stripControlTokens(sentence)
+                    if (!cleanSentence) continue
+                    ttsProcessor.enqueueSentence(cleanSentence, false)
                   }
                 }
               }
@@ -574,8 +591,11 @@ export default defineEventHandler(async (event) => {
               if (sentenceDetector && ttsProcessor) {
                 const remaining = sentenceDetector.flush()
                 if (remaining) {
-                  // Synthesize remaining text as the final chunk
-                  ttsProcessor.enqueueSentence(remaining, true)
+                  const cleanRemaining = stripControlTokens(remaining)
+                  if (cleanRemaining) {
+                    // Synthesize remaining text as the final chunk
+                    ttsProcessor.enqueueSentence(cleanRemaining, true)
+                  }
                 }
 
                 // Wait for all sequential synthesis to complete
