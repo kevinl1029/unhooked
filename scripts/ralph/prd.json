@@ -231,7 +231,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts (or wherever check-ins are scheduled in the session-complete flow). Evidence bridge uses 24hr timing (REQ-28), not the 2hr default. Existing post_session check-in scheduling continues unchanged for non-layer sessions."
     },
     {

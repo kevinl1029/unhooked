@@ -248,3 +248,27 @@ Started: Sun Feb  8 23:27:05 EST 2026
 - State flags like isProgramComplete must be reset in handleContinueLayer to avoid stale state
 ---
 
+## 2026-02-09 00:40 EST - US-012
+- Created scheduleEvidenceBridgeCheckIn function in check-in-scheduler.ts
+- Evidence bridge check-ins scheduled 24 hours after L1/L2 session completion (not L3)
+- Added observationAssignment parameter to createCheckIn function
+- Prompt template wraps observation: "You were going to [observation] — what did you observe?"
+- When observation is null, uses fallback: "What did you observe?"
+- check_in_schedule.observation_assignment populated with template text
+- check_in_schedule.check_in_type set to 'evidence_bridge'
+- Scheduling is non-blocking in complete-session.post.ts (errors logged, doesn't fail completion)
+- Build passes with no TypeScript errors
+
+**Files changed:**
+- server/utils/scheduling/check-in-scheduler.ts (added scheduleEvidenceBridgeCheckIn, updated createCheckIn signature)
+- server/api/progress/complete-session.post.ts (imported and called scheduleEvidenceBridgeCheckIn for L1/L2)
+- scripts/ralph/prd.json (marked US-012 as passes=true)
+
+**Learnings for future iterations:**
+- Evidence bridge check-ins use 24-hour timing (not 2-hour like post_session)
+- The createCheckIn function signature was extended to accept observationAssignment parameter
+- Non-blocking pattern: Use .then()/.catch() fire-and-forget for background operations that shouldn't fail main flow
+- Prompt template normalization: lowercase + replace "notice/pay attention to/track" with "notice" for natural phrasing
+- Check-in scheduling happens AFTER progress update but BEFORE API response (async, non-blocking)
+---
+
