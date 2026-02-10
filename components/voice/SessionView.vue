@@ -447,6 +447,11 @@ const showStreamingTranscript = computed(() => {
   return Boolean((isTextStreaming.value || isStreamingMode.value || isPaused.value) && currentTranscript.value)
 })
 
+// While streaming/highlighting is active, let WordByWordTranscript own scroll focus.
+const shouldSuppressContainerAutoScroll = computed(() => {
+  return isAISpeaking.value || isStreamingMode.value || isTextStreaming.value || isPaused.value
+})
+
 // Initialize on mount
 onMounted(async () => {
   // Request wake lock to prevent screen dimming during session
@@ -498,6 +503,7 @@ watch(isRecording, (recording) => {
 watch(
   () => messages.value.length,
   () => {
+    if (shouldSuppressContainerAutoScroll.value) return
     nextTick(() => {
       scrollToBottom()
     })
