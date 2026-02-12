@@ -156,7 +156,12 @@ export function buildSystemPrompt(
   }
 
   // Add opening instruction for new conversations
-  if (options.isNewConversation && !options.bridgeContext && !options.abandonedSessionContext) {
+  if (
+    options.isNewConversation
+    && options.illusionLayer === 'intellectual'
+    && !options.bridgeContext
+    && !options.abandonedSessionContext
+  ) {
     const openingMessage = ILLUSION_OPENING_MESSAGES[options.illusionKey]
     if (openingMessage) {
       prompt += '\n\n## Starting This Session\n\n'

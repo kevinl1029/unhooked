@@ -146,7 +146,7 @@ export interface KeyInsightSelectionOutput {
 // Check-In Personalization Types
 // ============================================
 
-export type CheckInType = 'post_session' | 'morning' | 'evening'
+export type CheckInType = 'post_session' | 'morning' | 'evening' | 'evidence_bridge'
 
 export interface CheckInPersonalizationInput {
   checkInType: CheckInType
