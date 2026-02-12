@@ -4,8 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { IllusionKey, CheckInType } from '../llm/task-types'
-import { personalizeCheckIn } from '../llm/tasks/checkin-personalization'
+import type { CheckInType } from '../llm/task-types'
 import crypto from 'crypto'
 
 // Check-in schedule configuration
