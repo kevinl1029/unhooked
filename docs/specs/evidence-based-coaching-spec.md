@@ -374,7 +374,8 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 
 #### Prompt Assembly (Integration)
 
-- **REQ-36:** Layer-specific instructions are injected in the prompt assembly order **after the illusion prompt and before bridge context**: base → personalization → **cross-layer context** (Layer 2+ only: prior layer insights, breakthroughs, conviction history — already implemented in `cross-layer-context.ts`) → illusion prompt → **layer instructions** → bridge context → abandoned session context → opening instruction. Layer instructions refine the illusion prompt's approach (analytical for L1, emotional holding for L2, identity-forward for L3).
+- **REQ-36:** Layer-specific instructions are injected in the prompt assembly order **after the illusion prompt and before bridge context**: base → personalization → **cross-layer context** (Layer 2+ only: prior layer insights, breakthroughs, conviction history, observation assignment from prior layer — already implemented in `cross-layer-context.ts`) → illusion prompt → **layer instructions** → bridge context → abandoned session context → opening instruction. Layer instructions refine the illusion prompt's approach (analytical for L1, emotional holding for L2, identity-forward for L3).
+- **REQ-52:** The observation assignment text from the prior layer's completed session is injected into the next session's **cross-layer context**. For Layer 2/3 sessions, the system fetches `conversations.observation_assignment` from the most recent completed conversation for this illusion and prior layer. If present, it is included so the AI can ask a targeted evidence bridge question referencing the specific assignment (e.g., "You were going to notice when stress shows up — what did you observe?") rather than a generic topic-level question. If null (extraction failed) or not applicable (Layer 1 session), this section is omitted gracefully. No new schema needed — reads the existing `conversations.observation_assignment` column.
 
 #### Data Storage (Data)
 
@@ -541,7 +542,7 @@ base system prompt (Allen Carr methodology, session structure, SESSION_COMPLETE 
   ↓
 personalization context (intake, story, conviction, moments)
   ↓
-cross-layer context (Layer 2+ only: prior layer insights, breakthroughs, conviction history)
+cross-layer context (Layer 2+ only: prior layer insights, breakthroughs, conviction history, observation assignment from prior layer)
   ↓
 illusion prompt (stress/pleasure/willpower/focus/identity)
   ↓
@@ -1527,7 +1528,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 
 #### Story 6.1: Surface Observation Evidence in Session Context
 
-**Description:** As a developer, I want check-in observation responses (captured as `real_world_observation` moments) to appear in the personalization context for the next session, so that the AI can reference what the user observed.
+**Description:** As a developer, I want observation evidence — both the prior layer's observation assignment text and check-in observation responses (captured as `real_world_observation` moments) — to appear in the cross-layer context for the next session, so that the AI can ask a targeted evidence bridge question and reference what the user observed.
 
 **Acceptance Criteria:**
 1. Given a user submitted a check-in response that was captured as a `real_world_observation` moment, when the next session's context is built, then the observation appears in the "KEY MOMENTS" section
@@ -1536,16 +1537,20 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 4. Given a user submits a response to an `evidence_bridge` check-in, when the moment detection pipeline processes it, then it creates a `captured_moment` with `moment_type = 'real_world_observation'` and the correct `illusion_key`
 5. Given the moment detection prompt/task definition, when updated, then it includes `real_world_observation` as a recognized moment type with classification guidance for evidence bridge check-in responses (distinct from generic `insight` or `reflection`)
 6. Given a user responds to an evidence bridge check-in with an observation like "I noticed my stress was from the situation, not nicotine", when moment detection runs, then the response is classified as `real_world_observation` (not generic `insight` or `reflection`)
+7. Given Layer 1 completed with `observation_assignment = "Notice when stress shows up and ask: is it the situation or withdrawal?"`, when Layer 2's cross-layer context is built, then the context includes the prior observation assignment text (e.g., "In the previous session, you assigned them this observation: 'Notice when stress shows up and ask: is it the situation or withdrawal?'") (REQ-52)
+8. Given Layer 1 completed with `observation_assignment = null` (extraction failed), when Layer 2's cross-layer context is built, then no observation assignment section appears — graceful omission, no error (REQ-52)
+9. Given a Layer 1 session (no prior layer exists), when cross-layer context is built, then no observation assignment is fetched (REQ-52)
 
 **Technical Notes:**
-- Files: `server/utils/personalization/context-builder.ts`, `server/utils/llm/tasks/moment-detection.ts`
+- Files: `server/utils/personalization/cross-layer-context.ts`, `server/utils/personalization/context-builder.ts`, `server/utils/llm/tasks/moment-detection.ts`
 - The existing context builder already surfaces moments by type. `real_world_observation` is already a valid moment type in the schema.
 - The moment detection pipeline's prompt/task definition needs to be updated to recognize `real_world_observation` as a valid moment type and provide classification guidance (AC#5).
 - Verify that the existing moment selection in context-builder includes `real_world_observation` moments. If the existing selection logic filters to specific types, add `real_world_observation` to the allowed types.
+- **For AC#7-9 (REQ-52):** `cross-layer-context.ts` must query `conversations.observation_assignment` from the most recent completed conversation for the same illusion and prior layer. Include the text in the formatted cross-layer context output. The `conversations` table already has the `observation_assignment` column — no schema change needed.
 
 **Dependencies:** Story 4.1 (check-ins capture observations as moments)
-**Test Requirements:** Unit test verifying `real_world_observation` moments appear in context output; unit test for moment detection classification of evidence bridge responses
-**Estimated Complexity:** M — Requires moment detection prompt update + context builder verification
+**Test Requirements:** Unit test verifying `real_world_observation` moments appear in context output; unit test for moment detection classification of evidence bridge responses; unit test verifying observation assignment text appears in cross-layer context for Layer 2/3 sessions (REQ-52)
+**Estimated Complexity:** M — Requires moment detection prompt update + context builder verification + cross-layer context query for observation assignment
 
 ---
 
@@ -1834,6 +1839,16 @@ No open questions remain. All questions have been resolved through UX refinement
 
 ## Changelog
 
+### v1.8 — Observation Assignment in Cross-Layer Context (2026-02-11)
+
+Post-implementation bug investigation revealed that Layer 2/3 sessions lack the specific observation assignment text from the prior layer. The AI could only ask a generic "What have you been noticing about [illusion topic]?" instead of referencing the specific observation assigned (e.g., "You were going to notice when stress shows up — what did you observe?"). This was a technical design gap — no existing requirement covered injecting the observation assignment into the next session's prompt context.
+
+- **REQ-52 added:** Observation assignment text from the prior layer's completed session is injected into the next session's cross-layer context. Fetched from `conversations.observation_assignment`. Graceful omission when null or not applicable.
+- **REQ-36 updated:** Cross-layer context description now includes "observation assignment from prior layer" alongside insights, breakthroughs, and conviction history.
+- **Prompt assembly order diagram updated:** Cross-layer context line reflects the addition.
+- **Story 6.1 expanded:** Added AC#7 (observation assignment appears in cross-layer context), AC#8 (graceful null handling), AC#9 (Layer 1 no-op). Updated description, technical notes, test requirements, and complexity estimate.
+- **Related implementation bugs (not spec gaps):** #7 (opening message override fires on L2/L3, violating REQ-5) and #9 (cross-layer context missing `real_world_observation` moments, violating REQ-7) were identified in the same investigation. These are implementation oversights against existing requirements and do not require spec changes.
+
 ### v1.7 — Layer Progress Dots UX Refinement (2026-02-09)
 
 - **Three-state session dots:** Changed layer progress dots from two-state (filled/empty) to three-state: filled white (completed), orange ring outline (current/up next), dim white (future). Eliminates ambiguity where users could confuse "sessions completed" with "current session number."
@@ -1950,7 +1965,7 @@ Added based on structured UX audit across 12 dimensions:
 | **Deferred Items** | None |
 
 **Traceability status:**
-- UX → Requirements: Complete. All flows, screens, interactions, states, and data displays have backing requirements (REQ-1 through REQ-51).
+- UX → Requirements: Complete. All flows, screens, interactions, states, and data displays have backing requirements (REQ-1 through REQ-52).
 - Requirements → Stories: Complete. All requirements map to user stories across 7 epics (15 stories).
 - Stories → Acceptance Criteria: Complete. All stories have testable acceptance criteria covering happy paths, error scenarios, edge cases, and cross-references to dependent specs.
 
