@@ -1,114 +1,204 @@
-/**
- * Unit tests for cross-layer context builder
- */
 import { describe, it, expect } from 'vitest'
 import type { IllusionLayer } from '~/server/utils/llm/task-types'
+import { buildCrossLayerContext, formatCrossLayerContext } from '~/server/utils/personalization/cross-layer-context'
 
-describe('Cross-Layer Context', () => {
-  describe('Layer progression', () => {
-    it('should identify previous layers correctly', () => {
-      const layers: IllusionLayer[] = ['intellectual', 'emotional', 'visceral']
+type MockDataConfig = {
+  previousMoments?: Array<Record<string, any>>
+  convictionAssessments?: Array<Record<string, any>>
+  conversations?: Array<Record<string, any>>
+}
 
-      const getPreviousLayers = (current: IllusionLayer): IllusionLayer[] => {
-        const index = layers.indexOf(current)
-        return layers.slice(0, index)
+function createMockSupabase(config: MockDataConfig = {}) {
+  const filters: Array<{ table: string; field: string; value: unknown }> = []
+  let conversationQueries = 0
+
+  const previousMoments = config.previousMoments || []
+  const convictionAssessments = config.convictionAssessments || []
+  const conversations = config.conversations || []
+
+  const supabase = {
+    from: (table: string) => {
+      if (table === 'captured_moments') {
+        return {
+          select: () => ({
+            eq: (field1: string, value1: unknown) => {
+              filters.push({ table, field: field1, value: value1 })
+              return {
+                eq: (field2: string, value2: unknown) => {
+                  filters.push({ table, field: field2, value: value2 })
+                  return {
+                    order: () => Promise.resolve({ data: previousMoments }),
+                  }
+                },
+              }
+            },
+          }),
+        }
       }
 
-      expect(getPreviousLayers('intellectual')).toEqual([])
-      expect(getPreviousLayers('emotional')).toEqual(['intellectual'])
-      expect(getPreviousLayers('visceral')).toEqual(['intellectual', 'emotional'])
-    })
-
-    it('should determine if user is returning', () => {
-      const isReturningUser = (layer: IllusionLayer): boolean => {
-        return layer !== 'intellectual'
+      if (table === 'conviction_assessments') {
+        return {
+          select: () => ({
+            eq: (field1: string, value1: unknown) => {
+              filters.push({ table, field: field1, value: value1 })
+              return {
+                eq: (field2: string, value2: unknown) => {
+                  filters.push({ table, field: field2, value: value2 })
+                  return {
+                    order: () => Promise.resolve({ data: convictionAssessments }),
+                  }
+                },
+              }
+            },
+          }),
+        }
       }
 
-      expect(isReturningUser('intellectual')).toBe(false)
-      expect(isReturningUser('emotional')).toBe(true)
-      expect(isReturningUser('visceral')).toBe(true)
-    })
-  })
+      if (table === 'conversations') {
+        return {
+          select: () => {
+            conversationQueries += 1
+            return {
+              eq: (field1: string, value1: unknown) => {
+                filters.push({ table, field: field1, value: value1 })
+                return {
+                  eq: (field2: string, value2: unknown) => {
+                    filters.push({ table, field: field2, value: value2 })
+                    return {
+                      eq: (field3: string, value3: unknown) => {
+                        filters.push({ table, field: field3, value: value3 })
+                        return {
+                          not: () => ({
+                            order: () => ({
+                              limit: () => Promise.resolve({ data: conversations }),
+                            }),
+                          }),
+                        }
+                      },
+                    }
+                  },
+                }
+              },
+            }
+          },
+        }
+      }
 
-  describe('Context accumulation', () => {
-    it('should accumulate insights from previous layers', () => {
-      const previousInsights = [
-        { layer: 'intellectual', insight: 'Nicotine causes anxiety' },
-        { layer: 'emotional', insight: 'I felt relieved understanding this' },
-      ]
+      throw new Error(`Unexpected table: ${table}`)
+    },
+  }
 
-      const currentLayer: IllusionLayer = 'visceral'
-      const relevantInsights = previousInsights.filter(i =>
-        i.layer !== currentLayer
+  return {
+    supabase: supabase as any,
+    filters,
+    getConversationQueries: () => conversationQueries,
+  }
+}
+
+describe('buildCrossLayerContext observation assignment injection', () => {
+  it.each([
+    ['emotional', 'intellectual'],
+    ['identity', 'emotional'],
+  ] as Array<[IllusionLayer, IllusionLayer]>)(
+    'includes previous layer observation assignment for %s sessions',
+    async (currentLayer, expectedPriorLayer) => {
+      const observationAssignment = 'Notice when stress shows up and ask: is it the situation or withdrawal?'
+      const { supabase, filters } = createMockSupabase({
+        conversations: [{ observation_assignment: observationAssignment }],
+      })
+
+      const context = await buildCrossLayerContext(
+        supabase,
+        'user-1',
+        'stress_relief',
+        currentLayer
       )
 
-      expect(relevantInsights.length).toBe(2)
+      const formatted = formatCrossLayerContext(context)
+
+      expect(context.previousLayerObservationAssignment).toBe(observationAssignment)
+      expect(formatted).toContain('OBSERVATION ASSIGNMENT FROM LAST SESSION')
+      expect(formatted).toContain(observationAssignment)
+      expect(filters).toContainEqual({
+        table: 'conversations',
+        field: 'illusion_layer',
+        value: expectedPriorLayer,
+      })
+    }
+  )
+
+  it('omits observation assignment section when previous layer assignment is null', async () => {
+    const { supabase } = createMockSupabase({
+      conversations: [{ observation_assignment: null }],
     })
 
-    it('should include conviction progression', () => {
-      const convictionHistory = [
-        { layer: 'intellectual', conviction: 5 },
-        { layer: 'emotional', conviction: 7 },
-      ]
+    const context = await buildCrossLayerContext(
+      supabase,
+      'user-1',
+      'stress_relief',
+      'emotional'
+    )
+    const formatted = formatCrossLayerContext(context)
 
-      const latestConviction = convictionHistory[convictionHistory.length - 1]
-      const convictionDelta = convictionHistory.length > 1
-        ? convictionHistory[convictionHistory.length - 1].conviction - convictionHistory[0].conviction
-        : 0
-
-      expect(latestConviction.conviction).toBe(7)
-      expect(convictionDelta).toBe(2)
-    })
+    expect(context.previousLayerObservationAssignment).toBeNull()
+    expect(formatted).not.toContain('OBSERVATION ASSIGNMENT FROM LAST SESSION')
   })
 
-  describe('Key insight selection', () => {
-    it('should select most recent key insight from previous layer', () => {
-      const insights = [
-        { layer: 'intellectual', id: 'ins-1', isKey: true },
-        { layer: 'intellectual', id: 'ins-2', isKey: false },
-        { layer: 'emotional', id: 'ins-3', isKey: true },
-      ]
-
-      const currentLayer = 'visceral'
-      const previousLayer = 'emotional'
-
-      const keyInsight = insights.find(i =>
-        i.layer === previousLayer && i.isKey
-      )
-
-      expect(keyInsight?.id).toBe('ins-3')
+  it('does not query conversations for Layer 1 sessions', async () => {
+    const { supabase, getConversationQueries } = createMockSupabase({
+      conversations: [{ observation_assignment: 'should not be queried' }],
     })
 
-    it('should handle missing key insight gracefully', () => {
-      const insights = [
-        { layer: 'intellectual', id: 'ins-1', isKey: false },
-      ]
+    const context = await buildCrossLayerContext(
+      supabase,
+      'user-1',
+      'stress_relief',
+      'intellectual'
+    )
 
-      const keyInsight = insights.find(i => i.isKey)
-
-      expect(keyInsight).toBeUndefined()
-    })
+    expect(context.previousLayerObservationAssignment).toBeNull()
+    expect(getConversationQueries()).toBe(0)
   })
 
-  describe('Context formatting', () => {
-    it('should format cross-layer context for prompt injection', () => {
-      const context = {
-        previousConviction: 5,
-        currentConviction: 7,
-        keyInsight: 'The anxiety IS the withdrawal',
-        previousLayersCompleted: ['intellectual'],
-      }
-
-      const formatted = `
-Previous conviction: ${context.previousConviction}/10
-Current conviction: ${context.currentConviction}/10
-Key insight from last session: "${context.keyInsight}"
-Layers completed: ${context.previousLayersCompleted.join(', ')}
-`.trim()
-
-      expect(formatted).toContain('Previous conviction: 5/10')
-      expect(formatted).toContain('Current conviction: 7/10')
-      expect(formatted).toContain('The anxiety IS the withdrawal')
+  it('includes real_world_observation moments in previous session context output', async () => {
+    const realWorldObservation = 'I noticed my stress spike was strongest right before withdrawal cravings.'
+    const { supabase } = createMockSupabase({
+      previousMoments: [
+        {
+          moment_type: 'real_world_observation',
+          transcript: realWorldObservation,
+          illusion_layer: 'intellectual',
+        },
+      ],
     })
+
+    const context = await buildCrossLayerContext(
+      supabase,
+      'user-1',
+      'stress_relief',
+      'emotional'
+    )
+    const formatted = formatCrossLayerContext(context)
+
+    expect(context.realWorldObservations).toEqual([realWorldObservation])
+    expect(formatted).toContain('REAL-WORLD OBSERVATION THEY REPORTED')
+    expect(formatted).toContain(realWorldObservation)
+  })
+
+  it('omits real-world observation section when no observation moments exist', async () => {
+    const { supabase } = createMockSupabase({
+      previousMoments: [],
+    })
+
+    const context = await buildCrossLayerContext(
+      supabase,
+      'user-1',
+      'stress_relief',
+      'emotional'
+    )
+    const formatted = formatCrossLayerContext(context)
+
+    expect(context.realWorldObservations).toEqual([])
+    expect(formatted).not.toContain('REAL-WORLD OBSERVATION THEY REPORTED')
   })
 })

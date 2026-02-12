@@ -17,7 +17,7 @@
       <div class="flex-1 min-h-0">
         <!-- Voice Session View (default) -->
         <VoiceSessionView
-          v-if="!isTranscriptView && !useTextMode"
+          v-if="!isTranscriptView && !useTextMode && isLayerResolved"
           :illusion-key="illusionKey"
           :illusion-layer="illusionLayer"
           :read-only="sessionComplete"
@@ -27,6 +27,10 @@
           @conversation-id-update="handleConversationIdUpdate"
           @error="handleError"
         />
+
+        <div v-else-if="!isTranscriptView && !useTextMode && !isLayerResolved" class="h-full flex items-center justify-center">
+          <p class="text-white-65">Preparing session...</p>
+        </div>
 
         <!-- Text-based Chat (transcript view or fallback) -->
         <ChatWindow
@@ -86,6 +90,7 @@ const error = ref<string | null>(null)
 const sessionComplete = ref(false)
 const nextIllusion = ref<number | null>(null)
 const illusionLayer = ref<IllusionLayer>('intellectual')
+const isLayerResolved = ref(false)
 const sessionCompleteSubtext = ref<string>('')
 const showContinueToNextLayer = ref(false)
 const isProgramComplete = ref(false)
@@ -114,10 +119,15 @@ onMounted(async () => {
   }
 
   // Fetch progress to derive current layer
-  await fetchProgress()
-
-  // Set illusionLayer from derived progress (currentLayer is computed)
-  illusionLayer.value = currentLayer.value
+  try {
+    await fetchProgress()
+    // Set illusionLayer from derived progress (currentLayer is computed)
+    illusionLayer.value = currentLayer.value
+  } catch (err) {
+    console.warn('[session] Failed to fetch progress for layer resolution, using default layer', err)
+  } finally {
+    isLayerResolved.value = true
+  }
 
   // Voice session view handles its own initialization
   // Only initialize for transcript view or text mode
@@ -396,21 +406,20 @@ async function completeSessionWithRecovery(targetConversationId: string) {
     return completeSession(targetConversationId, illusionKey.value, layer)
   }
 
-  const resolveConversationLayer = async (): Promise<IllusionLayer | null> => {
+  const resolveLayerFromLatestProgress = async (): Promise<IllusionLayer | null> => {
     try {
-      const conversationData = await $fetch<{ illusion_layer?: string | null }>(`/api/conversations/${targetConversationId}`)
-      const layer = conversationData?.illusion_layer
-      if (layer === 'intellectual' || layer === 'emotional' || layer === 'identity') {
-        return layer
+      await fetchProgress()
+      if (currentLayer.value === 'intellectual' || currentLayer.value === 'emotional' || currentLayer.value === 'identity') {
+        return currentLayer.value
       }
     } catch (err) {
-      console.warn('[session] Failed to resolve conversation layer before completion', err)
+      console.warn('[session] Failed to refresh progress before completion', err)
     }
     return null
   }
 
   try {
-    const resolvedLayer = await resolveConversationLayer()
+    const resolvedLayer = await resolveLayerFromLatestProgress()
     const initialLayer = resolvedLayer || illusionLayer.value
     illusionLayer.value = initialLayer
     return await attemptComplete(initialLayer)
@@ -464,7 +473,7 @@ async function handleSessionComplete() {
 
 // Voice session handlers
 async function handleVoiceSessionComplete(nextIllusionNum: number | null) {
-  // Complete using authoritative conversation-layer lookup inside recovery helper.
+  // Complete using latest progress-derived layer inside recovery helper.
   const activeConversationId = existingConversationId.value
   if (activeConversationId) {
     try {
