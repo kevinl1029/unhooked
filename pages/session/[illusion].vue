@@ -17,7 +17,7 @@
       <div class="flex-1 min-h-0">
         <!-- Voice Session View (default) -->
         <VoiceSessionView
-          v-if="!isTranscriptView && !useTextMode"
+          v-if="!isTranscriptView && !useTextMode && isLayerResolved"
           :illusion-key="illusionKey"
           :illusion-layer="illusionLayer"
           :read-only="sessionComplete"
@@ -27,6 +27,10 @@
           @conversation-id-update="handleConversationIdUpdate"
           @error="handleError"
         />
+
+        <div v-else-if="!isTranscriptView && !useTextMode && !isLayerResolved" class="h-full flex items-center justify-center">
+          <p class="text-white-65">Preparing session...</p>
+        </div>
 
         <!-- Text-based Chat (transcript view or fallback) -->
         <ChatWindow
@@ -86,6 +90,7 @@ const error = ref<string | null>(null)
 const sessionComplete = ref(false)
 const nextIllusion = ref<number | null>(null)
 const illusionLayer = ref<IllusionLayer>('intellectual')
+const isLayerResolved = ref(false)
 const sessionCompleteSubtext = ref<string>('')
 const showContinueToNextLayer = ref(false)
 const isProgramComplete = ref(false)
@@ -114,10 +119,13 @@ onMounted(async () => {
   }
 
   // Fetch progress to derive current layer
-  await fetchProgress()
-
-  // Set illusionLayer from derived progress (currentLayer is computed)
-  illusionLayer.value = currentLayer.value
+  try {
+    await fetchProgress()
+    // Set illusionLayer from derived progress (currentLayer is computed)
+    illusionLayer.value = currentLayer.value
+  } finally {
+    isLayerResolved.value = true
+  }
 
   // Voice session view handles its own initialization
   // Only initialize for transcript view or text mode
