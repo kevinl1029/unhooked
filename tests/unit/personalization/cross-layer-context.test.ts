@@ -159,4 +159,46 @@ describe('buildCrossLayerContext observation assignment injection', () => {
     expect(context.previousLayerObservationAssignment).toBeNull()
     expect(getConversationQueries()).toBe(0)
   })
+
+  it('includes real_world_observation moments in previous session context output', async () => {
+    const realWorldObservation = 'I noticed my stress spike was strongest right before withdrawal cravings.'
+    const { supabase } = createMockSupabase({
+      previousMoments: [
+        {
+          moment_type: 'real_world_observation',
+          transcript: realWorldObservation,
+          illusion_layer: 'intellectual',
+        },
+      ],
+    })
+
+    const context = await buildCrossLayerContext(
+      supabase,
+      'user-1',
+      'stress_relief',
+      'emotional'
+    )
+    const formatted = formatCrossLayerContext(context)
+
+    expect(context.realWorldObservations).toEqual([realWorldObservation])
+    expect(formatted).toContain('REAL-WORLD OBSERVATION THEY REPORTED')
+    expect(formatted).toContain(realWorldObservation)
+  })
+
+  it('omits real-world observation section when no observation moments exist', async () => {
+    const { supabase } = createMockSupabase({
+      previousMoments: [],
+    })
+
+    const context = await buildCrossLayerContext(
+      supabase,
+      'user-1',
+      'stress_relief',
+      'emotional'
+    )
+    const formatted = formatCrossLayerContext(context)
+
+    expect(context.realWorldObservations).toEqual([])
+    expect(formatted).not.toContain('REAL-WORLD OBSERVATION THEY REPORTED')
+  })
 })

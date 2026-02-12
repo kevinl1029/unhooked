@@ -15,6 +15,7 @@ export interface CrossLayerContext {
   previousLayerInsights: LayerInsight[]
   breakthroughs: string[]
   resistancePoints: string[]
+  realWorldObservations: string[]
   previousLayerObservationAssignment: string | null
   convictionAtPreviousLayers: Array<{
     layer: IllusionLayer
@@ -122,6 +123,7 @@ export async function buildCrossLayerContext(
     previousLayerInsights: insightsWithLayer,
     breakthroughs: getOnePerType(previousMoments, 'emotional_breakthrough'),
     resistancePoints: getOnePerType(previousMoments, 'fear_resistance'),
+    realWorldObservations: getOnePerType(previousMoments, 'real_world_observation'),
     previousLayerObservationAssignment,
     convictionAtPreviousLayers: convictionHistory,
   }
@@ -146,6 +148,10 @@ export function formatCrossLayerContext(context: CrossLayerContext): string {
 
   if (context.resistancePoints.length > 0) {
     parts.push(`RESISTANCE THEY SHOWED: "${context.resistancePoints[0]}"`)
+  }
+
+  if (context.realWorldObservations.length > 0) {
+    parts.push(`REAL-WORLD OBSERVATION THEY REPORTED: "${context.realWorldObservations[0]}"`)
   }
 
   if (context.previousLayerObservationAssignment) {
