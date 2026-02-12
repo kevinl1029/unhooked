@@ -123,6 +123,8 @@ onMounted(async () => {
     await fetchProgress()
     // Set illusionLayer from derived progress (currentLayer is computed)
     illusionLayer.value = currentLayer.value
+  } catch (err) {
+    console.warn('[session] Failed to fetch progress for layer resolution, using default layer', err)
   } finally {
     isLayerResolved.value = true
   }
