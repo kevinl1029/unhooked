@@ -15,11 +15,40 @@ export interface CrossLayerContext {
   previousLayerInsights: LayerInsight[]
   breakthroughs: string[]
   resistancePoints: string[]
+  previousLayerObservationAssignment: string | null
   convictionAtPreviousLayers: Array<{
     layer: IllusionLayer
     conviction: number
     assessed_at: string
   }>
+}
+
+function getPriorLayer(currentLayer: IllusionLayer): IllusionLayer | null {
+  if (currentLayer === 'emotional') return 'intellectual'
+  if (currentLayer === 'identity') return 'emotional'
+  return null
+}
+
+async function getPriorLayerObservationAssignment(
+  supabase: SupabaseClient,
+  userId: string,
+  illusionKey: string,
+  currentLayer: IllusionLayer
+): Promise<string | null> {
+  const priorLayer = getPriorLayer(currentLayer)
+  if (!priorLayer) return null
+
+  const { data } = await supabase
+    .from('conversations')
+    .select('observation_assignment')
+    .eq('user_id', userId)
+    .eq('illusion_key', illusionKey)
+    .eq('illusion_layer', priorLayer)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(1)
+
+  return data?.[0]?.observation_assignment || null
 }
 
 /**
@@ -66,6 +95,12 @@ export async function buildCrossLayerContext(
 
   // Get conviction history
   const convictionHistory = await getConvictionHistory(supabase, userId, illusionKey)
+  const previousLayerObservationAssignment = await getPriorLayerObservationAssignment(
+    supabase,
+    userId,
+    illusionKey,
+    currentLayer
+  )
 
   // Filter to get 1 per type max
   const getOnePerType = (moments: typeof previousMoments, type: MomentType): string[] => {
@@ -87,6 +122,7 @@ export async function buildCrossLayerContext(
     previousLayerInsights: insightsWithLayer,
     breakthroughs: getOnePerType(previousMoments, 'emotional_breakthrough'),
     resistancePoints: getOnePerType(previousMoments, 'fear_resistance'),
+    previousLayerObservationAssignment,
     convictionAtPreviousLayers: convictionHistory,
   }
 }
@@ -110,6 +146,10 @@ export function formatCrossLayerContext(context: CrossLayerContext): string {
 
   if (context.resistancePoints.length > 0) {
     parts.push(`RESISTANCE THEY SHOWED: "${context.resistancePoints[0]}"`)
+  }
+
+  if (context.previousLayerObservationAssignment) {
+    parts.push(`OBSERVATION ASSIGNMENT FROM LAST SESSION: "${context.previousLayerObservationAssignment}"`)
   }
 
   if (context.convictionAtPreviousLayers.length > 0) {
