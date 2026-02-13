@@ -107,7 +107,7 @@ export default defineNuxtConfig({
 
     // Groq Configuration (Primary LLM Provider)
     groqApiKey: process.env.GROQ_API_KEY,
-    groqModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+    groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
 
     // Gemini Configuration (Fallback/Testing)
     geminiApiKey: process.env.GEMINI_API_KEY,
