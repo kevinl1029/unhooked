@@ -10,20 +10,37 @@ export default defineEventHandler(async (event) => {
   const router = getModelRouter()
 
   const availableProviders = router.listAvailableModels()
+  const defaultProvider = getDefaultModel()
+  const chatPrimaryProvider = (config.chatPrimaryProvider as string | undefined) || defaultProvider
+  const chatSecondaryProvider = (config.chatSecondaryProvider as string | undefined) || null
+  const effectiveGroqModel = (config.groqModel as string | undefined) || 'openai/gpt-oss-20b'
+  const effectiveGeminiModel = (config.geminiModel as string | undefined) || 'gemini-3-flash-preview'
 
   return {
-    defaultModel: getDefaultModel(),
+    defaultModel: defaultProvider,
     availableProviders,
+    routing: {
+      chatPrimaryProvider,
+      chatSecondaryProvider,
+      effectiveGroqModelWhenSelected: effectiveGroqModel,
+      effectiveGeminiModelWhenSelected: effectiveGeminiModel,
+      defaultProviderModel:
+        defaultProvider === 'groq'
+          ? effectiveGroqModel
+          : defaultProvider === 'gemini'
+            ? effectiveGeminiModel
+            : null,
+    },
     configuration: {
       groq: {
         configured: !!config.groqApiKey,
         apiKeySet: config.groqApiKey ? '✓ Set' : '✗ Not set',
-        defaultModel: config.groqModel,
+        defaultModel: effectiveGroqModel,
       },
       gemini: {
         configured: !!config.geminiApiKey,
         apiKeySet: config.geminiApiKey ? '✓ Set' : '✗ Not set',
-        defaultModel: config.geminiModel,
+        defaultModel: effectiveGeminiModel,
       },
       anthropic: {
         configured: !!config.anthropicApiKey,
@@ -33,6 +50,13 @@ export default defineEventHandler(async (event) => {
         configured: !!config.openaiApiKey,
         apiKeySet: config.openaiApiKey ? '✓ Set' : '✗ Not set',
       },
+    },
+    envPresence: {
+      defaultLlmProvider: process.env.DEFAULT_LLM_PROVIDER ? 'set' : 'unset',
+      nuxtDefaultLlmProvider: process.env.NUXT_DEFAULT_LLM_PROVIDER ? 'set' : 'unset',
+      groqModel: process.env.GROQ_MODEL ? 'set' : 'unset',
+      chatPrimaryProvider: process.env.CHAT_PRIMARY_PROVIDER ? 'set' : 'unset',
+      chatSecondaryProvider: process.env.CHAT_SECONDARY_PROVIDER ? 'set' : 'unset',
     },
     timestamp: new Date().toISOString(),
   }

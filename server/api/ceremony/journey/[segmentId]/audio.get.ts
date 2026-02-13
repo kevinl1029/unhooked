@@ -111,6 +111,13 @@ export default defineEventHandler(async (event) => {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const ttsProvider = getTTSProviderFromConfig()
+      console.log('[journey-audio] TTS request', {
+        userId: user.sub,
+        artifactId: artifact.id,
+        segmentId,
+        attempt: attempt + 1,
+        segmentTextLength: segment.text?.length || 0,
+      })
       const result = await ttsProvider.synthesize({
         text: segment.text,
       })

@@ -6,7 +6,7 @@ export class GroqProvider implements LLMProvider {
   private client: Groq
   private modelName: string
 
-  constructor(apiKey: string, modelName = 'llama-3.1-8b-instant') {
+  constructor(apiKey: string, modelName = 'openai/gpt-oss-20b') {
     this.client = new Groq({ apiKey })
     this.modelName = modelName
   }

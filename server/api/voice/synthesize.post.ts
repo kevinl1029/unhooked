@@ -22,6 +22,12 @@ export default defineEventHandler(async (event) => {
     // Get the configured TTS provider
     const provider = getTTSProviderFromConfig()
 
+    console.log('[synthesize] TTS request', {
+      userId: user.sub,
+      textLength: text.length,
+      voice: voice || null,
+    })
+
     // Synthesize speech
     const result = await provider.synthesize({ text, voice })
 

@@ -497,6 +497,17 @@ export default defineEventHandler(async (event) => {
       (ttsProvider === 'inworld' && !!config.inworldApiKey)
     const useStreamingTTS = streamTTS && supportsStreamingTTS
 
+    console.log('[chat] TTS config', {
+      requestId,
+      userId: user.sub,
+      conversationId: convId,
+      sessionType,
+      inputModality,
+      ttsProvider,
+      streamTTSRequested: streamTTS,
+      useStreamingTTS,
+    })
+
     const encoder = new TextEncoder()
     const streamResponse = new ReadableStream({
       async start(controller) {
