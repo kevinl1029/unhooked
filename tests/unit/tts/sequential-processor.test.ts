@@ -58,6 +58,25 @@ function createFailingNonStreamingProvider(): TTSProvider {
 
 describe('SequentialTTSProcessor', () => {
   describe('streaming provider (InWorld) - all synthesis fails', () => {
+    it('should send a completion marker when last sentence strips to empty', async () => {
+      const chunks: AudioChunk[] = []
+      const provider = createSuccessfulStreamingProvider()
+      const processor = new SequentialTTSProcessor(provider, (chunk) => {
+        chunks.push(chunk)
+      })
+
+      // Sanitization removes bracket content, so this becomes empty text.
+      processor.enqueueSentence('[SESSION_COMPLETE]', true)
+
+      await processor.flush()
+
+      const completionChunks = chunks.filter((c) => c.isLast === true)
+      expect(completionChunks).toHaveLength(1)
+
+      const audioChunks = chunks.filter((c) => c.audioBase64 !== '')
+      expect(audioChunks).toHaveLength(0)
+    })
+
     it('should send a completion marker when the last sentence fails', async () => {
       const chunks: AudioChunk[] = []
       const provider = createFailingStreamingProvider()

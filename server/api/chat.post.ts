@@ -18,6 +18,7 @@ import { buildCrossLayerContext, formatCrossLayerContext } from '../utils/person
 import { buildBridgeContext } from '../utils/session/bridge'
 import { createSentenceDetector } from '../utils/tts/sentence-detector'
 import { createSequentialTTSProcessor } from '../utils/tts/sequential-processor'
+import { finalizeStreamingTTS } from '../utils/tts/finalize-streaming'
 import { getTTSProviderFromConfig, type TTSProviderType } from '../utils/tts'
 import { extractObservationAssignment, stripChatControlTokens } from '~/utils/chat-control-tokens'
 
@@ -589,25 +590,11 @@ export default defineEventHandler(async (event) => {
 
               // Flush any remaining text for TTS
               if (sentenceDetector && ttsProcessor) {
-                const remaining = sentenceDetector.flush()
-                if (remaining) {
-                  const cleanRemaining = stripControlTokens(remaining)
-                  if (cleanRemaining) {
-                    // Synthesize remaining text as the final chunk
-                    ttsProcessor.enqueueSentence(cleanRemaining, true)
-                  }
-                }
-
-                // Wait for all sequential synthesis to complete
-                // This ensures all audio chunks are sent before closing the stream
-                await ttsProcessor.flush()
-
-                // Send a completion marker if the last enqueued sentence didn't
-                // already have isLast=true (i.e., remaining was empty so sentences
-                // were detected via onToken, not the flush path)
-                if (!remaining) {
-                  await ttsProcessor.sendCompletionMarker()
-                }
+                await finalizeStreamingTTS({
+                  sentenceDetector,
+                  ttsProcessor,
+                  stripControlTokens
+                })
               }
 
               // Check for ceremony-specific tokens

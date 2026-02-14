@@ -32,3 +32,5 @@ Thumbs.db
 /playwright/.auth/
 coverage/
 
+.vercel
+.env*.local
