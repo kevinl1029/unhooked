@@ -155,3 +155,18 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Button shows "Loading..." when isDataLoading is true, brief 100ms delay to allow fetches to complete
   - Build passed successfully via npm run build
 ---
+## 2026-02-15 23:00 EST - US-011
+- Created comprehensive unit tests for sanitizeForPrompt() utility
+- Files changed:
+  - tests/unit/utils/sanitize-user-text.test.ts (created)
+  - scripts/ralph/prd.json (passes: true)
+- **Learnings for future iterations:**
+  - Test file structure follows Vitest pattern: describe blocks with nested it() tests
+  - 36 test cases covering all sanitization behaviors
+  - Role markers (SYSTEM:, ASSISTANT:, etc) only stripped at line start (^ with multiline flag)
+  - Sanitization order matters: role markers → headers → backticks → tags → trim
+  - Because replacements are sequential, `## SYSTEM: text` → role check (no match) → header removed → `SYSTEM: text` remains
+  - Tests confirm unicode (José) and emoji (👋) are preserved
+  - Tests confirm normal names like Kevin, Skip, Ignore are preserved without false positives
+  - All 36 tests pass successfully
+---

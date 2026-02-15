@@ -217,7 +217,7 @@
         "Tests pass"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "See spec v1.1: Test Specification section for the full test case table with inputs and expected outputs."
     },
     {
