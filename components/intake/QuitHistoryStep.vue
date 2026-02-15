@@ -20,7 +20,7 @@
     <!-- Previous quit attempts -->
     <div class="mb-6">
       <label class="block text-white font-medium mb-3">How many times have you tried to quit before?</label>
-      <div class="grid grid-cols-4 gap-3">
+      <div class="flex flex-col gap-3">
         <button
           v-for="option in attemptOptions"
           :key="option.value"
@@ -37,7 +37,7 @@
     </div>
 
     <!-- Longest quit duration (conditional) -->
-    <div v-if="previousAttempts !== undefined && previousAttempts > 0" class="mb-8">
+    <div v-if="previousAttempts && previousAttempts !== 'never'" class="mb-8">
       <label class="block text-white font-medium mb-3">What was your longest time without nicotine?</label>
       <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
         <button
@@ -79,23 +79,24 @@
 <script setup lang="ts">
 const props = defineProps<{
   yearsUsing?: number
-  previousAttempts?: number
+  previousAttempts?: string
   longestQuitDuration?: string
 }>()
 
 const emit = defineEmits<{
   'update:yearsUsing': [value: number | undefined]
-  'update:previousAttempts': [value: number | undefined]
+  'update:previousAttempts': [value: string | undefined]
   'update:longestQuitDuration': [value: string | undefined]
   next: []
   back: []
 }>()
 
 const attemptOptions = [
-  { value: 0, label: '0' },
-  { value: 1, label: '1' },
-  { value: 2, label: '2' },
-  { value: 3, label: '3+' },
+  { value: 'never', label: 'Never' },
+  { value: 'once', label: 'Once' },
+  { value: 'a_few', label: 'A few times' },
+  { value: 'many', label: 'Many times' },
+  { value: 'countless', label: 'Too many to count' },
 ]
 
 const durationOptions = [
