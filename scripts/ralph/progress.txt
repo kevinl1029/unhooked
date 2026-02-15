@@ -20,3 +20,15 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Migration includes: preferred_name VARCHAR(50) column, previous_attempts type change from INTEGER to TEXT, data migration for existing values, CHECK constraint
   - Rollback SQL documented in comments for reference
 ---
+## 2026-02-15 15:45 EST - US-002
+- Updated TypeScript types for v1.1 fields across composables and server API
+- Files changed:
+  - composables/useIntake.ts (IntakeData and IntakeResponse interfaces)
+  - server/api/intake/index.post.ts (IntakeBody interface)
+- **Learnings for future iterations:**
+  - IntakeData and IntakeResponse use camelCase for client-side, while DB fields use snake_case
+  - preferredName added as optional string field
+  - previousAttempts changed from `number | undefined` to `string | undefined`
+  - This is a clean type break - no union types for backwards compatibility
+  - Typecheck via `npm run build` passed successfully
+---

@@ -34,7 +34,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Clean type break — no union types for backwards compat. See spec v1.1: State Management Design for exact interfaces."
     },
     {
