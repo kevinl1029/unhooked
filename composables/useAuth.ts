@@ -67,7 +67,7 @@ export const useAuth = () => {
   }
 
   const getProfile = async () => {
-    if (!user.value) return null
+    if (!user.value?.id) return null
 
     const { data, error } = await supabase
       .from('profiles')
