@@ -285,7 +285,10 @@ export async function handleSessionComplete(input: SessionCompleteInput): Promis
 
     // 8. Schedule check-ins (only for core sessions, not reinforcement)
     // Per spec: Check-in sessions should not follow after reinforcement sessions
-    if (sessionType === 'core') {
+    // Per REQ-28: L1/L2 sessions get evidence_bridge check-ins (scheduled by complete-session.post.ts),
+    // so skip post_session scheduling here. Only L3 (identity) and non-layer sessions get post_session.
+    const isEvidenceBridgeLayer = illusionLayer === 'intellectual' || illusionLayer === 'emotional'
+    if (sessionType === 'core' && !isEvidenceBridgeLayer) {
       // Fetch user's timezone from user_progress
       const { data: userProgress } = await supabase
         .from('user_progress')

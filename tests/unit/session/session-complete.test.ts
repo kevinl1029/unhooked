@@ -185,6 +185,44 @@ describe('Session Complete Handler - Check-In Scheduling', () => {
   })
 })
 
+describe('Session Complete Handler - Layer Guard for Check-In Scheduling (Issue #12)', () => {
+  // Mirrors the isEvidenceBridgeLayer logic in session-complete.ts
+  function shouldSchedulePostSession(sessionType: string, illusionLayer: string): boolean {
+    const isEvidenceBridgeLayer = illusionLayer === 'intellectual' || illusionLayer === 'emotional'
+    return sessionType === 'core' && !isEvidenceBridgeLayer
+  }
+
+  describe('L1 (intellectual) sessions', () => {
+    it('should NOT schedule post_session check-in', () => {
+      expect(shouldSchedulePostSession('core', 'intellectual')).toBe(false)
+    })
+  })
+
+  describe('L2 (emotional) sessions', () => {
+    it('should NOT schedule post_session check-in', () => {
+      expect(shouldSchedulePostSession('core', 'emotional')).toBe(false)
+    })
+  })
+
+  describe('L3 (identity) sessions', () => {
+    it('should schedule post_session check-in', () => {
+      expect(shouldSchedulePostSession('core', 'identity')).toBe(true)
+    })
+  })
+
+  describe('non-core sessions', () => {
+    it('should NOT schedule post_session for reinforcement regardless of layer', () => {
+      expect(shouldSchedulePostSession('reinforcement', 'intellectual')).toBe(false)
+      expect(shouldSchedulePostSession('reinforcement', 'emotional')).toBe(false)
+      expect(shouldSchedulePostSession('reinforcement', 'identity')).toBe(false)
+    })
+
+    it('should NOT schedule post_session for check_in sessions', () => {
+      expect(shouldSchedulePostSession('check_in', 'intellectual')).toBe(false)
+    })
+  })
+})
+
 describe('Session Complete Handler - Missing User Story Handling (Gap #5)', () => {
   // Simulate the user_story creation logic from the handler
   interface UserStory {
