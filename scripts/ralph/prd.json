@@ -129,7 +129,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "File: components/intake/QuitHistoryStep.vue. This is now Step 4 (was Step 3) due to the new preferred name Step 1, but the component itself doesn't need to know its step number."
     },
     {

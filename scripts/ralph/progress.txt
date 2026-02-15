@@ -86,3 +86,17 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Component uses <script setup lang="ts"> syntax for TypeScript support
   - Input maxlength='50' matches the database column constraint
 ---
+## 2026-02-15 20:30 EST - US-007
+- Updated QuitHistoryStep.vue to use string-based previousAttempts with descriptive labels
+- Files changed:
+  - components/intake/QuitHistoryStep.vue
+  - scripts/ralph/prd.json (passes: true)
+- **Learnings for future iterations:**
+  - Changed previousAttempts from numeric (0,1,2,3+) to string values ('never','once','a_few','many','countless')
+  - Layout changed from horizontal grid (grid grid-cols-4) to vertical stack (flex flex-col) for better mobile UX
+  - 5 options now: Never, Once, A few times, Many times, Too many to count
+  - Conditional logic for longest quit duration updated: `previousAttempts && previousAttempts !== 'never'` (was `previousAttempts > 0`)
+  - Component maintains same button styling (border-2 rounded-xl) for consistency
+  - Type changes: prop type and emit type both changed from `number | undefined` to `string | undefined`
+  - Build passed successfully via `npm run build`
+---
