@@ -56,3 +56,19 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Preserves normal names like 'Kevin', 'Skip', 'Ignore' without false positives
   - File location follows pattern: `server/utils/personalization/` for personalization utilities
 ---
+## 2026-02-15 18:30 EST - US-005
+- Updated context builder to include v1.1 fields with sanitization and natural language formatting
+- Files changed:
+  - server/utils/personalization/context-builder.ts
+- **Learnings for future iterations:**
+  - Added QUIT_ATTEMPTS_CONTEXT map to translate string values ('never', 'once', 'a_few', 'many', 'countless') to natural language for prompt injection
+  - Added TRIGGER_DISPLAY_NAMES map for predefined triggers (morning, after_meals, stress, social, boredom, driving, alcohol, work_breaks)
+  - Created formatTriggers() helper that strips custom: prefix from custom triggers and applies display names to predefined triggers
+  - Custom triggers are sanitized and wrapped in triple-backtick delimiters (```custom text```) for prompt injection safety
+  - Preferred name is sanitized and wrapped in triple-backtick delimiters in the USER: line
+  - IntakeUserContext interface updated: added preferredName (string | null), changed previousAttempts from number to string | null
+  - getUserIntake() now selects preferred_name from user_intake table
+  - formatContextForPrompt() updated to include USER: line when preferred name exists, quit history line when previousAttempts is not null, and formatted triggers with sanitization
+  - Double-prefix escape (custom:custom:) is handled by stripping only the first custom: prefix
+  - Typecheck passed via npm run build
+---

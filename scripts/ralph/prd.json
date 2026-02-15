@@ -92,7 +92,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/personalization/context-builder.ts. Add QUIT_ATTEMPTS_CONTEXT map and formatTriggers() helper. Import sanitizeForPrompt from sanitize-user-text.ts. See spec for TRIGGER_DISPLAY_NAMES mapping."
     },
     {
