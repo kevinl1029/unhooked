@@ -119,3 +119,22 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - aria-live="polite" on text input container for screen reader accessibility
   - Build passed successfully via npm run build
 ---
+## 2026-02-15 22:00 EST - US-009
+- Updated IntakeForm.vue to support 6-step onboarding flow with preferred name as Step 1
+- Files changed:
+  - components/intake/IntakeForm.vue
+  - components/intake/ProductTypeStep.vue
+  - scripts/ralph/prd.json (passes: true)
+- **Learnings for future iterations:**
+  - Progress indicator updated from 5 to 6 dots
+  - Step 1 now renders IntakePreferredNameStep for preferred name collection
+  - All existing steps (ProductType, UsageFrequency, QuitHistory, PrimaryReason, Triggers) shifted by +1 (now Steps 2-6)
+  - Added ProductTypeStep Back button since it's now Step 2 instead of Step 1 - follows same pattern as other steps with Back button
+  - Added new props to IntakeForm: prefilledName?: string, existingIntake?: IntakeResponse | null
+  - Added onMounted() hook to pre-fill formData from existingIntake (DB fields) or prefilledName
+  - Pre-fill logic: existingIntake takes priority over prefilledName
+  - Snake_case DB fields (preferred_name, previous_attempts) mapped to camelCase formData fields (preferredName, previousAttempts)
+  - formData now includes preferredName: string field (default '')
+  - nextStep() max changed from 5 to 6
+  - Build passed successfully via npm run build
+---

@@ -16,23 +16,71 @@
       <button
         type="button"
         class="btn-primary text-white px-10 py-4 rounded-pill font-semibold shadow-card text-lg"
-        @click="started = true"
+        :disabled="isDataLoading"
+        @click="handleStart"
       >
-        Let's Go
+        {{ isDataLoading ? 'Loading...' : "Let's Go" }}
       </button>
     </div>
 
-    <IntakeForm v-else @complete="handleComplete" />
+    <IntakeForm
+      v-else
+      :prefilled-name="prefilledName"
+      :existing-intake="existingIntake"
+      @complete="handleComplete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import type { IntakeResponse } from '~/composables/useIntake'
+
 definePageMeta({
   middleware: 'auth'
 })
 
 const router = useRouter()
 const started = ref(false)
+const isDataLoading = ref(false)
+const prefilledName = ref('')
+const existingIntake = ref<IntakeResponse | null>(null)
+
+// Background data fetching on mount
+onMounted(async () => {
+  const { getProfile } = useAuth()
+  const { fetchIntake, intake } = useIntake()
+
+  // Fetch profile and intake in parallel
+  const results = await Promise.allSettled([
+    getProfile(),
+    fetchIntake()
+  ])
+
+  // Extract first name from profile.full_name (first word before space)
+  const profileResult = results[0]
+  if (profileResult.status === 'fulfilled' && profileResult.value?.full_name) {
+    const firstName = profileResult.value.full_name.split(' ')[0]
+    prefilledName.value = firstName
+  }
+  // If profile fetch fails, prefilledName stays empty (no error shown per FR-5.6)
+
+  // Populate existingIntake from the intake ref if fetch succeeds
+  if (intake.value) {
+    existingIntake.value = intake.value
+  }
+  // If intake fetch fails, existingIntake stays null (no error shown)
+})
+
+const handleStart = async () => {
+  // If fetches are still in progress, show brief loading state
+  isDataLoading.value = true
+
+  // Brief delay to allow background fetches to complete if they're almost done
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  isDataLoading.value = false
+  started.value = true
+}
 
 const handleComplete = () => {
   router.push('/dashboard')

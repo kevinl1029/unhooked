@@ -177,7 +177,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "File: components/intake/IntakeForm.vue. Import IntakeResponse type from useIntake composable. The re-entry pre-fill maps snake_case DB fields to camelCase formData fields."
     },
     {
