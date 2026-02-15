@@ -39,14 +39,14 @@
     <div class="flex gap-3">
       <button
         type="button"
-        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors"
+        class="px-6 py-2 md:px-8 md:py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors"
         @click="$emit('back')"
       >
         Back
       </button>
       <button
         type="button"
-        class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card flex-1 disabled:opacity-50"
+        class="btn-primary text-white px-6 py-2 md:px-8 md:py-3 rounded-pill font-semibold shadow-card flex-1 disabled:opacity-50"
         :disabled="isSubmitting"
         @click="$emit('submit')"
       >

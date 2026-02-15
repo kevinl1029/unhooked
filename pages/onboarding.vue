@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <div v-if="!started" class="glass rounded-card p-8 md:p-12 shadow-card border border-brand-border max-w-2xl mx-auto text-center animate-fade-in-up">
+  <div class="min-h-screen flex items-center justify-center p-0 md:p-4">
+    <div v-if="!started" class="glass rounded-card p-6 md:p-12 shadow-card border border-brand-border max-w-2xl mx-auto text-center animate-fade-in-up">
       <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Welcome to Unhooked</h1>
       <p class="text-white-85 text-lg mb-3">
         You're about to start a journey that will change how you see nicotine forever.

@@ -1,5 +1,5 @@
 <template>
-  <div class="glass rounded-card p-8 shadow-card border border-brand-border max-w-2xl mx-auto animate-fade-in-up">
+  <div class="glass rounded-card p-6 md:p-12 shadow-card border border-brand-border max-w-2xl mx-auto animate-fade-in-up">
     <!-- Progress indicator -->
     <div class="flex items-center justify-center mb-8 gap-2">
       <div
