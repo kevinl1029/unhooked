@@ -4,7 +4,8 @@ interface IntakeBody {
   productTypes: string[]
   usageFrequency: string
   yearsUsing?: number
-  previousAttempts?: number
+  preferredName?: string
+  previousAttempts?: string
   longestQuitDuration?: string
   primaryReason: string
   triggers?: string[]

@@ -2,7 +2,8 @@ export interface IntakeData {
   productTypes: string[]
   usageFrequency: string
   yearsUsing?: number
-  previousAttempts?: number
+  preferredName?: string
+  previousAttempts?: string
   longestQuitDuration?: string
   primaryReason: string
   triggers?: string[]
@@ -14,7 +15,8 @@ export interface IntakeResponse {
   product_types: string[]
   usage_frequency: string
   years_using?: number
-  previous_attempts?: number
+  preferred_name?: string
+  previous_attempts?: string
   longest_quit_duration?: string
   primary_reason: string
   triggers?: string[]
