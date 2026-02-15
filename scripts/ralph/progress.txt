@@ -170,3 +170,21 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Tests confirm normal names like Kevin, Skip, Ignore are preserved without false positives
   - All 36 tests pass successfully
 ---
+## 2026-02-15 23:30 EST - US-012
+- Added unit tests for formatContextForPrompt() v1.1 changes
+- Files changed:
+  - tests/unit/personalization/context-builder.test.ts (updated)
+  - scripts/ralph/prd.json (passes: true)
+- **Learnings for future iterations:**
+  - Tests added to existing context-builder.test.ts file rather than creating new file
+  - 18 new test cases added for v1.1 changes (25 total tests now)
+  - Helper function createContext() creates minimal PersonalizationContext for testing
+  - Tests verify preferred name inclusion/omission, triple-backtick delimiters, and whitespace handling
+  - Tests verify all 5 quit attempts values (never/once/a_few/many/countless) map to natural language
+  - Tests verify NULL previousAttempts omits quit history line from prompt
+  - Tests verify custom: prefix stripping from custom triggers
+  - Tests verify predefined trigger display names (morning → 'morning routines', etc)
+  - Tests verify double-prefix escape handling (custom:custom:text → ```custom:text```)
+  - Tests verify sanitization applies to user-provided text (preferred name and custom triggers)
+  - All 25 tests pass successfully
+---
