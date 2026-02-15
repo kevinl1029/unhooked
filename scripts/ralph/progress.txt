@@ -1,4 +1,22 @@
 # Ralph Progress Log
-Started: Sat Feb 15 2026
+Started: Sun Feb 15 14:15:08 EST 2026
 ---
 
+## Codebase Patterns
+- This Nuxt 3 project uses default TypeScript setup (no custom tsconfig.json)
+- Quality checks: Use `npm run build` to verify TypeScript (no separate typecheck command)
+- Migration files go in `supabase/migrations/` with format `YYYYMMDD_description.sql`
+- Migration files should include rollback SQL as comments at the bottom
+
+---
+
+## 2026-02-15 14:16 EST - US-001
+- Created database migration file for v1.1 schema changes
+- Files changed:
+  - supabase/migrations/20260215_personalization_v11.sql (created)
+- **Learnings for future iterations:**
+  - SQL migration files don't require TypeScript typecheck - use `npm run build` instead to verify the overall project
+  - PostgreSQL CHECK constraints automatically pass NULL values (no special NULL handling needed)
+  - Migration includes: preferred_name VARCHAR(50) column, previous_attempts type change from INTEGER to TEXT, data migration for existing values, CHECK constraint
+  - Rollback SQL documented in comments for reference
+---

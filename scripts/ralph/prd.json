@@ -17,7 +17,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "See spec v1.1: Schema Changes section for exact SQL. CHECK constraint must allow NULL (PostgreSQL passes NULL by default). Rollback SQL: drop constraint, reverse mapping, alter back to INTEGER, drop preferred_name."
     },
     {
