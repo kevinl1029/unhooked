@@ -2,6 +2,7 @@
  * Unit tests for check-in scheduler
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { scheduleEvidenceBridgeCheckIn } from '~/server/utils/scheduling/check-in-scheduler'
 
 // Helper to create dates
 function createDate(hour: number, minute: number = 0, dayOffset: number = 0): Date {
@@ -273,6 +274,57 @@ describe('Check-In Scheduler', () => {
 
       const toExpire = filterCheckInsToExpire(checkIns)
       expect(toExpire.length).toBe(3) // scheduled, sent, opened - not expired
+    })
+  })
+
+  describe('Evidence bridge check-in trigger_session_id', () => {
+    function createMockSupabase(insertResult: { data: any; error: any }) {
+      const single = vi.fn().mockResolvedValue(insertResult)
+      const select = vi.fn().mockReturnValue({ single })
+      const insert = vi.fn().mockReturnValue({ select })
+      const from = vi.fn().mockReturnValue({ insert })
+      return { from, insert, select, single }
+    }
+
+    it('populates trigger_session_id on evidence_bridge check-in', async () => {
+      const sessionId = 'conv-abc-123'
+      const mockData = { id: 'check-in-1' }
+      const mock = createMockSupabase({ data: mockData, error: null })
+
+      const result = await scheduleEvidenceBridgeCheckIn(
+        mock as any,
+        'user-1',
+        'stress_relief',
+        'Notice when you feel stressed',
+        new Date('2026-01-10T12:00:00Z'),
+        'America/New_York',
+        sessionId
+      )
+
+      expect(result).not.toBeNull()
+      expect(result!.type).toBe('evidence_bridge')
+
+      // Verify the insert was called with trigger_session_id
+      const insertCall = mock.insert.mock.calls[0][0]
+      expect(insertCall.trigger_session_id).toBe(sessionId)
+    })
+
+    it('passes null trigger_session_id when sessionId is empty string', async () => {
+      const mock = createMockSupabase({ data: { id: 'check-in-2' }, error: null })
+
+      await scheduleEvidenceBridgeCheckIn(
+        mock as any,
+        'user-1',
+        'pleasure',
+        null,
+        new Date('2026-01-10T12:00:00Z'),
+        'UTC',
+        ''
+      )
+
+      const insertCall = mock.insert.mock.calls[0][0]
+      // Empty string is falsy, so createCheckIn maps it to null
+      expect(insertCall.trigger_session_id).toBeNull()
     })
   })
 })

@@ -315,7 +315,8 @@ export default defineEventHandler(async (event) => {
         effectiveIllusionKey,
         canonicalObservationAssignment,
         new Date(),
-        timezone
+        timezone,
+        body.conversationId
       ).then((scheduled) => {
         if (scheduled) {
           console.log(`[complete-session] Scheduled evidence bridge check-in for user ${user.sub}`)

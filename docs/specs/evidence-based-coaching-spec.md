@@ -2,7 +2,7 @@
 
 **Created:** 2026-02-08
 **Status:** Implemented
-**Version:** 1.7
+**Version:** 1.9
 **Document Type:** Feature Specification (PRD)
 
 ---
@@ -377,6 +377,10 @@ The existing `SessionCompleteCard` component is a centered glass card with a lar
 - **REQ-36:** Layer-specific instructions are injected in the prompt assembly order **after the illusion prompt and before bridge context**: base → personalization → **cross-layer context** (Layer 2+ only: prior layer insights, breakthroughs, conviction history, observation assignment from prior layer — already implemented in `cross-layer-context.ts`) → illusion prompt → **layer instructions** → bridge context → abandoned session context → opening instruction. Layer instructions refine the illusion prompt's approach (analytical for L1, emotional holding for L2, identity-forward for L3).
 - **REQ-52:** The observation assignment text from the prior layer's completed session is injected into the next session's **cross-layer context**. For Layer 2/3 sessions, the system fetches `conversations.observation_assignment` from the most recent completed conversation for this illusion and prior layer. If present, it is included so the AI can ask a targeted evidence bridge question referencing the specific assignment (e.g., "You were going to notice when stress shows up — what did you observe?") rather than a generic topic-level question. If null (extraction failed) or not applicable (Layer 1 session), this section is omitted gracefully. No new schema needed — reads the existing `conversations.observation_assignment` column.
 
+#### Evidence Bridge Traceability (Data)
+
+- **REQ-53:** Evidence bridge check-ins populate `trigger_session_id` with the conversation ID of the session that triggered the check-in. This matches the existing `post_session` check-in behavior, which already sets `trigger_session_id`. The conversation ID is available at the scheduling call site (`body.conversationId` in `complete-session.post.ts`) and is threaded through `scheduleEvidenceBridgeCheckIn()` to the `createCheckIn()` helper. No schema changes needed — `trigger_session_id` already exists on `check_in_schedule` as a nullable FK to `conversations`.
+
 #### Data Storage (Data)
 
 - **REQ-37:** The observation assignment text is stored as a new `observation_assignment` text field on the existing `check_in_schedule` table. This field is populated when the check-in is scheduled after session completion. The check-in email builder and context builder read it directly.
@@ -457,6 +461,7 @@ The following decisions were made during technical design and inform all section
 | Prompt template injection | Observation template embedded in layer instruction block | L1/L2 layer instructions include the template text + `[OBSERVATION_ASSIGNMENT: ...]` token instructions |
 | Token rendering | Client ignores post-SESSION_COMPLETE content | No streaming handler changes needed. Server extracts token in session-complete post-processing |
 | Composable API | Add computed properties to `useProgress` | `currentLayer` (derived from `layer_progress`), `layersCompletedForIllusion(key)`, `layerSessionNumber` — centralizes layer logic |
+| Evidence bridge session traceability | Populate `trigger_session_id` on evidence bridge check-ins | Matches `post_session` behavior, enables debugging/audit trail, supports future prompt personalization from triggering session |
 | Evidence bridge email prompt | Compose around observation at scheduling time | `prompt_template` = "You were going to [observation] — what did you observe?" — follows existing pattern |
 | Prompt token budget | Within acceptable limits (3000-4000 tokens total) | No optimization needed for current models |
 | Migration file structure | Single migration file | All schema changes + data migration in `20260209_evidence_based_coaching.sql` |
@@ -565,7 +570,7 @@ opening instruction (new conversations only)
 
 3. **`complete-session.post.ts` → `conversations` table**: Read `observation_assignment` from the conversation record. Return it in the API response for the client to display.
 
-4. **`session-complete.ts` → `check-in-scheduler.ts`**: Pass observation assignment text. Scheduler creates `evidence_bridge` check-in with 24hr timing, stores observation on `check_in_schedule.observation_assignment`, composes `prompt_template` wrapping the observation.
+4. **`complete-session.post.ts` → `check-in-scheduler.ts`**: Pass observation assignment text and conversation ID. Scheduler creates `evidence_bridge` check-in with 24hr timing, stores observation on `check_in_schedule.observation_assignment`, sets `trigger_session_id` to the originating conversation, and composes `prompt_template` wrapping the observation.
 
 5. **Session page → `complete-session.post.ts`**: Send `illusionLayer` in request body. Receive `nextLayer`, `isIllusionComplete`, `observationAssignment` in response.
 
@@ -714,6 +719,7 @@ conversations (many per user)
 
 check_in_schedule (many per user)
   └── check_in_type ─────────── 'evidence_bridge' for layer check-ins
+  └── trigger_session_id ────── conversation that triggered this check-in (REQ-53)
   └── observation_assignment ── template-based observation text
   └── cancellation_reason ───── why the check-in was cancelled
   └── status ────────────────── includes 'cancelled' state
@@ -1412,11 +1418,13 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 4. Given a Layer 3 session completes, when check-ins are scheduled, then NO evidence bridge check-in is scheduled (L3 has no observation)
 5. Given the observation text is `null` (extraction failed), when the check-in is scheduled, then the template fallback text is used for both `observation_assignment` and `prompt_template`
 6. Given the check-in scheduling insert fails (e.g., Supabase error), when the error is caught, then the session completion still succeeds (check-in scheduling is non-blocking) and the error is logged for monitoring
+7. Given a Layer 1 or Layer 2 session completes, when the `evidence_bridge` check-in is created, then `trigger_session_id` is set to the conversation ID of the completed session (REQ-53)
 
 **Technical Notes:**
 - File: `server/utils/scheduling/check-in-scheduler.ts`
-- Accept observation text and layer as parameters
+- Accept observation text, layer, and conversation ID as parameters
 - Use 24-hour timing instead of 2-hour for `evidence_bridge` type (REQ-28)
+- Populate `trigger_session_id` on evidence bridge check-ins for traceability (REQ-53)
 - Existing `post_session` check-in scheduling continues unchanged for non-layer sessions
 
 **Dependencies:** Story 1.1 (schema), Story 3.2 (observation extraction)
@@ -1672,6 +1680,7 @@ After migration, regenerate types: `npm run db:types` to update `types/database.
 | `skips scheduling for Layer 3` | Pass layer='identity', verify no check-in created |
 | `stores observation_assignment on check-in record` | Verify field is populated with template text |
 | `uses template fallback when observation is null` | Pass null observation, verify template text used |
+| `populates trigger_session_id on evidence_bridge check-in` | Pass conversationId, verify `trigger_session_id` matches |
 | `cancels scheduled check-in on next session start` | Mock scheduled evidence_bridge check-in, start new core session for same illusion, verify status='cancelled' with cancellation_reason |
 | `cancels sent check-in on next session start` | Mock sent evidence_bridge check-in, start new core session, verify status='cancelled' |
 | `does not cancel check-ins for reinforcement sessions` | Mock scheduled evidence_bridge check-in, start reinforcement session, verify check-in status unchanged |
@@ -1839,6 +1848,17 @@ No open questions remain. All questions have been resolved through UX refinement
 
 ## Changelog
 
+### v1.9 — Evidence Bridge Trigger Session Traceability (2026-02-14)
+
+Evidence bridge check-ins were missing `trigger_session_id`, making them harder to trace back to the originating session compared to `post_session` check-ins which already populate it. This was a design gap — the scheduler explicitly passed `undefined` for the session ID.
+
+- **REQ-53 added:** Evidence bridge check-ins populate `trigger_session_id` with the conversation ID of the completed session. No schema changes needed — column already exists.
+- **Architectural decisions table updated:** Added "Evidence bridge session traceability" decision.
+- **Integration point #4 updated:** Data flow now includes conversation ID alongside observation assignment text.
+- **Entity relationship summary updated:** `trigger_session_id` shown on `check_in_schedule`.
+- **Story 4.1 expanded:** Added AC#7 (trigger_session_id populated for L1/L2). Updated technical notes to accept conversation ID parameter.
+- **Scheduling tests updated:** Added test case for `trigger_session_id` population.
+
 ### v1.8 — Observation Assignment in Cross-Layer Context (2026-02-11)
 
 Post-implementation bug investigation revealed that Layer 2/3 sessions lack the specific observation assignment text from the prior layer. The AI could only ask a generic "What have you been noticing about [illusion topic]?" instead of referencing the specific observation assigned (e.g., "You were going to notice when stress shows up — what did you observe?"). This was a technical design gap — no existing requirement covered injecting the observation assignment into the next session's prompt context.
@@ -1965,7 +1985,7 @@ Added based on structured UX audit across 12 dimensions:
 | **Deferred Items** | None |
 
 **Traceability status:**
-- UX → Requirements: Complete. All flows, screens, interactions, states, and data displays have backing requirements (REQ-1 through REQ-52).
+- UX → Requirements: Complete. All flows, screens, interactions, states, and data displays have backing requirements (REQ-1 through REQ-53).
 - Requirements → Stories: Complete. All requirements map to user stories across 7 epics (15 stories).
 - Stories → Acceptance Criteria: Complete. All stories have testable acceptance criteria covering happy paths, error scenarios, edge cases, and cross-references to dependent specs.
 

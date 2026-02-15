@@ -220,7 +220,8 @@ export async function scheduleEvidenceBridgeCheckIn(
   illusionKey: string,
   observationAssignment: string | null,
   sessionEndTime: Date,
-  timezone: string
+  timezone: string,
+  sessionId: string
 ): Promise<ScheduledCheckIn | null> {
   try {
     // Schedule for 24 hours later
@@ -238,7 +239,7 @@ export async function scheduleEvidenceBridgeCheckIn(
       twentyFourHoursLater,
       timezone,
       illusionKey,
-      undefined, // no session ID for evidence bridge
+      sessionId,
       promptTemplate,
       observationAssignment || undefined
     )
