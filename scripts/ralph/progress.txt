@@ -32,3 +32,27 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - This is a clean type break - no union types for backwards compatibility
   - Typecheck via `npm run build` passed successfully
 ---
+## 2026-02-15 16:30 EST - US-003
+- Updated POST /api/intake endpoint for v1.1 field validation and storage
+- Files changed:
+  - server/api/intake/index.post.ts
+- **Learnings for future iterations:**
+  - Added validation for preferredName: trim, NULL if empty, reject if > 50 chars
+  - Added validation for previousAttempts: must be one of 'never', 'once', 'a_few', 'many', 'countless' - rejects integers with 400 error
+  - Added validation for custom triggers: reject empty 'custom:' prefix entries
+  - Changed upsert to use normalized values: `preferred_name: normalizedPreferredName` and `previous_attempts: normalizedPreviousAttempts`
+  - Previous default of `|| 0` removed - NULL is now explicitly stored when previousAttempts is omitted
+  - Validation pattern: normalize field values before upsert, use explicit null checks
+---
+## 2026-02-15 17:45 EST - US-004
+- Created prompt injection sanitization utility
+- Files changed:
+  - server/utils/personalization/sanitize-user-text.ts (created)
+- **Learnings for future iterations:**
+  - The sanitization utility is simple regex-based string processing
+  - Applied at context builder level (NFR-4.3) to sanitize user-provided text before LLM prompt injection
+  - Strategy: Strip LLM control patterns (role markers, markdown headers, triple backticks, XML tags), then wrap in delimiters in prompt template
+  - Key regex patterns: `/^(SYSTEM|ASSISTANT|Human|AI|User):\s*/gmi` for role markers, `/^#{1,6}\s+/gm` for markdown headers, `/```/g` for backticks, `/<\/?[a-z][a-z0-9]*[^>]*>/gi` for XML/HTML tags
+  - Preserves normal names like 'Kevin', 'Skip', 'Ignore' without false positives
+  - File location follows pattern: `server/utils/personalization/` for personalization utilities
+---

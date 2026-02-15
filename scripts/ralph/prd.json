@@ -53,7 +53,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/intake/index.post.ts. Change previous_attempts: body.previousAttempts || 0 to previous_attempts: normalizedPreviousAttempts. Add validation for preferredName length, previousAttempts allowed values, and custom: trigger entries."
     },
     {
@@ -72,7 +72,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "See spec v1.1: Prompt Injection Sanitization section for exact regex patterns. This utility is used by the context builder (NFR-4.3)."
     },
     {
