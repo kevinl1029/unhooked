@@ -36,14 +36,23 @@
       </button>
     </div>
 
-    <button
-      type="button"
-      class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card w-full disabled:opacity-50 disabled:cursor-not-allowed"
-      :disabled="!canContinue"
-      @click="handleNext"
-    >
-      Continue
-    </button>
+    <div class="flex gap-3">
+      <button
+        type="button"
+        class="px-8 py-3 rounded-pill font-semibold text-white-85 hover:text-white transition-colors"
+        @click="$emit('back')"
+      >
+        Back
+      </button>
+      <button
+        type="button"
+        class="btn-primary text-white px-8 py-3 rounded-pill font-semibold shadow-card flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="!canContinue"
+        @click="handleNext"
+      >
+        Continue
+      </button>
+    </div>
   </div>
 </template>
 
@@ -55,6 +64,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string[]]
   next: []
+  back: []
 }>()
 
 const options = [
