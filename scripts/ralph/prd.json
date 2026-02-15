@@ -111,7 +111,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the same pattern as existing step components (e.g., ProductTypeStep.vue). Use glass-input, rounded-pill, border-brand-border styling consistent with other inputs in the app."
     },
     {

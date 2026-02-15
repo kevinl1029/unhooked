@@ -72,3 +72,17 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Double-prefix escape (custom:custom:) is handled by stripping only the first custom: prefix
   - Typecheck passed via npm run build
 ---
+## 2026-02-15 19:00 EST - US-006
+- Created PreferredNameStep.vue component for preferred name collection in onboarding
+- Files changed:
+  - components/intake/PreferredNameStep.vue (created)
+- **Learnings for future iterations:**
+  - PreferredNameStep follows the same pattern as other intake steps (ProductTypeStep, QuitHistoryStep)
+  - Component structure: heading text + helper text + input/buttons + Next button
+  - Uses v-model pattern: accepts modelValue prop, emits update:modelValue and next events
+  - Input styling: glass-input, rounded-pill, border-brand-border classes for consistency
+  - No Back button on first step (Step 1 in the flow)
+  - Next button is always enabled (no validation required for optional preferred name)
+  - Component uses <script setup lang="ts"> syntax for TypeScript support
+  - Input maxlength='50' matches the database column constraint
+---
