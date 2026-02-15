@@ -197,7 +197,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "File: pages/onboarding.vue. Use useAuth().getProfile() for profile fetch and useIntake().fetchIntake() for intake data. Add isDataLoading ref to track loading state."
     },
     {

@@ -138,3 +138,20 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - nextStep() max changed from 5 to 6
   - Build passed successfully via npm run build
 ---
+## 2026-02-15 22:30 EST - US-010
+- Updated onboarding.vue to fetch profile and intake data in background on mount
+- Files changed:
+  - pages/onboarding.vue
+  - scripts/ralph/prd.json (passes: true)
+- **Learnings for future iterations:**
+  - Welcome screen renders immediately with no loading delay
+  - Background data fetching via Promise.allSettled() for profile and intake in parallel on mount
+  - First name extracted from profiles.full_name using .split(' ')[0] to get first word before space
+  - prefilledName ref populated from profile.full_name if available, stays empty on error (no error shown)
+  - existingIntake ref populated from useIntake().intake ref after fetchIntake() completes
+  - fetchIntake() doesn't return a value - it updates the intake ref in the composable
+  - Props passed to IntakeForm: prefilled-name (kebab-case in template) and existing-intake
+  - Added isDataLoading ref and handleStart() function for loading state management
+  - Button shows "Loading..." when isDataLoading is true, brief 100ms delay to allow fetches to complete
+  - Build passed successfully via npm run build
+---
