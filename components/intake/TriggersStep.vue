@@ -9,7 +9,7 @@
         :key="option.value"
         type="button"
         :class="[
-          'p-3 rounded-xl border-2 transition-all duration-200',
+          'p-3 min-h-[3.75rem] rounded-xl border-2 transition-all duration-200',
           option.value === 'other' ? 'col-span-2' : '',
           isSelected(option.value)
             ? 'border-brand-accent bg-brand-accent/10'
@@ -18,7 +18,7 @@
         @click="toggleOption(option.value)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-white font-medium text-sm">{{ option.label }}</span>
+          <span class="text-white font-medium text-sm text-left flex-1">{{ option.label }}</span>
           <div
             class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ml-2"
             :class="isSelected(option.value)

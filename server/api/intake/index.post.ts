@@ -105,7 +105,7 @@ export default defineEventHandler(async (event) => {
       primary_reason: body.primaryReason,
       triggers: body.triggers || null,
       updated_at: new Date().toISOString()
-    })
+    }, { onConflict: 'user_id' })
     .select()
     .single()
 
@@ -126,7 +126,7 @@ export default defineEventHandler(async (event) => {
       current_illusion: illusionOrder[0],
       started_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    })
+    }, { onConflict: 'user_id' })
     .select()
     .single()
 
@@ -141,7 +141,7 @@ export default defineEventHandler(async (event) => {
       user_id: userId,
       primary_triggers: body.triggers || [],
       personal_stakes: [],
-    })
+    }, { onConflict: 'user_id' })
 
   if (storyError && storyError.code !== '23505') {
     console.error('Failed to create user_story:', storyError)
