@@ -53,6 +53,42 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'primaryReason is required' })
   }
 
+  // Validate preferredName (v1.1)
+  let normalizedPreferredName: string | null = null
+  if (body.preferredName !== undefined) {
+    const trimmedName = body.preferredName.trim()
+    if (trimmedName.length > 50) {
+      throw createError({ statusCode: 400, message: 'preferredName cannot exceed 50 characters' })
+    }
+    normalizedPreferredName = trimmedName.length > 0 ? trimmedName : null
+  }
+
+  // Validate previousAttempts (v1.1)
+  const allowedAttempts = ['never', 'once', 'a_few', 'many', 'countless']
+  let normalizedPreviousAttempts: string | null = null
+  if (body.previousAttempts !== undefined) {
+    // Reject integer values (no backwards compat)
+    if (typeof body.previousAttempts === 'number') {
+      throw createError({ statusCode: 400, message: 'previousAttempts must be a string value' })
+    }
+    if (!allowedAttempts.includes(body.previousAttempts)) {
+      throw createError({ statusCode: 400, message: `previousAttempts must be one of: ${allowedAttempts.join(', ')}` })
+    }
+    normalizedPreviousAttempts = body.previousAttempts
+  }
+
+  // Validate triggers with custom: prefix (v1.1)
+  if (body.triggers) {
+    for (const trigger of body.triggers) {
+      if (trigger.startsWith('custom:')) {
+        const customText = trigger.substring(7) // Remove 'custom:' prefix
+        if (customText.trim().length === 0) {
+          throw createError({ statusCode: 400, message: 'Custom trigger cannot be empty' })
+        }
+      }
+    }
+  }
+
   const supabase = serverSupabaseServiceRole(event)
 
   // Upsert intake data
@@ -63,7 +99,8 @@ export default defineEventHandler(async (event) => {
       product_types: body.productTypes,
       usage_frequency: body.usageFrequency,
       years_using: body.yearsUsing || null,
-      previous_attempts: body.previousAttempts || 0,
+      preferred_name: normalizedPreferredName,
+      previous_attempts: normalizedPreviousAttempts,
       longest_quit_duration: body.longestQuitDuration || null,
       primary_reason: body.primaryReason,
       triggers: body.triggers || null,
