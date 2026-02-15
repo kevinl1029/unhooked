@@ -155,7 +155,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "File: components/intake/TriggersStep.vue. Local state: customTriggerText ref (preserved across toggle), otherTextInput template ref for auto-focus. CSS transition uses v-show with max-height + opacity + ease-out to match app animation style."
     },
     {

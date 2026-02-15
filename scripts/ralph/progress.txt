@@ -100,3 +100,22 @@ Started: Sun Feb 15 14:15:08 EST 2026
   - Type changes: prop type and emit type both changed from `number | undefined` to `string | undefined`
   - Build passed successfully via `npm run build`
 ---
+## 2026-02-15 21:45 EST - US-008
+- Updated TriggersStep.vue to add Other option with free-text custom trigger input
+- Files changed:
+  - components/intake/TriggersStep.vue
+  - scripts/ralph/prd.json (passes: true)
+- **Learnings for future iterations:**
+  - Added 'other' option as last item in options array with col-span-2 for full width
+  - Custom trigger text input slides down with CSS transition (v-show + max-height/opacity/ease-out)
+  - Text input auto-focused via watch + nextTick when Other is selected
+  - Local state customTriggerText ref preserves typed text across toggle on/off
+  - Submit button disabled when Other selected with empty/whitespace-only text
+  - Hint text shown when submit disabled: "Please describe your trigger or deselect Other."
+  - On submit: 'other' replaced with 'custom:{trimmed text}' in triggers array
+  - Double-prefix escape: text starting with 'custom:' stored as 'custom:custom:{text}'
+  - On mount: if existing triggers contain custom: entry, Other is selected and text extracted from prefix
+  - CSS transition pattern: v-show with :style binding for max-height and opacity creates smooth slide-down effect
+  - aria-live="polite" on text input container for screen reader accessibility
+  - Build passed successfully via npm run build
+---
