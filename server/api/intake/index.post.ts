@@ -116,6 +116,18 @@ export default defineEventHandler(async (event) => {
   // Calculate illusion order based on primary reason
   const illusionOrder = getIllusionOrder(body.primaryReason)
 
+  // Check for existing progress to avoid resetting completed work
+  const { data: existingProgress } = await supabase
+    .from('user_progress')
+    .select('illusions_completed, started_at')
+    .eq('user_id', userId)
+    .single()
+
+  const illusionsCompleted: number[] = existingProgress?.illusions_completed ?? []
+
+  // Set current_illusion to the first illusion in the new order that isn't already completed
+  const currentIllusion = illusionOrder.find(i => !illusionsCompleted.includes(i)) ?? illusionOrder[0]
+
   // Upsert progress data
   const { data: progressData, error: progressError } = await supabase
     .from('user_progress')
@@ -123,8 +135,8 @@ export default defineEventHandler(async (event) => {
       user_id: userId,
       program_status: 'in_progress',
       illusion_order: illusionOrder,
-      current_illusion: illusionOrder[0],
-      started_at: new Date().toISOString(),
+      current_illusion: currentIllusion,
+      started_at: existingProgress?.started_at ?? new Date().toISOString(),
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' })
     .select()
