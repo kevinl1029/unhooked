@@ -6,15 +6,17 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { IllusionKey, IllusionLayer, SessionType, MomentType } from '../llm/task-types'
+import { sanitizeForPrompt } from './sanitize-user-text'
 
 // Types for personalization context
 // Note: Named IntakeUserContext to distinguish from UserContext in prompts/base-system.ts
 export interface IntakeUserContext {
+  preferredName: string | null
   productsUsed: string[]
   usageFrequency: string
   yearsUsing: number | null
   triggers: string[]
-  previousAttempts: number
+  previousAttempts: string | null
 }
 
 export interface StoryContext {
@@ -43,6 +45,43 @@ export interface PersonalizationContext {
   momentContext: MomentContext
 }
 
+// Quit attempts → natural language mapping
+const QUIT_ATTEMPTS_CONTEXT: Record<string, string> = {
+  'never': 'This is their first quit attempt.',
+  'once': "They've tried to quit once before.",
+  'a_few': "They've tried to quit a few times before.",
+  'many': "They've tried to quit many times before.",
+  'countless': "They've tried to quit more times than they can count."
+}
+
+// Trigger keys → display names for predefined triggers
+const TRIGGER_DISPLAY_NAMES: Record<string, string> = {
+  'morning': 'morning routines',
+  'after_meals': 'after meals',
+  'stress': 'stressful moments',
+  'social': 'social situations',
+  'boredom': 'boredom',
+  'driving': 'driving',
+  'alcohol': 'with alcohol',
+  'work_breaks': 'work breaks',
+}
+
+/**
+ * Format triggers for prompt injection
+ * Strips custom: prefix, maps predefined keys to display names, and sanitizes custom text
+ */
+function formatTriggers(triggers: string[]): string {
+  return triggers.map(t => {
+    if (t.startsWith('custom:')) {
+      // Strip first custom: prefix only (handle double-prefix escape)
+      const customText = t.slice(7)
+      // Sanitize and wrap custom trigger text in delimiters
+      return `\`\`\`${sanitizeForPrompt(customText)}\`\`\``
+    }
+    return TRIGGER_DISPLAY_NAMES[t] || t
+  }).join(', ')
+}
+
 /**
  * Get user intake data
  */
@@ -50,15 +89,16 @@ async function getUserIntake(
   supabase: SupabaseClient,
   userId: string
 ): Promise<{
+  preferred_name: string | null
   product_types: string[]
   usage_frequency: string
   years_using: number | null
   triggers: string[] | null
-  previous_attempts: number
+  previous_attempts: string | null
 } | null> {
   const { data } = await supabase
     .from('user_intake')
-    .select('product_types, usage_frequency, years_using, triggers, previous_attempts')
+    .select('preferred_name, product_types, usage_frequency, years_using, triggers, previous_attempts')
     .eq('user_id', userId)
     .single()
 
@@ -219,11 +259,12 @@ export async function buildSessionContext(
 
   return {
     userContext: {
+      preferredName: intake?.preferred_name || null,
       productsUsed: intake?.product_types || [],
       usageFrequency: intake?.usage_frequency || 'unknown',
       yearsUsing: intake?.years_using || null,
       triggers: (story?.primary_triggers as string[]) || intake?.triggers || [],
-      previousAttempts: intake?.previous_attempts || 0,
+      previousAttempts: intake?.previous_attempts || null,
     },
 
     storyContext: {
@@ -254,20 +295,32 @@ export async function buildSessionContext(
 export function formatContextForPrompt(context: PersonalizationContext): string {
   const sections: string[] = []
 
+  // User preferred name (sanitized and wrapped in delimiters)
+  if (context.userContext.preferredName && context.userContext.preferredName.trim()) {
+    const sanitized = sanitizeForPrompt(context.userContext.preferredName)
+    sections.push(`USER: \`\`\`${sanitized}\`\`\``)
+  }
+
   // User background
   if (context.userContext.productsUsed.length > 0) {
+    const quitHistoryLine = context.userContext.previousAttempts && QUIT_ATTEMPTS_CONTEXT[context.userContext.previousAttempts]
+      ? `\n- Quit history: ${QUIT_ATTEMPTS_CONTEXT[context.userContext.previousAttempts]}`
+      : ''
+
     sections.push(`USER BACKGROUND:
 - Uses: ${context.userContext.productsUsed.join(', ')}
 - Frequency: ${context.userContext.usageFrequency}
-- Years using: ${context.userContext.yearsUsing || 'unknown'}
-- Previous quit attempts: ${context.userContext.previousAttempts}`)
+- Years using: ${context.userContext.yearsUsing || 'unknown'}${quitHistoryLine}`)
   }
 
   // Triggers and stakes
   if (context.userContext.triggers.length > 0 || context.storyContext.personalStakes.length > 0) {
     const parts: string[] = []
     if (context.userContext.triggers.length > 0) {
-      parts.push(`Triggers: ${context.userContext.triggers.join(', ')}`)
+      // Format triggers with custom: prefix stripping and display names
+      const formattedTriggers = formatTriggers(context.userContext.triggers)
+      // Wrap custom trigger text in delimiters (sanitization happens in formatTriggers via context.userContext.triggers values)
+      parts.push(`Triggers: ${formattedTriggers}`)
     }
     if (context.storyContext.personalStakes.length > 0) {
       parts.push(`Personal stakes: ${context.storyContext.personalStakes.join(', ')}`)
