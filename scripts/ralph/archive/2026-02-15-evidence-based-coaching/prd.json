@@ -1,0 +1,339 @@
+{
+  "project": "Unhooked",
+  "branchName": "feature/evidence-based-coaching",
+  "description": "Evidence-Based Coaching — Evolve the core program from 1 session per illusion to 3 layer-differentiated sessions connected by an evidence loop",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Schema migration for evidence-based coaching",
+      "description": "As a developer, I want to create the database migration that adds layer tracking columns and constraint updates, so that the application can store evidence-based coaching data.",
+      "acceptanceCriteria": [
+        "Migration file exists at supabase/migrations/20260209_evidence_based_coaching.sql",
+        "user_progress table has layer_progress JSONB DEFAULT '{}' column",
+        "conversations table has observation_assignment TEXT column",
+        "check_in_schedule table has observation_assignment TEXT and cancellation_reason TEXT columns",
+        "check_in_schedule check_in_type constraint accepts 'evidence_bridge'",
+        "check_in_schedule status constraint accepts 'cancelled'",
+        "Existing users with illusions_completed get all 3 layers set in layer_progress for those illusions",
+        "In-progress users with completed core conversations for current illusion get ['intellectual'] in layer_progress for that illusion",
+        "In-progress users with NO completed core conversations for current illusion do NOT get layer_progress entry for that illusion",
+        "New users with no progress get layer_progress = '{}'",
+        "Migration does not overwrite existing layer_progress data if already present",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Run npm run db:types after migration to regenerate TypeScript types. See REQ-50 for migration logic details. Reference existing migration patterns in supabase/migrations/."
+    },
+    {
+      "id": "US-002",
+      "title": "Create layer instruction prompt blocks",
+      "description": "As a developer, I want 3 layer instruction prompt blocks that define the AI's coaching approach for each layer (analytical, emotional, identity-forward), so that sessions have distinct character.",
+      "acceptanceCriteria": [
+        "File server/utils/prompts/layer-instructions.ts exists",
+        "Exports LAYER_1_INTELLECTUAL_INSTRUCTIONS, LAYER_2_EMOTIONAL_INSTRUCTIONS, LAYER_3_IDENTITY_INSTRUCTIONS as string constants",
+        "L1 instructions include Socratic questioning guidance, CBT evidence examination, MI reflective listening",
+        "L1 instructions include session flow (surface belief, explore, reframe, discover contradiction, solidify)",
+        "L1 instructions include {observationTemplate} placeholder and [OBSERVATION_ASSIGNMENT: ...] token instructions",
+        "L2 instructions include emotional holding guidance and evidence bridge opening ('What have you been noticing?')",
+        "L2 instructions include {observationTemplate} placeholder and [OBSERVATION_ASSIGNMENT: ...] token instructions",
+        "L3 instructions include identity integration guidance, evidence + feelings bridge opening",
+        "L3 instructions include illusion completion marking ('You've seen through the [Illusion Name]')",
+        "L3 instructions include {nextIllusionPreview} placeholder for next-illusion tease",
+        "L3 instructions explicitly state NO [OBSERVATION_ASSIGNMENT: ...] token",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference docs/guides/coaching-framework-guide.md Section 6 for session flow patterns. L1/L2 have {observationTemplate} placeholder replaced at assembly time. L3 has {nextIllusionPreview} placeholder replaced at assembly time. See the spec's Prompt Design section for exact template content."
+    },
+    {
+      "id": "US-003",
+      "title": "Add observation templates to illusion prompt files",
+      "description": "As a developer, I want observation assignment templates exported from each illusion prompt file, so that the AI has structured templates to personalize and a fallback exists if AI personalization fails.",
+      "acceptanceCriteria": [
+        "Each of the 5 illusion prompt files exports an OBSERVATION_TEMPLATES map",
+        "Each OBSERVATION_TEMPLATES has 'intellectual' and 'emotional' keys (no 'identity' key)",
+        "Stress Relief intellectual template references stress timing and last use",
+        "Stress Relief emotional template references feeling the stress-nicotine connection",
+        "Pleasure intellectual template references paying attention to actual physical sensation",
+        "Pleasure emotional template references difference between wanting and enjoying",
+        "Willpower intellectual template references predicting vs actual craving outcome",
+        "Willpower emotional template references the fear around cravings",
+        "Focus intellectual template references tracking focus dips across a day",
+        "Focus emotional template references how focus dips feel",
+        "Identity intellectual template references when 'addict' label appears",
+        "Identity emotional template references feeling of questioning the label",
+        "All 10 templates are complete sentences ready to display as-is on the session-complete screen",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Files are in server/utils/prompts/illusions/. 10 templates total (5 illusions x 2 layers). See the spec's Observation Templates section for exact template text. Templates match the themes in the Per-Illusion Journey Summary table."
+    },
+    {
+      "id": "US-004",
+      "title": "Evolve prompt assembly to inject layer instructions",
+      "description": "As a developer, I want buildSystemPrompt to accept illusionLayer and inject the corresponding layer instruction block after the illusion prompt, so that each session gets the correct coaching approach.",
+      "acceptanceCriteria": [
+        "buildSystemPrompt accepts optional illusionLayer parameter ('intellectual' | 'emotional' | 'identity')",
+        "When illusionLayer is 'intellectual', Layer 1 instructions are injected after illusion prompt and before bridge context",
+        "When illusionLayer is 'intellectual' and illusionKey is provided, {observationTemplate} placeholder is replaced with the correct template from that illusion file's OBSERVATION_TEMPLATES",
+        "When illusionLayer is 'emotional', Layer 2 instructions with correct template replacement are injected",
+        "When illusionLayer is 'identity', Layer 3 instructions are injected with NO {observationTemplate}",
+        "When illusionLayer is 'identity' and illusionKey is NOT the final illusion, {nextIllusionPreview} is replaced with next-illusion preview text",
+        "When illusionLayer is 'identity' and illusionKey is 'identity' (final illusion), {nextIllusionPreview} is replaced with ceremony tease",
+        "When illusionLayer is omitted, no layer instructions are injected (backwards compatible)",
+        "Prompt assembly order: base → personalization → cross-layer context → illusion prompt → layer instructions → bridge context → abandoned session → opening",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "File: server/utils/prompts/index.ts. Add illusionLayer to BuildSystemPromptOptions. Import layer instructions and observation templates. Insert after illusion prompt per REQ-36. The {nextIllusionPreview} in L3 is replaced based on illusion order position."
+    },
+    {
+      "id": "US-005",
+      "title": "Extract observation assignment from chat streaming response",
+      "description": "As a developer, I want the chat streaming handler to extract [OBSERVATION_ASSIGNMENT: ...] from the AI's response after [SESSION_COMPLETE] and store it on the conversations table.",
+      "acceptanceCriteria": [
+        "After [SESSION_COMPLETE] is detected in the full response, the handler parses for [OBSERVATION_ASSIGNMENT: ...] token",
+        "When token is found (e.g., '[OBSERVATION_ASSIGNMENT: Notice your stress patterns]'), the text 'Notice your stress patterns' is stored on conversations.observation_assignment",
+        "When token is NOT found after SESSION_COMPLETE, conversations.observation_assignment is set to null",
+        "When SESSION_COMPLETE is not in the response, no observation extraction is attempted",
+        "Multi-line observation text is handled correctly (whitespace trimmed, content preserved)",
+        "Extraction works in both streaming and non-streaming onComplete paths",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "File: server/api/chat.post.ts. Regex: /\\[OBSERVATION_ASSIGNMENT:\\s*([\\s\\S]*?)\\]/. Store alongside existing session_completed=true update. Look for existing [SESSION_COMPLETE] detection pattern and add observation extraction after it."
+    },
+    {
+      "id": "US-006",
+      "title": "Evolve useProgress composable for layer data",
+      "description": "As a developer, I want the useProgress composable to expose layer-specific computed properties (currentLayer, layerSessionNumber, layersCompletedForIllusion), so that components can display layer progress.",
+      "acceptanceCriteria": [
+        "useProgress exports currentLayer computed that derives next incomplete layer from layer_progress for current illusion",
+        "LAYER_ORDER constant is ['intellectual', 'emotional', 'identity']",
+        "currentLayer returns 'intellectual' when layer_progress is empty or null",
+        "useProgress exports layersCompletedForIllusion(illusionKey) function returning string[]",
+        "layersCompletedForIllusion returns empty array for unknown illusion key",
+        "useProgress exports layerSessionNumber computed (completed count + 1)",
+        "useProgress exports layerProgress computed returning the full layer_progress object",
+        "completeSession method accepts optional illusionLayer parameter and passes it to the API",
+        "When progress is null (not loaded), all computed properties return safe defaults",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "File: composables/useProgress.ts. Current layer is derived (next incomplete in ordered list ['intellectual', 'emotional', 'identity']), not stored. See REQ-29. Uses getCurrentIllusionKey() helper for deriving the illusion key from illusion_order + current_illusion."
+    },
+    {
+      "id": "US-007",
+      "title": "Evolve complete-session API for layer progression (L1/L2)",
+      "description": "As a developer, I want complete-session.post.ts to handle layer progression for L1 and L2, advancing the user to the next layer within the same illusion instead of completing the illusion.",
+      "acceptanceCriteria": [
+        "Request body accepts optional illusionLayer field ('intellectual' | 'emotional' | 'identity')",
+        "When illusionLayer is 'intellectual', layer_progress is updated to include 'intellectual' for that illusion",
+        "When illusionLayer is 'emotional', layer_progress is updated to include 'emotional' for that illusion",
+        "Response includes layerCompleted, nextLayer, isIllusionComplete=false, and observationAssignment fields for L1/L2",
+        "observationAssignment uses conversation's extracted text when available",
+        "observationAssignment falls back to OBSERVATION_TEMPLATES template text when conversation's observation_assignment is null",
+        "When illusionLayer doesn't match the derived current layer from layer_progress, returns 409 Conflict with correct layer",
+        "illusionLayer is validated against allowed values; invalid values return 400",
+        "When illusionLayer is omitted (legacy client), behaves as before (marks entire illusion complete) for backwards compatibility",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "File: server/api/progress/complete-session.post.ts. Derives current layer from layer_progress (next incomplete in ordered list). Validates against request. Uses jsonb_set or app-level merge for layer_progress JSONB. Read observation_assignment from conversations table for the conversationId."
+    },
+    {
+      "id": "US-008",
+      "title": "Evolve complete-session API for layer progression (L3 — illusion complete)",
+      "description": "As a developer, I want complete-session.post.ts to handle L3 completion by marking the illusion as complete and auto-unlocking the next illusion.",
+      "acceptanceCriteria": [
+        "When illusionLayer is 'identity', layer_progress includes all 3 layers and the illusion is added to illusions_completed",
+        "Response includes isIllusionComplete=true, nextLayer=null, observationAssignment=null",
+        "nextIllusion is calculated using existing logic and returned in response",
+        "For the final illusion (identity), isComplete=true and nextIllusion=null are returned",
+        "Conviction assessment records the illusion_layer value ('identity') for L3 completions",
+        "Any pending evidence_bridge check-ins for this user/illusion are cancelled with reason 'illusion_completed'",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "File: server/api/progress/complete-session.post.ts. This is the L3 branch of the layer progression logic added in US-007. When identity illusion L3 completes, set program_status='ceremony_ready' and ceremony_ready_at=now() (existing behavior from ceremony spec)."
+    },
+    {
+      "id": "US-009",
+      "title": "Pass current layer to chat API from session page",
+      "description": "As a developer, I want the session page to determine the current layer from progress data on mount and pass it to all chat API calls, so that the AI receives correct layer instructions.",
+      "acceptanceCriteria": [
+        "Session page fetches progress on mount and derives current layer from layer_progress",
+        "illusionLayer is stored in a ref and passed in all chat API request bodies (opening message and user messages)",
+        "VoiceSessionView component accepts illusionLayer as a prop",
+        "useVoiceSession composable receives and passes illusionLayer to chat API request body",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "File: pages/session/[illusion].vue. Also update components/voice/SessionView.vue (VoiceSessionView) and composables/useVoiceSession.ts to thread illusionLayer through. The session page already has illusionLayer tracking from ceremony spec (US-013) — extend it to use progress-derived layer instead of conversation-fetched layer."
+    },
+    {
+      "id": "US-010",
+      "title": "Configure SessionCompleteCard for layer context (L1/L2 with observation)",
+      "description": "As a developer, I want SessionCompleteCard to show the observation assignment and 'Continue to Next Session' CTA for L1/L2 completions.",
+      "acceptanceCriteria": [
+        "SessionCompleteCard accepts showContinue boolean prop",
+        "SessionCompleteCard emits 'continue-layer' event (new, distinct from existing 'continue' emit)",
+        "When showContinue=true, 'Continue to Next Session' CTA is visible as secondary (ghost border) style",
+        "When showContinue=false, only 'Return to Dashboard' CTA is visible",
+        "For L1/L2, session page sets subtext to the observation assignment text from complete-session response",
+        "When observation assignment is null (extraction failed), subtext falls back to generic settling message with spacing recommendation",
+        "When user taps 'Continue to Next Session', session page re-initializes for the next layer (fetches updated progress, starts new session)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Files: components/SessionCompleteCard.vue, pages/session/[illusion].vue. Session page uses isIllusionComplete and observationAssignment from complete-session response to configure the card. Generic fallback: 'Great work. Take a moment to let this settle. Your next session will be ready tomorrow.'"
+    },
+    {
+      "id": "US-011",
+      "title": "Configure SessionCompleteCard for L3 (no observation, illusion complete)",
+      "description": "As a developer, I want SessionCompleteCard to show a generic settling message with only 'Return to Dashboard' for L3 completions, and ceremony-specific copy for the final illusion.",
+      "acceptanceCriteria": [
+        "For L3 completion, subtext is 'Great work. Take a moment to let this settle.' with no observation assignment",
+        "For L3 completion, showContinue is false — no 'Continue to Next Session' CTA",
+        "For L3 of the final illusion (Identity), heading is 'Session Complete' and subtext is 'All five illusions dismantled. Your final ceremony is ready.' per ceremony-spec.md",
+        "Only 'Return to Dashboard' CTA is shown for all L3 completions",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "File: pages/session/[illusion].vue. L3 uses isIllusionComplete=true from response. Final illusion uses isComplete=true. The ceremonyTease prop on SessionCompleteCard already exists from ceremony spec US-013 — reuse it for the final illusion case."
+    },
+    {
+      "id": "US-012",
+      "title": "Schedule evidence bridge check-ins on layer completion",
+      "description": "As a developer, I want the session-complete handler to schedule evidence bridge check-ins with 24-hour timing and observation-specific prompts for L1/L2 completions.",
+      "acceptanceCriteria": [
+        "After L1 session completes, an evidence_bridge check-in is scheduled for ~24 hours later",
+        "After L2 session completes, an evidence_bridge check-in is scheduled for ~24 hours later",
+        "After L3 session completes, NO evidence bridge check-in is scheduled",
+        "check_in_schedule.observation_assignment is populated with the template text",
+        "check_in_schedule.prompt_template wraps the observation: 'You were going to [observation] — what did you observe?'",
+        "check_in_schedule.check_in_type is 'evidence_bridge'",
+        "When observation text is null (extraction failed), template fallback text is used for both observation_assignment and prompt_template",
+        "If check-in scheduling insert fails, session completion still succeeds (non-blocking) and error is logged",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "File: server/utils/scheduling/check-in-scheduler.ts (or wherever check-ins are scheduled in the session-complete flow). Evidence bridge uses 24hr timing (REQ-28), not the 2hr default. Existing post_session check-in scheduling continues unchanged for non-layer sessions."
+    },
+    {
+      "id": "US-013",
+      "title": "Cancel evidence bridge check-ins on next session start",
+      "description": "As a developer, I want pending evidence bridge check-ins to be cancelled when the user starts the next layer session, so that redundant emails aren't sent.",
+      "acceptanceCriteria": [
+        "When a new core session is created for an illusion, any scheduled or sent evidence_bridge check-ins for that user/illusion are cancelled",
+        "Cancelled check-ins have status='cancelled' and cancellation_reason='user_continued_immediately'",
+        "Reinforcement sessions do NOT trigger check-in cancellation",
+        "Cancelled check-ins are NOT re-scheduled even if the user abandons the next layer",
+        "Cancellation is non-blocking (fire-and-forget, errors logged)",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "File: server/api/chat.post.ts — after creating a new conversation. Cancel query: update check_in_schedule where user_id, trigger_illusion_key, check_in_type='evidence_bridge', status IN ('scheduled', 'sent'). Only cancel for core sessions, not reinforcement."
+    },
+    {
+      "id": "US-014",
+      "title": "Update check-in email and cron for evidence bridge type",
+      "description": "As a developer, I want evidence bridge check-in emails to use the observation-specific prompt and be included in the cron job's query.",
+      "acceptanceCriteria": [
+        "The check-in cron job's query includes 'evidence_bridge' type check-ins in its results",
+        "Evidence bridge check-in emails use the prompt_template field for email body content",
+        "The observation_assignment text appears in the email body",
+        "Evidence bridge check-in conversations use the prompt as the AI's natural opening",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "The existing email template and check-in flow already use prompt_template. This may require minimal or no code changes — mainly verification that the cron query includes evidence_bridge type. Check server/api/cron/check-ins.get.ts and server/utils/email/check-in-sender.ts."
+    },
+    {
+      "id": "US-015",
+      "title": "Add layer progress dots to ProgressCarousel",
+      "description": "As a developer, I want the ProgressCarousel to show 'Session X of 3' with layer progress dots for the current illusion in the action section.",
+      "acceptanceCriteria": [
+        "ProgressCarousel accepts layerProgress prop (Record<string, string[]>)",
+        "When current illusion is focused with 0 layers completed, shows 'Session 1 of 3' with 3 empty dots",
+        "When current illusion is focused with 1 layer completed, shows 'Session 2 of 3' with 1 filled + 2 empty dots",
+        "When current illusion is focused with 2 layers completed, shows 'Session 3 of 3' with 2 filled + 1 empty dot",
+        "Filled dots have full opacity, empty dots have 0.35 opacity",
+        "Filled dots are slightly larger (9px) than empty dots (8px) for color vision support",
+        "Layer progress dots have aria-label describing state (e.g., '1 of 3 sessions complete')",
+        "Completed or locked illusions do NOT show layer progress dots",
+        "Progress line uses text-sm text-white-65 styling",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "File: components/dashboard/ProgressCarousel.vue. Layer progress line goes in action section below illusion title, above description. Current layer is derived from layerProgress data internally (not passed separately)."
+    },
+    {
+      "id": "US-016",
+      "title": "Pass layer data from dashboard to ProgressCarousel",
+      "description": "As a developer, I want the dashboard page to pass layer progress data to the ProgressCarousel component.",
+      "acceptanceCriteria": [
+        "Dashboard imports layerProgress from useProgress composable",
+        "Dashboard passes layerProgress as prop to ProgressCarousel",
+        "After session completion and dashboard navigation, carousel reflects updated layer progress",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "File: pages/dashboard.vue. Simple prop passing from composable to component."
+    },
+    {
+      "id": "US-017",
+      "title": "Surface observation evidence in session context",
+      "description": "As a developer, I want check-in observation responses (captured as real_world_observation moments) to appear in the AI's session context, and the moment detection pipeline to classify evidence bridge responses correctly.",
+      "acceptanceCriteria": [
+        "real_world_observation moments appear in the KEY MOMENTS section of personalization context",
+        "Most recent observations for the current illusion are included within the existing 5-8 moment budget",
+        "Context assembly works correctly when no observation moments exist",
+        "Evidence bridge check-in responses create captured_moments with moment_type='real_world_observation'",
+        "Moment detection prompt/task definition includes real_world_observation as a recognized moment type with classification guidance",
+        "Evidence bridge responses like 'I noticed my stress was from the situation, not nicotine' are classified as real_world_observation (not generic insight or reflection)",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Files: server/utils/personalization/context-builder.ts, server/utils/llm/tasks/moment-detection.ts. Verify existing context builder includes real_world_observation in its moment selection. Update moment detection prompt to recognize the new type with classification guidance for evidence bridge responses."
+    },
+    {
+      "id": "US-018",
+      "title": "E2E test: full 3-layer session flow",
+      "description": "As a developer, I want E2E tests covering the complete layer progression flow from L1 through L3 of a single illusion, including observation assignments, continue-immediately flow, and dashboard updates.",
+      "acceptanceCriteria": [
+        "Test Flow 1: L1 completes, session-complete screen shows observation text and Continue CTA, dashboard shows 'Session 2 of 3'",
+        "Test Flow 2: User taps Continue after L1, next session uses illusionLayer='emotional', evidence bridge check-in is cancelled",
+        "Test Flow 3: L3 completes, session-complete shows generic settling text, no Continue CTA, dashboard shows illusion complete and next unlocked",
+        "Test Flow 4: Dashboard shows correct layer progress dots with opacity and aria-label",
+        "Test Flow 5: Stale client sending wrong illusionLayer to complete-session gets 409 and refreshes",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "File: tests/e2e/evidence-based-coaching.spec.ts. Use existing mock utilities (mockUserInProgress, mockProgressAPI) from tests/e2e/utils/. Mock chat API responses with SESSION_COMPLETE and OBSERVATION_ASSIGNMENT tokens."
+    }
+  ]
+}
