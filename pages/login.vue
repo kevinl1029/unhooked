@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-md mx-auto py-16 animate-fade-in-up">
     <div class="glass rounded-card p-8 shadow-card border border-brand-border">
-      <h1 class="text-2xl font-bold text-white mb-2 text-center">Welcome Back</h1>
+      <h1 class="text-2xl font-bold text-white mb-2 text-center">Sign In</h1>
       <p class="text-white-65 text-center mb-2">
         No password needed — just enter your email
       </p>
@@ -58,15 +58,14 @@
           <span v-else>Send sign-in link</span>
         </button>
 
-        <!-- Social Sign-on (Staging Only) -->
-        <div v-if="isStaging" class="flex items-center gap-4 mt-8 mb-6">
+        <!-- Social Sign-on -->
+        <div class="flex items-center gap-4 mt-8 mb-6">
           <div class="h-px bg-white-15 flex-1"></div>
           <span class="text-xs font-medium uppercase tracking-widest text-white-65">Or continue with</span>
           <div class="h-px bg-white-15 flex-1"></div>
         </div>
 
         <button
-          v-if="isStaging"
           type="button"
           @click="handleGoogleSignIn"
           :disabled="loading"
@@ -90,18 +89,12 @@
 </template>
 
 <script setup lang="ts">
-const { appAccessEnabled, isStaging } = useAppMode()
 const { signInWithEmail, signInWithGoogle, user } = useAuth()
 
 const email = ref('')
 const loading = ref(false)
 const submitted = ref(false)
 const error = ref('')
-
-// Redirect to landing if app access is disabled (validation or disabled mode)
-if (!appAccessEnabled) {
-  navigateTo('/')
-}
 
 // Redirect if already logged in
 watch(user, (newUser) => {
