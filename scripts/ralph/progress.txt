@@ -1,190 +1,76 @@
 # Ralph Progress Log
-Started: Sun Feb 15 14:15:08 EST 2026
----
+Started: Sun Feb 15 20:28:04 EST 2026
 
 ## Codebase Patterns
-- This Nuxt 3 project uses default TypeScript setup (no custom tsconfig.json)
-- Quality checks: Use `npm run build` to verify TypeScript (no separate typecheck command)
-- Migration files go in `supabase/migrations/` with format `YYYYMMDD_description.sql`
-- Migration files should include rollback SQL as comments at the bottom
+- **Framework:** Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
+- **Database types:** types/database.types.ts follows Supabase conventions (Row, Insert, Update for each table)
+- **Migrations:** supabase/migrations/ with naming pattern YYYYMMDD_description.sql
+- **Migration best practices:** Always use `IF NOT EXISTS` for idempotent schema changes
+- **Supabase auth:** Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
+- **Supabase queries:** Return `{ data, error }` — always check error before using data
+- **Supabase .single():** Fetches exactly one row (returns error if 0 or >1 rows)
+- **Middleware:** middleware/auth.ts uses defineNuxtRouteMiddleware() — can be sync or async
+- **Middleware fail-closed pattern:** Redirect on any error (Supabase error or JS exception)
+- **Composables:** useSupabaseClient() for DB queries, useSupabaseUser() for current user
+- **Pages:** pages/login.vue for authentication UI
+- **Dead code cleanup:** After removing v-if conditions, clean up unused destructured variables
 
 ---
+## 2026-02-15 20:30 - US-001
+- Created migration file at supabase/migrations/20260215_add_beta_flag.sql
+- Added is_beta BOOLEAN NOT NULL DEFAULT false column to profiles table
+- Created protect_is_beta() trigger function to prevent unauthorized modifications (only service_role can change is_beta)
+- Created protect_is_beta_trigger BEFORE UPDATE trigger on profiles table
+- Updated types/database.types.ts to add is_beta: boolean to profiles.Row
+- Updated types/database.types.ts to add is_beta?: boolean to profiles.Insert
+- Updated types/database.types.ts to add is_beta?: boolean to profiles.Update
+- Files changed: supabase/migrations/20260215_add_beta_flag.sql (new), types/database.types.ts
+- Build passed successfully
 
-## 2026-02-15 14:16 EST - US-001
-- Created database migration file for v1.1 schema changes
-- Files changed:
-  - supabase/migrations/20260215_personalization_v11.sql (created)
-- **Learnings for future iterations:**
-  - SQL migration files don't require TypeScript typecheck - use `npm run build` instead to verify the overall project
-  - PostgreSQL CHECK constraints automatically pass NULL values (no special NULL handling needed)
-  - Migration includes: preferred_name VARCHAR(50) column, previous_attempts type change from INTEGER to TEXT, data migration for existing values, CHECK constraint
-  - Rollback SQL documented in comments for reference
+**Learnings for future iterations:**
+- This codebase uses Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
+- Database types are in types/database.types.ts following Supabase conventions (Row, Insert, Update)
+- Migrations go in supabase/migrations/ with naming pattern YYYYMMDD_description.sql
+- The profiles table starts at line 584 in types/database.types.ts
+- Always add `IF NOT EXISTS` for column additions to ensure idempotent migrations
+- Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
 ---
-## 2026-02-15 15:45 EST - US-002
-- Updated TypeScript types for v1.1 fields across composables and server API
-- Files changed:
-  - composables/useIntake.ts (IntakeData and IntakeResponse interfaces)
-  - server/api/intake/index.post.ts (IntakeBody interface)
-- **Learnings for future iterations:**
-  - IntakeData and IntakeResponse use camelCase for client-side, while DB fields use snake_case
-  - preferredName added as optional string field
-  - previousAttempts changed from `number | undefined` to `string | undefined`
-  - This is a clean type break - no union types for backwards compatibility
-  - Typecheck via `npm run build` passed successfully
+
+## 2026-02-15 20:32 - US-002
+- Changed login page heading from "Welcome Back" to "Sign In"
+- Removed appAccessEnabled redirect block (lines 101-104) — login page is now accessible regardless of APP_MODE
+- Removed v-if="isStaging" from "Or continue with" divider — divider always visible
+- Removed v-if="isStaging" from Google SSO button — button always visible
+- Removed useAppMode() destructure from script setup — appAccessEnabled and isStaging are now dead code
+- Files changed: pages/login.vue
+- Build passed successfully
+
+**Learnings for future iterations:**
+- Login page is at pages/login.vue
+- Google SSO button was previously gated behind isStaging flag from useAppMode composable
+- After removing v-if conditions that use composable values, clean up the destructure to avoid unused imports
 ---
-## 2026-02-15 16:30 EST - US-003
-- Updated POST /api/intake endpoint for v1.1 field validation and storage
-- Files changed:
-  - server/api/intake/index.post.ts
-- **Learnings for future iterations:**
-  - Added validation for preferredName: trim, NULL if empty, reject if > 50 chars
-  - Added validation for previousAttempts: must be one of 'never', 'once', 'a_few', 'many', 'countless' - rejects integers with 400 error
-  - Added validation for custom triggers: reject empty 'custom:' prefix entries
-  - Changed upsert to use normalized values: `preferred_name: normalizedPreferredName` and `previous_attempts: normalizedPreviousAttempts`
-  - Previous default of `|| 0` removed - NULL is now explicitly stored when previousAttempts is omitted
-  - Validation pattern: normalize field values before upsert, use explicit null checks
+
+## 2026-02-15 20:34 - US-003
+- Converted middleware/auth.ts from synchronous to async (added `async` to defineNuxtRouteMiddleware callback)
+- Reordered logic: check user authentication first, then APP_MODE, then beta flag
+- When APP_MODE is enabled (appAccessEnabled is true): only checks authentication, allows access with no beta query (zero performance cost)
+- When APP_MODE is disabled: queries profiles table for is_beta using useSupabaseClient()
+- Beta query uses .from('profiles').select('is_beta').eq('id', user.value.id).single()
+- Fail closed: if Supabase error object is returned, redirect to /
+- Fail closed: if JavaScript exception is thrown, catch and redirect to /
+- Fail closed: if profile doesn't exist or is_beta is false, redirect to /
+- Only beta users with is_beta=true can access protected routes when APP_MODE is disabled
+- Files changed: middleware/auth.ts
+- Build passed successfully
+
+**Learnings for future iterations:**
+- Auth middleware is at middleware/auth.ts
+- Nuxt middleware uses defineNuxtRouteMiddleware() — can be sync or async
+- useSupabaseClient() returns a Supabase client for querying the database
+- useSupabaseUser() returns the current authenticated user
+- .single() is used to fetch exactly one row from Supabase (returns error if 0 or >1 rows)
+- Supabase queries return { data, error } — always check error before using data
+- Middleware fail-closed pattern: redirect on any error (Supabase error or JS exception)
 ---
-## 2026-02-15 17:45 EST - US-004
-- Created prompt injection sanitization utility
-- Files changed:
-  - server/utils/personalization/sanitize-user-text.ts (created)
-- **Learnings for future iterations:**
-  - The sanitization utility is simple regex-based string processing
-  - Applied at context builder level (NFR-4.3) to sanitize user-provided text before LLM prompt injection
-  - Strategy: Strip LLM control patterns (role markers, markdown headers, triple backticks, XML tags), then wrap in delimiters in prompt template
-  - Key regex patterns: `/^(SYSTEM|ASSISTANT|Human|AI|User):\s*/gmi` for role markers, `/^#{1,6}\s+/gm` for markdown headers, `/```/g` for backticks, `/<\/?[a-z][a-z0-9]*[^>]*>/gi` for XML/HTML tags
-  - Preserves normal names like 'Kevin', 'Skip', 'Ignore' without false positives
-  - File location follows pattern: `server/utils/personalization/` for personalization utilities
----
-## 2026-02-15 18:30 EST - US-005
-- Updated context builder to include v1.1 fields with sanitization and natural language formatting
-- Files changed:
-  - server/utils/personalization/context-builder.ts
-- **Learnings for future iterations:**
-  - Added QUIT_ATTEMPTS_CONTEXT map to translate string values ('never', 'once', 'a_few', 'many', 'countless') to natural language for prompt injection
-  - Added TRIGGER_DISPLAY_NAMES map for predefined triggers (morning, after_meals, stress, social, boredom, driving, alcohol, work_breaks)
-  - Created formatTriggers() helper that strips custom: prefix from custom triggers and applies display names to predefined triggers
-  - Custom triggers are sanitized and wrapped in triple-backtick delimiters (```custom text```) for prompt injection safety
-  - Preferred name is sanitized and wrapped in triple-backtick delimiters in the USER: line
-  - IntakeUserContext interface updated: added preferredName (string | null), changed previousAttempts from number to string | null
-  - getUserIntake() now selects preferred_name from user_intake table
-  - formatContextForPrompt() updated to include USER: line when preferred name exists, quit history line when previousAttempts is not null, and formatted triggers with sanitization
-  - Double-prefix escape (custom:custom:) is handled by stripping only the first custom: prefix
-  - Typecheck passed via npm run build
----
-## 2026-02-15 19:00 EST - US-006
-- Created PreferredNameStep.vue component for preferred name collection in onboarding
-- Files changed:
-  - components/intake/PreferredNameStep.vue (created)
-- **Learnings for future iterations:**
-  - PreferredNameStep follows the same pattern as other intake steps (ProductTypeStep, QuitHistoryStep)
-  - Component structure: heading text + helper text + input/buttons + Next button
-  - Uses v-model pattern: accepts modelValue prop, emits update:modelValue and next events
-  - Input styling: glass-input, rounded-pill, border-brand-border classes for consistency
-  - No Back button on first step (Step 1 in the flow)
-  - Next button is always enabled (no validation required for optional preferred name)
-  - Component uses <script setup lang="ts"> syntax for TypeScript support
-  - Input maxlength='50' matches the database column constraint
----
-## 2026-02-15 20:30 EST - US-007
-- Updated QuitHistoryStep.vue to use string-based previousAttempts with descriptive labels
-- Files changed:
-  - components/intake/QuitHistoryStep.vue
-  - scripts/ralph/prd.json (passes: true)
-- **Learnings for future iterations:**
-  - Changed previousAttempts from numeric (0,1,2,3+) to string values ('never','once','a_few','many','countless')
-  - Layout changed from horizontal grid (grid grid-cols-4) to vertical stack (flex flex-col) for better mobile UX
-  - 5 options now: Never, Once, A few times, Many times, Too many to count
-  - Conditional logic for longest quit duration updated: `previousAttempts && previousAttempts !== 'never'` (was `previousAttempts > 0`)
-  - Component maintains same button styling (border-2 rounded-xl) for consistency
-  - Type changes: prop type and emit type both changed from `number | undefined` to `string | undefined`
-  - Build passed successfully via `npm run build`
----
-## 2026-02-15 21:45 EST - US-008
-- Updated TriggersStep.vue to add Other option with free-text custom trigger input
-- Files changed:
-  - components/intake/TriggersStep.vue
-  - scripts/ralph/prd.json (passes: true)
-- **Learnings for future iterations:**
-  - Added 'other' option as last item in options array with col-span-2 for full width
-  - Custom trigger text input slides down with CSS transition (v-show + max-height/opacity/ease-out)
-  - Text input auto-focused via watch + nextTick when Other is selected
-  - Local state customTriggerText ref preserves typed text across toggle on/off
-  - Submit button disabled when Other selected with empty/whitespace-only text
-  - Hint text shown when submit disabled: "Please describe your trigger or deselect Other."
-  - On submit: 'other' replaced with 'custom:{trimmed text}' in triggers array
-  - Double-prefix escape: text starting with 'custom:' stored as 'custom:custom:{text}'
-  - On mount: if existing triggers contain custom: entry, Other is selected and text extracted from prefix
-  - CSS transition pattern: v-show with :style binding for max-height and opacity creates smooth slide-down effect
-  - aria-live="polite" on text input container for screen reader accessibility
-  - Build passed successfully via npm run build
----
-## 2026-02-15 22:00 EST - US-009
-- Updated IntakeForm.vue to support 6-step onboarding flow with preferred name as Step 1
-- Files changed:
-  - components/intake/IntakeForm.vue
-  - components/intake/ProductTypeStep.vue
-  - scripts/ralph/prd.json (passes: true)
-- **Learnings for future iterations:**
-  - Progress indicator updated from 5 to 6 dots
-  - Step 1 now renders IntakePreferredNameStep for preferred name collection
-  - All existing steps (ProductType, UsageFrequency, QuitHistory, PrimaryReason, Triggers) shifted by +1 (now Steps 2-6)
-  - Added ProductTypeStep Back button since it's now Step 2 instead of Step 1 - follows same pattern as other steps with Back button
-  - Added new props to IntakeForm: prefilledName?: string, existingIntake?: IntakeResponse | null
-  - Added onMounted() hook to pre-fill formData from existingIntake (DB fields) or prefilledName
-  - Pre-fill logic: existingIntake takes priority over prefilledName
-  - Snake_case DB fields (preferred_name, previous_attempts) mapped to camelCase formData fields (preferredName, previousAttempts)
-  - formData now includes preferredName: string field (default '')
-  - nextStep() max changed from 5 to 6
-  - Build passed successfully via npm run build
----
-## 2026-02-15 22:30 EST - US-010
-- Updated onboarding.vue to fetch profile and intake data in background on mount
-- Files changed:
-  - pages/onboarding.vue
-  - scripts/ralph/prd.json (passes: true)
-- **Learnings for future iterations:**
-  - Welcome screen renders immediately with no loading delay
-  - Background data fetching via Promise.allSettled() for profile and intake in parallel on mount
-  - First name extracted from profiles.full_name using .split(' ')[0] to get first word before space
-  - prefilledName ref populated from profile.full_name if available, stays empty on error (no error shown)
-  - existingIntake ref populated from useIntake().intake ref after fetchIntake() completes
-  - fetchIntake() doesn't return a value - it updates the intake ref in the composable
-  - Props passed to IntakeForm: prefilled-name (kebab-case in template) and existing-intake
-  - Added isDataLoading ref and handleStart() function for loading state management
-  - Button shows "Loading..." when isDataLoading is true, brief 100ms delay to allow fetches to complete
-  - Build passed successfully via npm run build
----
-## 2026-02-15 23:00 EST - US-011
-- Created comprehensive unit tests for sanitizeForPrompt() utility
-- Files changed:
-  - tests/unit/utils/sanitize-user-text.test.ts (created)
-  - scripts/ralph/prd.json (passes: true)
-- **Learnings for future iterations:**
-  - Test file structure follows Vitest pattern: describe blocks with nested it() tests
-  - 36 test cases covering all sanitization behaviors
-  - Role markers (SYSTEM:, ASSISTANT:, etc) only stripped at line start (^ with multiline flag)
-  - Sanitization order matters: role markers → headers → backticks → tags → trim
-  - Because replacements are sequential, `## SYSTEM: text` → role check (no match) → header removed → `SYSTEM: text` remains
-  - Tests confirm unicode (José) and emoji (👋) are preserved
-  - Tests confirm normal names like Kevin, Skip, Ignore are preserved without false positives
-  - All 36 tests pass successfully
----
-## 2026-02-15 23:30 EST - US-012
-- Added unit tests for formatContextForPrompt() v1.1 changes
-- Files changed:
-  - tests/unit/personalization/context-builder.test.ts (updated)
-  - scripts/ralph/prd.json (passes: true)
-- **Learnings for future iterations:**
-  - Tests added to existing context-builder.test.ts file rather than creating new file
-  - 18 new test cases added for v1.1 changes (25 total tests now)
-  - Helper function createContext() creates minimal PersonalizationContext for testing
-  - Tests verify preferred name inclusion/omission, triple-backtick delimiters, and whitespace handling
-  - Tests verify all 5 quit attempts values (never/once/a_few/many/countless) map to natural language
-  - Tests verify NULL previousAttempts omits quit history line from prompt
-  - Tests verify custom: prefix stripping from custom triggers
-  - Tests verify predefined trigger display names (morning → 'morning routines', etc)
-  - Tests verify double-prefix escape handling (custom:custom:text → ```custom:text```)
-  - Tests verify sanitization applies to user-provided text (preferred name and custom triggers)
-  - All 25 tests pass successfully
----
+
