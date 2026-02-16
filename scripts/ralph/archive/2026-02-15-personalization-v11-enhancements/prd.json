@@ -1,0 +1,65 @@
+{
+  "project": "Unhooked",
+  "branchName": "ralph/beta-program",
+  "description": "Beta Program — Add per-user is_beta flag to allow manually flagged users to bypass the APP_MODE gate and access the app on production",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create database migration and update TypeScript types for is_beta column",
+      "description": "As a developer, I want to add the is_beta column to the profiles table with a write-protection trigger, and update the generated TypeScript types, so that the beta flag is available in the schema and type-safe in code.",
+      "acceptanceCriteria": [
+        "Create migration file at supabase/migrations/20260215_add_beta_flag.sql",
+        "Migration adds is_beta BOOLEAN NOT NULL DEFAULT false to public.profiles table",
+        "Migration creates protect_is_beta() trigger function that silently reverts is_beta changes unless caller has service_role (checks request.jwt.claims->>'role')",
+        "Migration creates BEFORE UPDATE trigger protect_is_beta_trigger on public.profiles that executes protect_is_beta()",
+        "In types/database.types.ts: profiles.Row has is_beta: boolean",
+        "In types/database.types.ts: profiles.Insert has is_beta?: boolean",
+        "In types/database.types.ts: profiles.Update has is_beta?: boolean",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The migration file is run manually via Supabase SQL Editor — Ralph just creates the file. TypeScript types in types/database.types.ts must be updated manually (add is_beta to Row, Insert, Update sections of profiles) since npm run db:types requires a live Supabase connection. See profiles type at line 584 of types/database.types.ts."
+    },
+    {
+      "id": "US-002",
+      "title": "Ungate login page and enable Google SSO on production",
+      "description": "As any user (beta or not), I want to access the login page regardless of APP_MODE and see the Google SSO option on production, so that I can authenticate before the beta check happens.",
+      "acceptanceCriteria": [
+        "In pages/login.vue: the appAccessEnabled redirect block (lines 101-104: if (!appAccessEnabled) { navigateTo('/') }) is removed",
+        "In pages/login.vue: the heading reads 'Sign In' (changed from 'Welcome Back' on line 4)",
+        "In pages/login.vue: the v-if=\"isStaging\" condition is removed from the 'Or continue with' divider (line 62) — divider is always visible",
+        "In pages/login.vue: the v-if=\"isStaging\" condition is removed from the Google SSO button (line 69) — button is always visible",
+        "In pages/login.vue: the useAppMode() destructure on line 93 is cleaned up — remove appAccessEnabled and isStaging since both are now dead code. If no other values are used from useAppMode(), remove the entire import",
+        "Magic link form submission still works as before (no regression)",
+        "Google SSO button click still calls handleGoogleSignIn (no regression)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: pages/login.vue. Three targeted template changes + dead code cleanup in script. The useAppMode() call on line 93 destructures { appAccessEnabled, isStaging } — after removing the gate and v-if conditions, both variables become unused. Clean up the destructure or remove the call entirely if nothing else from useAppMode() is used on this page."
+    },
+    {
+      "id": "US-003",
+      "title": "Add beta check to auth middleware",
+      "description": "As a beta user, I want the auth middleware to check my is_beta flag so I can access the app when APP_MODE is not enabled. As a non-beta user, I want to be silently redirected to the landing page.",
+      "acceptanceCriteria": [
+        "middleware/auth.ts callback is async (defineNuxtRouteMiddleware(async (to) => { ... }))",
+        "When APP_MODE is enabled (appAccessEnabled is true): only checks if user is authenticated, redirects to /login if not — no beta query is made",
+        "When APP_MODE is not enabled: checks user authentication first (redirect to /login if not logged in), then queries profiles table for is_beta",
+        "Beta query uses useSupabaseClient() to SELECT is_beta FROM profiles WHERE id = user.value.id with .single()",
+        "If query succeeds and is_beta is true: access is granted (no redirect)",
+        "If query succeeds and is_beta is false: redirect to /",
+        "If query returns an error (Supabase error object): redirect to / (fail closed per REQ-10)",
+        "If query throws a JavaScript exception: redirect to / (fail closed per REQ-10)",
+        "If profile row does not exist (.single() returns error): redirect to / (fail closed per REQ-10)",
+        "No beta-specific UI, branding, or modified flows are introduced anywhere",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: middleware/auth.ts. Replaces the current 15-line synchronous middleware with ~30-line async version. The beta check only runs when APP_MODE != enabled — once the app launches fully, there is zero performance cost. Uses try/catch around the Supabase query to handle both Supabase errors and JS exceptions. Depends on US-001 (is_beta column must exist in types for typecheck to pass)."
+    }
+  ]
+}
