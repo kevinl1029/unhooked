@@ -8,11 +8,18 @@ ADD COLUMN IF NOT EXISTS is_beta BOOLEAN NOT NULL DEFAULT false;
 -- Create trigger function to protect is_beta from unauthorized changes
 CREATE OR REPLACE FUNCTION public.protect_is_beta()
 RETURNS TRIGGER AS $$
+DECLARE
+  claims_text text;
 BEGIN
-  -- Only service_role can modify is_beta
-  -- All other callers have changes silently reverted
-  IF (request.jwt.claims->>'role') IS DISTINCT FROM 'service_role' THEN
-    NEW.is_beta := OLD.is_beta;
+  IF NEW.is_beta IS DISTINCT FROM OLD.is_beta THEN
+    claims_text := current_setting('request.jwt.claims', true);
+    -- Allow if no JWT context (direct DB connection, e.g. Supabase dashboard)
+    IF claims_text IS NOT NULL AND claims_text != '' THEN
+      -- Block if caller is not service_role
+      IF (claims_text::json ->> 'role') != 'service_role' THEN
+        NEW.is_beta := OLD.is_beta;
+      END IF;
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -23,3 +30,12 @@ CREATE TRIGGER protect_is_beta_trigger
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.protect_is_beta();
+
+-- Wire up profile auto-creation on user signup
+-- The handle_new_user() function exists (from baseline schema) but the trigger
+-- was never included in a migration file. Discovered during beta deployment
+-- when Google SSO signups weren't creating profile rows.
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
