@@ -93,6 +93,23 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
         continue
       }
 
+      // Check if user has unsubscribed from emails
+      const { data: progressData } = await supabase
+        .from('user_progress')
+        .select('email_unsubscribed_at')
+        .eq('user_id', checkIn.user_id)
+        .single()
+
+      if (progressData?.email_unsubscribed_at) {
+        console.log(`[check-in-sender] User ${checkIn.user_id} unsubscribed, skipping email`)
+        await supabase
+          .from('check_in_schedule')
+          .update({ status: 'sent', email_sent_at: null })
+          .eq('id', checkIn.id)
+        sent++
+        continue
+      }
+
       // Get user email
       const { data: userData, error: userError } = await supabase
         .from('auth.users')

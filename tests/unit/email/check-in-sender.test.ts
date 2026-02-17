@@ -32,7 +32,11 @@ function makeFreshCheckIn(overrides: Partial<{
   }
 }
 
-function makeSupabaseMock(checkIns: unknown[], updateSpy?: (payload: unknown, id: string) => void) {
+function makeSupabaseMock(
+  checkIns: unknown[],
+  updateSpy?: (payload: unknown, id: string) => void,
+  emailUnsubscribedAt: string | null = null
+) {
   return {
     from: (table: string) => {
       if (table === 'check_in_schedule') {
@@ -49,6 +53,18 @@ function makeSupabaseMock(checkIns: unknown[], updateSpy?: (payload: unknown, id
               updateSpy?.(payload, id)
               return Promise.resolve({ error: null })
             },
+          }),
+        }
+      }
+      if (table === 'user_progress') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({
+                data: { email_unsubscribed_at: emailUnsubscribedAt },
+                error: null,
+              }),
+            }),
           }),
         }
       }
@@ -176,5 +192,57 @@ describe('check-in sender retry/expiry policy', () => {
     expect(updates).toHaveLength(1)
     expect((updates[0].payload as any).retry_count).toBe(3)
     expect((updates[0].payload as any).status).toBe('failed')
+  })
+})
+
+describe('unsubscribed user handling', () => {
+  beforeEach(() => {
+    vi.mocked(getResendClient).mockReset()
+  })
+
+  it('skips email send and advances to sent with null email_sent_at for unsubscribed users', async () => {
+    const sendMock = vi.fn()
+    vi.mocked(getResendClient).mockReturnValue({
+      emails: { send: sendMock },
+    } as any)
+
+    const checkIn = makeFreshCheckIn()
+    const updates: Array<{ payload: unknown; id: string }> = []
+    const supabase = makeSupabaseMock(
+      [checkIn],
+      (payload, id) => updates.push({ payload, id }),
+      '2026-02-16T10:00:00Z' // unsubscribed_at is set
+    )
+
+    const result = await processScheduledCheckIns(supabase)
+
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(result.processed).toBe(1)
+    expect(result.sent).toBe(1)
+    expect(result.errors).toHaveLength(0)
+    expect(updates).toHaveLength(1)
+    expect((updates[0].payload as any).status).toBe('sent')
+    expect((updates[0].payload as any).email_sent_at).toBeNull()
+  })
+
+  it('sends email normally for subscribed users (email_unsubscribed_at is null)', async () => {
+    const sendMock = vi.fn().mockResolvedValue({ error: null })
+    vi.mocked(getResendClient).mockReturnValue({
+      emails: { send: sendMock },
+    } as any)
+
+    const checkIn = makeFreshCheckIn()
+    const updates: Array<{ payload: unknown; id: string }> = []
+    const supabase = makeSupabaseMock(
+      [checkIn],
+      (payload, id) => updates.push({ payload, id }),
+      null // subscribed
+    )
+
+    const result = await processScheduledCheckIns(supabase)
+
+    expect(sendMock).toHaveBeenCalledOnce()
+    expect(result.sent).toBe(1)
+    expect(result.errors).toHaveLength(0)
   })
 })
