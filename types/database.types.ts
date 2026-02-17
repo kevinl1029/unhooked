@@ -660,6 +660,7 @@ export type Database = {
           created_at: string | null
           current_illusion: number | null
           current_layer: string | null
+          email_unsubscribed_at: string | null
           id: string
           illusion_order: number[] | null
           illusions_completed: number[] | null
@@ -681,6 +682,7 @@ export type Database = {
           created_at?: string | null
           current_illusion?: number | null
           current_layer?: string | null
+          email_unsubscribed_at?: string | null
           id?: string
           illusion_order?: number[] | null
           illusions_completed?: number[] | null
@@ -702,6 +704,7 @@ export type Database = {
           created_at?: string | null
           current_illusion?: number | null
           current_layer?: string | null
+          email_unsubscribed_at?: string | null
           id?: string
           illusion_order?: number[] | null
           illusions_completed?: number[] | null
