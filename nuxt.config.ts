@@ -127,6 +127,7 @@ export default defineNuxtConfig({
     inworldApiKey: process.env.INWORLD_API_KEY,
     inworldVoiceId: process.env.INWORLD_VOICE_ID || 'Dennis',
     inworldModel: process.env.INWORLD_MODEL || 'inworld-tts-1', // 'inworld-tts-1' | 'inworld-tts-1-max'
+    ttsStreamingMode: process.env.TTS_STREAMING_MODE || 'sentence-batch', // 'sentence-batch' | 'true-streaming'
 
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,

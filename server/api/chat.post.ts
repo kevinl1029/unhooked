@@ -19,7 +19,7 @@ import { buildBridgeContext } from '../utils/session/bridge'
 import { createSentenceDetector } from '../utils/tts/sentence-detector'
 import { createSequentialTTSProcessor } from '../utils/tts/sequential-processor'
 import { finalizeStreamingTTS } from '../utils/tts/finalize-streaming'
-import { getTTSProviderFromConfig, type TTSProviderType } from '../utils/tts'
+import { getTTSProviderFromConfig } from '../utils/tts'
 import { extractObservationAssignment, stripChatControlTokens } from '~/utils/chat-control-tokens'
 
 export default defineEventHandler(async (event) => {
@@ -488,15 +488,27 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'no-cache')
     setResponseHeader(event, 'Connection', 'keep-alive')
 
-    // Check if streaming TTS is enabled and supported
-    // Groq: Sentence-level streaming (full sentence synthesized, then sent)
-    // InWorld: True sub-sentence streaming (chunks emitted progressively)
+    // Check if streaming TTS is enabled and a provider can be resolved
     const config = useRuntimeConfig()
-    const ttsProvider = config.ttsProvider as TTSProviderType
-    const supportsStreamingTTS =
-      (ttsProvider === 'groq' && !!config.groqApiKey) ||
-      (ttsProvider === 'inworld' && !!config.inworldApiKey)
-    const useStreamingTTS = streamTTS && supportsStreamingTTS
+
+    // Validate TTS streaming mode config
+    const validModes = ['sentence-batch', 'true-streaming'] as const
+    let ttsStreamingMode = config.ttsStreamingMode as string
+    if (!validModes.includes(ttsStreamingMode as any)) {
+      console.warn(`[chat] Invalid TTS_STREAMING_MODE '${ttsStreamingMode}', defaulting to 'sentence-batch'`)
+      ttsStreamingMode = 'sentence-batch'
+    }
+
+    // Resolve TTS provider - any provider with valid credentials is eligible
+    let resolvedTTSProvider: ReturnType<typeof getTTSProviderFromConfig> | null = null
+    if (streamTTS) {
+      try {
+        resolvedTTSProvider = getTTSProviderFromConfig()
+      } catch {
+        // No valid TTS credentials - TTS will be skipped
+      }
+    }
+    const useStreamingTTS = streamTTS && !!resolvedTTSProvider
 
     const encoder = new TextEncoder()
     const streamResponse = new ReadableStream({
@@ -506,24 +518,33 @@ export default defineEventHandler(async (event) => {
         let tokenChars = 0
         let audioChunkCount = 0
 
+        // Observability timestamps for TTS
+        let streamStartTime = 0
+        let firstChunkTime: number | null = null
+
         // Initialize streaming TTS components if enabled
-        const sentenceDetector = useStreamingTTS ? createSentenceDetector() : null
+        const sentenceDetector = useStreamingTTS ? createSentenceDetector({ minWords: 6 }) : null
         let suppressTTSAfterObservationToken = false
 
         // Create sequential TTS processor - guarantees chunks are sent in order
         // by processing one sentence at a time (no parallel synthesis)
-        const ttsProcessor = useStreamingTTS
+        const ttsProcessor = useStreamingTTS && resolvedTTSProvider
           ? createSequentialTTSProcessor(
-              getTTSProviderFromConfig(),
+              resolvedTTSProvider,
               (chunk) => {
                 audioChunkCount += 1
+                if (firstChunkTime === null && chunk.audioBase64) {
+                  firstChunkTime = Date.now()
+                }
                 // This callback is invoked in strict order for each synthesized chunk
                 const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId, requestId })
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-              }
+              },
+              ttsStreamingMode as 'sentence-batch' | 'true-streaming'
             )
           : null
 
+        streamStartTime = Date.now()
         await router.chatStream(
           { messages: processedMessages, model },
           {
@@ -594,6 +615,17 @@ export default defineEventHandler(async (event) => {
                   sentenceDetector,
                   ttsProcessor,
                   stripControlTokens
+                })
+
+                // Log TTS summary for observability
+                const effectiveMode = ttsProcessor.getEffectiveMode()
+                console.info('[chat] TTS summary', {
+                  requestId,
+                  ttsMode: effectiveMode,
+                  ttsProvider: config.ttsProvider,
+                  ttfaMs: firstChunkTime ? firstChunkTime - streamStartTime : null,
+                  totalTtsMs: Date.now() - streamStartTime,
+                  sentenceCount: ttsProcessor.getSentCount()
                 })
               }
 
@@ -706,6 +738,7 @@ export default defineEventHandler(async (event) => {
                 conversationId: convId,
                 sessionComplete,
                 streamingTTS: ttsProcessor ? ttsProcessor.getSentCount() > 0 : false,
+                ttsMode: ttsProcessor ? ttsProcessor.getEffectiveMode() : 'none',
                 requestId
               })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))

@@ -141,7 +141,7 @@ describe('SequentialTTSProcessor', () => {
 
       const processor = new SequentialTTSProcessor(provider, (chunk) => {
         chunks.push(chunk)
-      })
+      }, 'true-streaming')
 
       processor.enqueueSentence('This will fail.', false)
       processor.enqueueSentence('This will succeed.', true)
@@ -167,7 +167,7 @@ describe('SequentialTTSProcessor', () => {
       const provider = createSuccessfulStreamingProvider()
       const processor = new SequentialTTSProcessor(provider, (chunk) => {
         chunks.push(chunk)
-      })
+      }, 'true-streaming')
 
       processor.enqueueSentence('Hello world.', false)
       processor.enqueueSentence('Goodbye.', true)

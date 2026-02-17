@@ -1,9 +1,9 @@
 # Unhooked: Voice Interface Specification
 ## (Originally: Phase 3)
 
-**Version:** 3.0  
-**Last Updated:** 2026-01-11  
-**Status:** Implemented
+**Version:** 3.3
+**Last Updated:** 2026-02-16
+**Status:** Implemented (TTS Streaming Modes: Ready for Development)
 **Document Type:** Technical Specification  
 **Legacy Reference:** Phase 3
 
@@ -59,13 +59,202 @@ User speaks Ã¢â€ â€™ OpenAI Whisper (STT) Ã¢â€ â€™ LLM (Ge
 - Simpler integration with existing Nuxt/Supabase architecture
 - Clear upgrade path to native voice models if needed later
 
+<!-- REQ-REFINED: Updated provider table to reflect multi-provider TTS architecture -->
+
 **Providers:**
-| Component | Provider | Cost |
-|-----------|----------|------|
+| Component | Provider | Notes |
+|-----------|----------|-------|
 | Speech-to-Text | OpenAI Whisper API | $0.006/min |
-| LLM | Gemini (existing) | Per Foundation Setup (Phase 1.1), Authentication (Phase 1.2), Chat Infrastructure (Phase 1.3)3 |
-| Text-to-Speech | OpenAI TTS | $0.015/1K chars |
-| Voice | Nova | Ã¢â‚¬â€ |
+| LLM | Gemini (existing) | Per Chat Infrastructure spec |
+| Text-to-Speech (primary) | InWorld TTS | `inworld-tts-1` or `inworld-tts-1-max`; Dennis voice |
+| Text-to-Speech (fallback) | OpenAI TTS | Fallback if InWorld unavailable |
+| Text-to-Speech (alternatives) | ElevenLabs, Groq | Available via `ttsProvider` config |
+
+**Provider Fallback Chain:**
+If the configured TTS provider lacks valid credentials, the system falls back through the chain: configured provider -> OpenAI TTS. If no provider has valid credentials, TTS is skipped and the text transcript is shown without audio (existing text fallback behavior applies). Ã¢â‚¬â€ |
+
+---
+
+<!-- REQ-REFINED: New section defining TTS synthesis modes -->
+
+## TTS Synthesis Modes
+
+### Overview
+
+The TTS pipeline supports two synthesis modes that trade off between audio quality and latency. This is the primary configuration decision for the voice interface.
+
+**Motivation:** True-streaming TTS reduces time-to-first-audio but may produce flatter intonation because the TTS model generates audio from sub-sentence fragments without full sentence context. Sentence-batch TTS produces more natural, expressive speech because the model sees the complete sentence before generating audio, at the cost of higher initial latency.
+
+### Mode Definitions
+
+#### `sentence-batch`
+The LLM streams tokens. A sentence detector accumulates tokens until a sentence boundary is detected (terminal punctuation followed by whitespace or end-of-stream). Each complete sentence is sent to the TTS provider's standard (non-streaming) endpoint as a single request. The provider returns one audio chunk per sentence with full word-level timings.
+
+**Pipeline:**
+```
+LLM tokens --> Sentence Detector --> Complete Sentence --> TTS API (batch) --> Single Audio Chunk --> Client
+```
+
+**Characteristics:**
+- TTS provider receives full sentence context before generating audio
+- Natural intonation, emphasis, and prosody -- the model "knows" how the sentence ends
+- One audio chunk emitted per sentence
+- Higher latency for first sentence (~2-3s TTFB)
+- Subsequent sentences pipeline: while sentence 1 plays, sentences 2+ are already synthesizing
+- InWorld endpoint: `POST /tts/v1/voice`
+
+#### `true-streaming`
+The LLM streams tokens. A sentence detector accumulates tokens until a sentence boundary is detected. Each complete sentence is sent to the TTS provider's streaming endpoint. The provider returns multiple sub-sentence audio chunks progressively as they are generated. Each chunk is emitted to the client immediately.
+
+**Pipeline:**
+```
+LLM tokens --> Sentence Detector --> Complete Sentence --> TTS API (stream) --> Sub-sentence Chunks --> Client
+```
+
+**Characteristics:**
+- TTS provider starts generating audio before seeing the full prosodic arc
+- Lower latency (~500ms TTFB)
+- Multiple audio chunks per sentence, emitted progressively
+- May produce flatter intonation -- the model lacks full context for emphasis and pacing
+- InWorld endpoint: `POST /tts/v1/voice:stream` (newline-delimited JSON)
+
+### Tradeoffs
+
+| Aspect | `sentence-batch` | `true-streaming` |
+|--------|-------------------|-------------------|
+| Time-to-first-audio | ~2-3s (first sentence) | ~500ms |
+| Prosodic quality | High -- full sentence context | Lower -- limited lookahead |
+| Intonation / emphasis | Natural, expressive | May feel flat |
+| Chunks per sentence | 1 | Multiple (sub-sentence) |
+| Word timing source | Actual (from API, per sentence) | Actual (from API, per sub-chunk) |
+| Word timing accuracy | High -- complete sentence alignment | Good -- may have slight drift across sub-chunk boundaries |
+| Best for | Quality-focused, therapeutic delivery | Latency-sensitive, conversational feel |
+
+### Configuration
+
+TTS streaming mode is a **server-level configuration** in `nuxt.config.ts`:
+
+```typescript
+runtimeConfig: {
+  ttsStreamingMode: process.env.TTS_STREAMING_MODE || 'sentence-batch',
+  // Valid values: 'sentence-batch' | 'true-streaming'
+}
+```
+
+- Mode applies globally to all users and all sessions
+- No per-request override from the client
+- Changing the mode requires a server restart / redeployment
+- Default: `sentence-batch` (prioritizing audio quality for therapeutic content)
+- Invalid values: If an unrecognized value is set, the server defaults to `sentence-batch` and logs a `console.warn` at startup
+
+### InWorld Model Tier
+
+The InWorld TTS provider supports two model tiers:
+
+| Model | Quality | Latency | Use Case |
+|-------|---------|---------|----------|
+| `inworld-tts-1` (default) | Standard | Lower | General use |
+| `inworld-tts-1-max` | Higher | Higher | When maximum prosodic quality is desired |
+
+Configured via `inworldModel` in `nuxt.config.ts`. Default is `inworld-tts-1`.
+
+### Sentence Detection
+
+Sentences are detected using a regex-based boundary detector: terminal punctuation (`[.!?]+`) followed by whitespace or end-of-stream. Known edge cases (abbreviations like "Dr.", ellipses "...") may cause premature splits; this is acceptable as the audio remains natural even with slightly incorrect boundaries.
+
+No minimum sentence length is enforced. Single long sentences without internal boundaries are processed as a single TTS call in sentence-batch mode.
+
+### Sequential Processing
+
+Multiple sentences within a single AI response are processed with **parallel TTS synthesis and ordered emission**:
+
+1. Sentence 1 detected -- TTS call starts immediately
+2. Sentence 2 detected -- TTS call starts in parallel (does not wait for sentence 1)
+3. Audio chunks are emitted to the client in strict sentence order
+4. The `SequentialTTSProcessor` chains promises to guarantee ordering
+
+This means while sentence 1's audio plays on the client, sentences 2-N are likely already synthesized and queued -- minimizing inter-sentence gaps.
+
+### Per-Sentence Error Handling
+
+<!-- REQ-REFINED: Added partial failure handling for multi-sentence TTS -->
+
+If TTS synthesis fails for an individual sentence within a multi-sentence response:
+
+1. The failed sentence's audio is **skipped** (no audio emitted for that sentence)
+2. Remaining sentences continue to process normally
+3. The full text transcript is still shown to the user (transcript is independent of audio)
+4. The **completion marker is always sent** to the client, even if all sentences fail -- this prevents the UI from hanging
+5. No cross-mode fallback: if the configured mode fails, the system does NOT attempt the other mode. Standard TTS error handling applies (show transcript, skip audio)
+
+### Observability
+
+Each chat request with TTS logs:
+- Which TTS streaming mode was used (`sentence-batch` or `true-streaming`)
+- Which TTS provider handled synthesis
+- Basic timing: time-to-first-audio-chunk, total synthesis time
+- Logged at `info` level for production debugging and quality validation
+
+<!-- TECH-DESIGN: Implementation architecture for TTS streaming modes -->
+
+### Implementation Architecture
+
+#### Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Control point for mode routing | `SequentialTTSProcessor` constructor param | Centralizes routing in the one class that already owns both code paths (streaming and batch). Avoids spreading mode logic across files. |
+| Mode + no provider streaming support | Silently degrade to sentence-batch, `warn` log | Pragmatic: only InWorld supports streaming today. If operator configures `true-streaming` with OpenAI/Groq/ElevenLabs, audio still works via batch. Log makes misconfiguration visible. |
+| Eligibility check in `chat.post.ts` | Simplified: any provider with valid credentials | Current hardcoded provider allowlist (`groq`, `inworld`) is misleading (Groq doesn't actually support streaming). Replace with: `streamTTS && provider resolved successfully`. The processor handles capability routing internally. |
+| Done SSE event | Add `ttsMode` field (`'sentence-batch' \| 'true-streaming' \| 'none'`) | Useful for client-side debugging and future analytics. Minimal payload increase. |
+| Frontend changes | None | Client-side `useStreamingAudioQueue` is already mode-agnostic -- it processes chunks regardless of whether they come from batch or streaming synthesis. |
+| Error handling changes | None | Existing `SequentialTTSProcessor` error handling already matches spec: per-sentence catch, skip failed audio, completion marker always sent. |
+| Rollout strategy | Simple env var, default `sentence-batch` | No feature flags or gradual rollout. Single-developer app; change env var when ready to test. |
+
+#### Mode Routing Logic
+
+The `SequentialTTSProcessor` receives `ttsStreamingMode` as a constructor parameter. The routing decision on each `enqueueSentence` call:
+
+```
+if mode === 'true-streaming' AND provider.supportsStreaming:
+    → call provider.synthesizeStream() (streaming path)
+else:
+    → call provider.synthesize() (batch path)
+    → if mode was 'true-streaming', log warn: "Provider does not support streaming, using sentence-batch"
+```
+
+The existing `provider.supportsStreaming` flag remains a **capability indicator**. The config is the **intent**. Both must be true for true-streaming to activate.
+
+#### Observability Implementation
+
+A single `console.info` log is emitted in `chat.post.ts` after `finalizeStreamingTTS()` completes:
+
+```typescript
+console.info('[chat] TTS summary', {
+  requestId,
+  ttsMode: effectiveMode,        // 'sentence-batch' | 'true-streaming'
+  ttsProvider: config.ttsProvider,
+  ttfaMs: firstChunkTime - streamStartTime,  // Time-to-first-audio
+  totalTtsMs: Date.now() - streamStartTime,
+  sentenceCount: ttsProcessor.getSentCount()
+})
+```
+
+TTFA is captured by recording `Date.now()` on the first `onChunk` callback in `chat.post.ts`, compared against LLM stream start time.
+
+Provider fallback degradation (e.g., InWorld credentials missing → OpenAI, which can't stream) is logged at `warn` level by the `SequentialTTSProcessor`.
+
+#### Files Changed
+
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `nuxt.config.ts` | MODIFY | Add `ttsStreamingMode` runtime config |
+| `.env.example` | MODIFY | Add `TTS_STREAMING_MODE` variable |
+| `server/utils/tts/sequential-processor.ts` | MODIFY | Accept `ttsStreamingMode` in constructor; use it for routing instead of only `provider.supportsStreaming` |
+| `server/utils/tts/types.ts` | MODIFY | Add `TTSStreamingMode` type |
+| `server/api/chat.post.ts` | MODIFY | Read config, pass mode to processor, simplify eligibility check, add `ttsMode` to done event, add observability log |
+| `tests/unit/tts/sequential-processor.test.ts` | NEW | Unit tests for mode routing logic |
+| `tests/unit/tts/chat-tts-integration.test.ts` | NEW | Integration tests for chat endpoint TTS wiring |
 
 ---
 
@@ -241,13 +430,54 @@ Note: OpenAI TTS doesn't provide word timings natively. Options:
 ### Modified Endpoints
 
 #### `POST /api/chat` (updated)
-Add support for voice context flag.
 
-**Request addition:**
+<!-- REQ-REFINED: Updated chat API contract to document SSE TTS events -->
+
+The chat endpoint handles TTS inline via Server-Sent Events (SSE). When `streamTTS: true` is included in the request, the response stream includes audio chunks alongside text tokens.
+
+**Request additions:**
 ```typescript
 {
   // existing fields...
   inputModality?: 'voice' | 'text'  // Track how user responded
+  streamTTS?: boolean               // Enable inline TTS in SSE response
+}
+```
+
+**SSE Event Types (when `streamTTS: true`):**
+
+```typescript
+// Text token from LLM
+{ type: 'token', token: string }
+
+// Audio chunk (one per sentence in sentence-batch, multiple per sentence in true-streaming)
+{
+  type: 'audio_chunk',
+  chunk: {
+    chunkIndex: number,           // Sequential chunk number
+    audioBase64: string,          // Base64-encoded audio data
+    contentType: string,          // 'audio/mpeg' for InWorld
+    wordTimings: Array<{
+      word: string,
+      startMs: number,
+      endMs: number
+    }>,
+    cumulativeOffsetMs: number,   // Offset from start of response
+    durationMs: number,           // Duration of this chunk
+    isLast: boolean,              // Whether this is the final chunk
+    text: string                  // Sentence text (first sub-chunk only)
+  }
+}
+
+// Stream complete
+{
+  type: 'done',
+  done: true,
+  conversationId: string,
+  sessionComplete: boolean,
+  streamingTTS: boolean,          // Whether audio was actually sent
+  ttsMode: 'sentence-batch' | 'true-streaming' | 'none',  // Effective TTS mode used
+  requestId: string
 }
 ```
 
@@ -1369,31 +1599,264 @@ git push origin main
 |----------|----------|
 | Mic permission denied | Show explanation, offer text fallback |
 | STT fails/empty result | "I didn't catch that. Try again?" + re-record or type option |
-| TTS fails | Show transcript anyway, continue via text |
+| TTS fails (entire response) | Show transcript anyway, continue via text |
+| TTS fails (single sentence in multi-sentence response) | Skip failed sentence's audio, continue with remaining sentences. Transcript still shows full text. Completion marker always sent. |
 | Network interruption (AI response) | Show partial transcript, offer retry |
 | Network interruption (user recording) | Prompt to retry recording |
 | User leaves mid-session | Messages persist, can resume later |
+| TTS provider unavailable | Fall back through provider chain (configured -> OpenAI). If all unavailable, skip audio entirely. |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] AI responses play as audio with Nova voice
-- [ ] Word-by-word transcript displays synchronized with audio
-- [ ] Current word highlighted in brand accent color
-- [ ] Pause/resume works during AI speech
-- [ ] Mic button activates after AI finishes speaking
-- [ ] Tap-to-start/tap-to-stop recording works
-- [ ] Visual feedback (waveform) shows during recording
-- [ ] User's speech transcribed and displayed
-- [ ] Auto-submit after recording stops
-- [ ] Text fallback input available and functional
-- [ ] "Type instead" / "Use voice instead" toggles work
-- [ ] Session complete detection works
-- [ ] Mic permission request handled gracefully
-- [ ] Error states display with recovery options
-- [ ] Transcript persists to database (text only, no audio)
-- [ ] Works on mobile browsers (iOS Safari, Chrome)
+### Voice Interface (Implemented)
+- [x] AI responses play as audio
+- [x] Word-by-word transcript displays synchronized with audio
+- [x] Current word highlighted in brand accent color
+- [x] Pause/resume works during AI speech
+- [x] Mic button activates after AI finishes speaking
+- [x] Tap-to-start/tap-to-stop recording works
+- [x] Visual feedback (waveform) shows during recording
+- [x] User's speech transcribed and displayed
+- [x] Auto-submit after recording stops
+- [x] Text fallback input available and functional
+- [x] "Type instead" / "Use voice instead" toggles work
+- [x] Session complete detection works
+- [x] Mic permission request handled gracefully
+- [x] Error states display with recovery options
+- [x] Transcript persists to database (text only, no audio)
+- [x] Works on mobile browsers (iOS Safari, Chrome)
+
+<!-- REQ-REFINED: Added acceptance criteria for TTS streaming modes -->
+
+### TTS Streaming Modes (In Progress)
+- [ ] `ttsStreamingMode` config value controls which synthesis mode is used
+- [ ] `sentence-batch` mode: each detected sentence sent as a single TTS API call, one audio chunk per sentence
+- [ ] `true-streaming` mode: each detected sentence sent to streaming TTS endpoint, multiple sub-sentence chunks per sentence
+- [ ] Default mode is `sentence-batch`
+- [ ] Multi-sentence responses produce multiple sequential audio chunks with no gaps
+- [ ] Audio chunks emitted in strict sentence order regardless of which finishes first
+- [ ] Word-by-word transcript highlighting works correctly in both modes
+- [ ] If a single sentence's TTS fails, remaining sentences still play
+- [ ] Completion marker always sent to client even on total TTS failure
+- [ ] Provider fallback chain works (configured provider -> OpenAI) when credentials missing
+- [ ] TTS mode, provider, and timing logged per request at info level
+
+---
+
+<!-- TECH-DESIGN: User stories for TTS streaming modes implementation -->
+
+## User Stories: TTS Streaming Modes
+
+### Implementation Order
+
+Stories are ordered by dependency. Stories 1-2 are foundation; 3-4 build on them; 5 is cross-cutting.
+
+```
+Story 1: Config ──→ Story 3: Chat endpoint wiring ──→ Story 4: Observability
+Story 2: Processor mode routing ──↗                         ↓
+                                                    Story 5: Tests
+```
+
+Stories 1 and 2 can be implemented in parallel. Story 3 depends on both. Story 4 depends on 3. Story 5 can start after 2 but should cover everything.
+
+---
+
+### Story 1: Add TTS Streaming Mode Configuration
+
+**Description:** As a developer, I want to configure which TTS synthesis mode the server uses via an environment variable, so that I can switch between sentence-batch and true-streaming without code changes.
+
+**Acceptance Criteria:**
+
+1. Given `TTS_STREAMING_MODE` is not set in the environment, when the server starts, then `useRuntimeConfig().ttsStreamingMode` returns `'sentence-batch'`
+2. Given `TTS_STREAMING_MODE=true-streaming` is set, when the server starts, then `useRuntimeConfig().ttsStreamingMode` returns `'true-streaming'`
+3. Given `.env.example` is read by a new developer, then `TTS_STREAMING_MODE` is documented with valid values and default
+4. Given `TTS_STREAMING_MODE=banana` (an invalid value) is set, when the server starts, then `useRuntimeConfig().ttsStreamingMode` returns `'sentence-batch'` and a `console.warn` is logged indicating the invalid value was ignored
+
+<!-- READINESS-REVIEWED: Added AC for invalid config value handling -->
+
+**Technical Notes:**
+- Add `ttsStreamingMode: process.env.TTS_STREAMING_MODE || 'sentence-batch'` to `runtimeConfig` in `nuxt.config.ts`
+- Add `TTSStreamingMode` type (`'sentence-batch' | 'true-streaming'`) to `server/utils/tts/types.ts`
+- Add `TTS_STREAMING_MODE=` with comment to `.env.example`
+- Validate the config value at usage point (e.g., in `chat.post.ts` when reading the config); if invalid, default to `'sentence-batch'` and warn
+
+**Dependencies:** None
+
+**Estimated Complexity:** S — Three small file edits
+
+---
+
+### Story 2: Add Mode Routing to SequentialTTSProcessor
+
+**Description:** As a developer, I want the `SequentialTTSProcessor` to route between streaming and batch TTS synthesis based on an explicit mode parameter, so that the synthesis mode is decoupled from provider capability flags.
+
+**Acceptance Criteria:**
+
+1. Given mode is `'sentence-batch'`, when `enqueueSentence` is called with any provider (including one with `supportsStreaming: true`), then `provider.synthesize()` is called (batch path)
+2. Given mode is `'true-streaming'` and the provider has `supportsStreaming: true`, when `enqueueSentence` is called, then `provider.synthesizeStream()` is called (streaming path)
+3. Given mode is `'true-streaming'` and the provider does NOT have `supportsStreaming: true`, when `enqueueSentence` is called, then `provider.synthesize()` is called (batch fallback) and a `console.warn` is logged on the first such degradation
+4. Given mode is `'sentence-batch'`, when processing multiple sentences, then each sentence produces exactly one audio chunk
+5. Given mode is `'true-streaming'` with a streaming-capable provider, when processing a sentence, then multiple sub-sentence audio chunks may be emitted progressively
+6. Given mode is `'true-streaming'` and the provider degrades to batch, when `getEffectiveMode()` is called after processing, then it returns `'sentence-batch'`
+7. Given mode is `'true-streaming'` and the provider supports streaming (no degradation), when `getEffectiveMode()` is called, then it returns `'true-streaming'`
+8. Given mode is `'sentence-batch'`, when `getEffectiveMode()` is called, then it returns `'sentence-batch'`
+
+<!-- READINESS-REVIEWED: Added ACs for getEffectiveMode() exposure mechanism -->
+
+**Technical Notes:**
+- Modify `SequentialTTSProcessor` constructor to accept `ttsStreamingMode: TTSStreamingMode` parameter
+- Update `createSequentialTTSProcessor` factory function signature to include mode
+- Change the routing condition on line 65 from `this.provider.supportsStreaming && this.provider.synthesizeStream` to `this.ttsStreamingMode === 'true-streaming' && this.provider.supportsStreaming && this.provider.synthesizeStream`
+- Add a `degradationWarned` flag to avoid spamming the warn log for every sentence
+- Add `getEffectiveMode(): TTSStreamingMode` method — returns configured mode unless degradation occurred, then returns `'sentence-batch'`
+- All existing behavior (error handling, completion markers, sanitization) remains unchanged
+
+**Dependencies:** Story 1 (for the `TTSStreamingMode` type)
+
+**Estimated Complexity:** S — Modify constructor, change one conditional, add warning
+
+---
+
+### Story 3: Wire Configuration Through Chat Endpoint
+
+**Description:** As a developer, I want the chat endpoint to read the TTS streaming mode config and pass it to the processor, with a simplified provider eligibility check, so that the mode config controls end-to-end behavior.
+
+**Acceptance Criteria:**
+
+1. Given `streamTTS: true` in the request and a TTS provider with valid credentials, when the chat endpoint processes the request, then TTS synthesis is activated regardless of provider type
+2. Given `streamTTS: true` and `ttsStreamingMode: 'sentence-batch'`, when the response completes, then the SSE `done` event includes `ttsMode: 'sentence-batch'`
+3. Given `streamTTS: true` and `ttsStreamingMode: 'true-streaming'` with InWorld configured, when the response completes, then the SSE `done` event includes `ttsMode: 'true-streaming'`
+4. Given `streamTTS: false` or no TTS provider credentials, when the response completes, then the SSE `done` event includes `ttsMode: 'none'`
+5. Given the current hardcoded eligibility check for `groq` and `inworld`, when this story is complete, then the check is replaced with a credential-based check on the resolved provider
+
+**Technical Notes:**
+- Read `config.ttsStreamingMode` in `chat.post.ts` streaming path
+- Replace the `supportsStreamingTTS` eligibility check (lines ~494-499) with: `const useStreamingTTS = streamTTS && !!resolvedProvider` where `resolvedProvider` is obtained from `getTTSProviderFromConfig()`. Catch provider creation errors to handle missing credentials gracefully.
+- Pass `config.ttsStreamingMode` to `createSequentialTTSProcessor(provider, onChunk, mode)`
+- Add `ttsMode` field to the `done` SSE event payload
+- Determine `effectiveMode`: if TTS was used, report the configured mode; if provider degraded to batch, report `'sentence-batch'`; if no TTS, report `'none'`
+
+**Dependencies:** Story 1, Story 2
+
+**Estimated Complexity:** M — Multiple changes in a large file, needs careful integration with existing logic
+
+---
+
+### Story 4: Add TTS Observability Logging
+
+**Description:** As an operator, I want each chat request with TTS to log a summary of mode, provider, and timing at info level, so that I can monitor TTS quality and debug latency issues in production.
+
+**Acceptance Criteria:**
+
+1. Given a chat request with `streamTTS: true` that produces audio, when the stream completes, then a single `console.info('[chat] TTS summary', {...})` is logged containing: `requestId`, `ttsMode`, `ttsProvider`, `ttfaMs`, `totalTtsMs`, `sentenceCount`
+2. Given the first audio chunk is emitted, when measuring `ttfaMs`, then the value is `firstChunkTimestamp - streamStartTimestamp` in milliseconds
+3. Given a chat request where TTS is enabled but all sentences fail, when the stream completes, then the summary log still fires with `sentenceCount: 0`
+4. Given `ttsStreamingMode: 'true-streaming'` but the provider falls back to batch due to capability, when the degradation occurs, then a `console.warn` is logged (from Story 2) and the summary log reports `ttsMode: 'sentence-batch'` (the effective mode, not the configured mode)
+
+**Technical Notes:**
+- Record `streamStartTime = Date.now()` when LLM streaming begins in `chat.post.ts`
+- Record `firstChunkTime` in the `onChunk` callback (only on first invocation)
+- After `finalizeStreamingTTS()` completes, emit the summary log
+- Track `effectiveMode` by calling `ttsProcessor.getEffectiveMode()` after `finalizeStreamingTTS()` completes. Returns configured mode unless provider degraded to batch.
+
+**Dependencies:** Story 3
+
+**Estimated Complexity:** S — Add timestamps and a log statement
+
+---
+
+### Story 5: Unit and Integration Tests
+
+**Description:** As a developer, I want unit tests for the processor mode routing and integration tests for the chat endpoint TTS wiring, so that I can confidently change modes without regressions.
+
+**Acceptance Criteria:**
+
+1. Given `SequentialTTSProcessor` unit tests, when mode is `'sentence-batch'`, then the streaming path is never called even if the provider supports streaming
+2. Given `SequentialTTSProcessor` unit tests, when mode is `'true-streaming'` and provider supports streaming, then the streaming path is used
+3. Given `SequentialTTSProcessor` unit tests, when mode is `'true-streaming'` and provider does NOT support streaming, then the batch path is used and a warning is logged
+4. Given integration tests for `chat.post.ts`, when `ttsStreamingMode` config is `'sentence-batch'`, then the done event includes `ttsMode: 'sentence-batch'`
+5. Given integration tests for `chat.post.ts`, when `ttsStreamingMode` config is `'true-streaming'`, then the done event includes `ttsMode: 'true-streaming'`
+6. Given integration tests, when TTS is not used, then the done event includes `ttsMode: 'none'`
+
+**Technical Notes:**
+- Unit test file: `tests/unit/tts/sequential-processor.test.ts`
+  - Create mock `TTSProvider` objects with and without `supportsStreaming`
+  - Mock `synthesize()` and `synthesizeStream()` to return predictable results
+  - Assert which method was called based on mode + capability combination
+  - Assert `console.warn` called on degradation
+- Integration test file: `tests/unit/tts/chat-tts-integration.test.ts`
+  - Mock `getTTSProviderFromConfig()` to return a mock provider
+  - Mock `useRuntimeConfig()` to control `ttsStreamingMode`
+  - Verify SSE events include correct `ttsMode` in done event
+  - Test with both mode values
+- Follow existing test patterns in `tests/unit/` directory
+
+**Dependencies:** Stories 1-4
+
+**Estimated Complexity:** M — Multiple test files, mock setup, async behavior testing
+
+---
+
+<!-- TECH-DESIGN: Test specification for TTS streaming modes -->
+
+## Test Specification: TTS Streaming Modes
+
+### Unit Tests: SequentialTTSProcessor
+
+**File:** `tests/unit/tts/sequential-processor.test.ts`
+
+**Mock Strategy:**
+- Create `mockStreamingProvider`: `TTSProvider` with `supportsStreaming: true`, `synthesize` as vi.fn(), `synthesizeStream` as vi.fn() returning an async generator
+- Create `mockBatchProvider`: `TTSProvider` with `supportsStreaming` undefined, `synthesize` as vi.fn()
+- Both mocks return minimal valid `TTSResult`/`TTSStreamChunk` objects
+- Mock `console.warn` to verify degradation logging
+
+**Test Cases:**
+
+| Test Name | Mode | Provider | Expected Behavior |
+|-----------|------|----------|-------------------|
+| `should call synthesize() in sentence-batch mode even if provider supports streaming` | `sentence-batch` | streaming-capable | `synthesize` called, `synthesizeStream` not called |
+| `should call synthesizeStream() in true-streaming mode with streaming provider` | `true-streaming` | streaming-capable | `synthesizeStream` called, `synthesize` not called |
+| `should fall back to synthesize() in true-streaming mode with non-streaming provider` | `true-streaming` | batch-only | `synthesize` called, `console.warn` logged |
+| `should only warn once for degradation across multiple sentences` | `true-streaming` | batch-only | `console.warn` called once for 3 sentences |
+| `should emit one chunk per sentence in sentence-batch mode` | `sentence-batch` | streaming-capable | `onChunk` called once per `enqueueSentence` |
+| `should emit multiple chunks per sentence in true-streaming mode` | `true-streaming` | streaming-capable | `onChunk` called N times per `enqueueSentence` (based on generator yield count) |
+| `should maintain strict sentence ordering in both modes` | both | both | Chunks arrive in enqueue order |
+| `should send completion marker on last sentence failure` | both | both | `onChunk` called with `isLast: true` even when synthesis throws |
+| `should skip failed sentence and continue processing` | both | both | Sentence 2 fails, sentences 1 and 3 still produce audio |
+| `should return sentence-batch from getEffectiveMode when configured as sentence-batch` | `sentence-batch` | any | `getEffectiveMode()` returns `'sentence-batch'` |
+| `should return true-streaming from getEffectiveMode when no degradation` | `true-streaming` | streaming-capable | `getEffectiveMode()` returns `'true-streaming'` |
+| `should return sentence-batch from getEffectiveMode after degradation` | `true-streaming` | batch-only | `getEffectiveMode()` returns `'sentence-batch'` |
+
+### Integration Tests: Chat Endpoint TTS Wiring
+
+**File:** `tests/unit/tts/chat-tts-integration.test.ts`
+
+**Mock Strategy:**
+- Mock `useRuntimeConfig()` to return controlled config including `ttsStreamingMode`
+- Mock `getTTSProviderFromConfig()` to return a mock provider
+- Mock LLM streaming (Gemini) to return predictable token sequences
+- Parse SSE output to verify event types and payloads
+
+**Test Cases:**
+
+| Test Name | Setup | Expected Behavior |
+|-----------|-------|-------------------|
+| `should include ttsMode in done event for sentence-batch` | mode=`sentence-batch`, streamTTS=true | done event has `ttsMode: 'sentence-batch'` |
+| `should include ttsMode in done event for true-streaming` | mode=`true-streaming`, streamTTS=true, streaming provider | done event has `ttsMode: 'true-streaming'` |
+| `should include ttsMode: none when TTS disabled` | streamTTS=false | done event has `ttsMode: 'none'` |
+| `should activate TTS for any provider with valid credentials` | mode=`sentence-batch`, provider=`elevenlabs` | TTS pipeline activates (was previously excluded by hardcoded allowlist) |
+| `should log TTS summary after stream completes` | streamTTS=true | `console.info` called with expected fields |
+| `should default to sentence-batch and warn on invalid config value` | mode=`banana`, streamTTS=true | TTS uses sentence-batch, `console.warn` logged |
+
+### Coverage Goals
+
+- **Highest risk:** Mode routing logic in `SequentialTTSProcessor` — deepest coverage
+- **Medium risk:** Config wiring in `chat.post.ts` — integration coverage
+- **Low risk:** Config addition in `nuxt.config.ts` — covered implicitly by integration tests
+- **Not tested (by design):** Frontend composables (mode-agnostic, no changes), actual TTS API calls (mocked)
 
 ---
 
@@ -1442,3 +1905,25 @@ Well within the $199 price point (~0.6% of revenue).
 | 1.0 | [Original] | Initial Phase 3 voice specification created |
 | 2.0 | 2026-01-11 | Changed terminology from "myths" to "illusions" where applicable; Added version control header |
 | 3.0 | 2026-01-11 | Renamed from "Phase 3" to "Voice Interface Specification" for feature-based organization; Added legacy reference for git commit traceability; Updated status to Complete; Updated cross-references to use hybrid naming |
+| 3.1 | 2026-02-16 | Added TTS Synthesis Modes section (sentence-batch vs true-streaming); Updated provider table to multi-provider architecture (InWorld primary, OpenAI fallback); Added provider fallback chain requirement; Documented SSE audio_chunk event contract for chat-integrated TTS; Added per-sentence failure handling; Added TTS streaming modes acceptance criteria; Requirements refinement session for quality vs latency tradeoff |
+| 3.2 | 2026-02-16 | Technical design refinement: Added Implementation Architecture section with design decisions, mode routing logic, observability implementation, and files changed. Added 5 user stories with acceptance criteria (Given/When/Then), technical notes, dependencies, and complexity estimates. Added test specification with unit test cases for SequentialTTSProcessor mode routing and integration test cases for chat endpoint TTS wiring. |
+| 3.3 | 2026-02-16 | Readiness review: Updated SSE done event contract to include `ttsMode` field. Added invalid config value handling requirement and AC (Story 1 AC #4). Added `getEffectiveMode()` method ACs to Story 2 (ACs #6-8). Pinned effective mode exposure mechanism. Added 4 test cases (3 unit for getEffectiveMode, 1 integration for invalid config). |
+
+---
+
+## Readiness Summary
+
+**Review Date:** 2026-02-16
+**Scope:** TTS Streaming Modes enhancement (new implementation scope only)
+**Final Assessment:** Ready for Development
+
+**Gaps Found:** 6 (2 Layer 1, 1 Layer 2, 3 Layer 3)
+**Gaps Resolved:** 6/6
+
+**Resolutions Applied:**
+1. SSE `done` event contract updated to include `ttsMode` field (consistency fix)
+2. Invalid config value defaults to `sentence-batch` with `console.warn` (Story 1 AC #4 added)
+3. Effective mode exposure via `getEffectiveMode()` method on `SequentialTTSProcessor` (Story 2 ACs #6-8 added, Story 4 technical notes updated)
+4. Three unit test cases and one integration test case added to test specification
+
+**Deferred Items:** None

@@ -163,6 +163,28 @@ export const useStreamingAudioQueue = (options: StreamingAudioQueueOptions = {})
       options.onPlaybackStart?.()
     }
 
+    // Add inter-sentence pause for natural pacing.
+    // In sentence-batch mode each chunk is a full sentence (chunk.text is non-empty).
+    // In true-streaming mode only the first sub-chunk of each sentence has text.
+    // We insert a gap before every new sentence except the very first one.
+    // 400ms matches the SSML/TTS industry default for inter-sentence pauses
+    // and falls within the 350-600ms range perceived as natural in speech.
+    const INTER_SENTENCE_GAP_SEC = 0.4
+    const isNewSentence = chunk.text && chunk.text.length > 0
+    if (isNewSentence && queuedChunks.length > 0) {
+      nextScheduleTime += INTER_SENTENCE_GAP_SEC
+      actualCumulativeMs += INTER_SENTENCE_GAP_SEC * 1000
+    }
+
+    // If the scheduled time is in the past, audio will start immediately
+    // (Web Audio API clamps start time to currentTime). Adjust our tracking
+    // so word timing offsets reflect the actual playback position.
+    if (playbackStarted && nextScheduleTime < currentTime) {
+      const gapSec = currentTime - nextScheduleTime
+      actualCumulativeMs += gapSec * 1000
+      nextScheduleTime = currentTime
+    }
+
     const scheduledTime = nextScheduleTime
 
     // Create and schedule the source node

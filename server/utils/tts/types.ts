@@ -55,6 +55,8 @@ export interface TTSProvider {
 
 export type TTSProviderType = 'openai' | 'elevenlabs' | 'groq' | 'inworld'
 
+export type TTSStreamingMode = 'sentence-batch' | 'true-streaming'
+
 /**
  * Audio chunk for streaming TTS
  * Sent via SSE during streaming responses

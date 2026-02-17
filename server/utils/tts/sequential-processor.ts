@@ -8,7 +8,7 @@
  * where faster-completing requests could overtake slower ones.
  */
 
-import type { TTSProvider, AudioChunk } from './types'
+import type { TTSProvider, AudioChunk, TTSStreamingMode } from './types'
 import { getWavDurationMs, scaleWordTimings } from './wav-utils'
 import { sanitizeForTTS } from './sanitize'
 
@@ -20,10 +20,13 @@ export class SequentialTTSProcessor {
   private cumulativeOffsetMs = 0
   private hasError = false
   private sentCount = 0 // Tracks actually-emitted audio chunks (not completion markers)
+  private degraded = false
+  private degradationWarned = false
 
   constructor(
     private provider: TTSProvider,
-    private onChunk: ChunkCallback
+    private onChunk: ChunkCallback,
+    private ttsStreamingMode: TTSStreamingMode = 'sentence-batch'
   ) {}
 
   /**
@@ -61,8 +64,8 @@ export class SequentialTTSProcessor {
       if (this.hasError) return
 
       try {
-        // Check if provider supports streaming synthesis
-        if (this.provider.supportsStreaming && this.provider.synthesizeStream) {
+        // Check if mode is true-streaming AND provider supports it
+        if (this.ttsStreamingMode === 'true-streaming' && this.provider.supportsStreaming && this.provider.synthesizeStream) {
           // STREAMING PATH: Emit multiple sub-sentence chunks progressively
           // This reduces time-to-first-byte significantly
           let subChunkCount = 0
@@ -103,7 +106,14 @@ export class SequentialTTSProcessor {
             this.onChunk(completionChunk)
           }
         } else {
-          // NON-STREAMING PATH: Existing behavior for Groq, OpenAI, ElevenLabs
+          // NON-STREAMING / BATCH PATH
+          // Log degradation warning if true-streaming was requested but provider can't do it
+          if (this.ttsStreamingMode === 'true-streaming' && !this.degradationWarned) {
+            console.warn('[sequential-tts] Provider does not support streaming, using sentence-batch')
+            this.degradationWarned = true
+            this.degraded = true
+          }
+
           // Capture chunk index for this sentence
           const myChunkIndex = this.chunkIndex++
 
@@ -211,6 +221,16 @@ export class SequentialTTSProcessor {
   }
 
   /**
+   * Get the effective TTS streaming mode after accounting for provider capabilities.
+   * Returns the configured mode unless the provider degraded to batch,
+   * in which case it returns 'sentence-batch'.
+   */
+  getEffectiveMode(): TTSStreamingMode {
+    if (this.degraded) return 'sentence-batch'
+    return this.ttsStreamingMode
+  }
+
+  /**
    * Mark the processor as having encountered an error.
    * Subsequent enqueue calls will be ignored.
    */
@@ -224,10 +244,12 @@ export class SequentialTTSProcessor {
  *
  * @param provider - The TTS provider to use for synthesis
  * @param onChunk - Callback invoked for each synthesized chunk (in order)
+ * @param ttsStreamingMode - Which synthesis mode to use ('sentence-batch' or 'true-streaming')
  */
 export function createSequentialTTSProcessor(
   provider: TTSProvider,
-  onChunk: ChunkCallback
+  onChunk: ChunkCallback,
+  ttsStreamingMode: TTSStreamingMode = 'sentence-batch'
 ): SequentialTTSProcessor {
-  return new SequentialTTSProcessor(provider, onChunk)
+  return new SequentialTTSProcessor(provider, onChunk, ttsStreamingMode)
 }
