@@ -48,6 +48,12 @@ const updateAudioLevel = () => {
 }
 
 onMounted(() => {
+  // Save focus and move it into the modal
+  previouslyFocusedElement = document.activeElement as HTMLElement | null
+  nextTick(() => {
+    modalRef.value?.focus()
+  })
+
   const checkInIllusionKey = props.checkIn.illusion_key && ILLUSION_KEYS.includes(props.checkIn.illusion_key as IllusionKey)
     ? props.checkIn.illusion_key as IllusionKey
     : undefined
@@ -93,6 +99,8 @@ onUnmounted(() => {
   if (audioLevelFrame) {
     cancelAnimationFrame(audioLevelFrame)
   }
+  // Restore focus to the element that was focused before the modal opened
+  previouslyFocusedElement?.focus()
 })
 
 // Handle backdrop click - only dismiss in ready state
@@ -168,6 +176,53 @@ async function handleMicTap() {
   }
 }
 
+// Accessibility: track element focused before modal opened so we can restore focus on close
+let previouslyFocusedElement: HTMLElement | null = null
+
+const promptId = `check-in-prompt-${Math.random().toString(36).slice(2, 9)}`
+
+// Get all focusable elements within the modal
+function getFocusableElements(): HTMLElement[] {
+  if (!modalRef.value) return []
+  return Array.from(
+    modalRef.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter(el => !el.hasAttribute('disabled'))
+}
+
+// Focus trap: handle Tab/Shift+Tab and Escape
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    if (state.value === 'ready') {
+      emit('dismiss')
+    }
+    return
+  }
+
+  if (event.key === 'Tab') {
+    const focusable = getFocusableElements()
+    if (focusable.length === 0) {
+      event.preventDefault()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+
+    if (event.shiftKey) {
+      if (document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else {
+      if (document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+  }
+}
+
 // Touch handling for swipe down dismissal (only in ready state)
 let touchStartY = 0
 let currentTranslateY = 0
@@ -231,10 +286,15 @@ function handleTouchEnd() {
     <div
       class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
       @click="handleBackdropClick"
+      @keydown="handleKeydown"
     >
       <div
         ref="modalRef"
-        class="w-full md:max-w-md glass rounded-t-3xl md:rounded-card p-8 shadow-card border border-brand-border animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        :aria-describedby="promptId"
+        tabindex="-1"
+        class="w-full md:max-w-md glass rounded-t-3xl md:rounded-card p-8 shadow-card border border-brand-border animate-slide-up focus:outline-none"
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
@@ -250,7 +310,7 @@ function handleTouchEnd() {
         </div>
 
         <div class="mb-8">
-          <p class="text-xl text-white text-center leading-relaxed">{{ checkIn.prompt }}</p>
+          <p :id="promptId" class="text-xl text-white text-center leading-relaxed">{{ checkIn.prompt }}</p>
         </div>
 
         <!-- Voice response area -->
