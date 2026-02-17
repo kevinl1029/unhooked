@@ -11,6 +11,7 @@ import crypto from 'crypto'
 const MORNING_HOUR = 9    // 9am local
 const EVENING_HOUR = 19   // 7pm local
 const POST_SESSION_DELAY_HOURS = 2   // 2 hours after session
+const EVIDENCE_BRIDGE_DELAY_HOURS = 6  // 6 hours after session
 const ROLLING_WINDOW_DAYS = 3        // Schedule 3 days ahead
 const QUIET_HOURS_START = 21  // 9pm — begin quiet hours
 const QUIET_HOURS_END = 8     // 8am — end quiet hours
@@ -251,8 +252,8 @@ export async function scheduleEvidenceBridgeCheckIn(
   sessionId: string
 ): Promise<ScheduledCheckIn | null> {
   try {
-    // Schedule for 24 hours later, then apply quiet hours deferral
-    const rawTime = addHours(sessionEndTime, 24)
+    // Schedule for 6 hours later, then apply quiet hours deferral
+    const rawTime = addHours(sessionEndTime, EVIDENCE_BRIDGE_DELAY_HOURS)
     const scheduledTime = applyQuietHours(rawTime, timezone)
 
     // Build the prompt template wrapping the observation
