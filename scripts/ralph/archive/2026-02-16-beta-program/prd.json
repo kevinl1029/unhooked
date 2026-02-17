@@ -1,0 +1,329 @@
+{
+  "project": "Unhooked",
+  "branchName": "ralph/checkin-email-enhancements",
+  "description": "Check-In Email Enhancements — Quiet hours deferral, email template redesign with per-type content, first-name personalization, List-Unsubscribe headers, one-click unsubscribe/resubscribe flow, evidence bridge 6h timing, retry logic, cron-driven expiration, and accessibility improvements",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Database migration — email unsubscribe column",
+      "description": "As the system, I need the email_unsubscribed_at column on user_progress so that user email preferences can be tracked.",
+      "acceptanceCriteria": [
+        "Create migration file at supabase/migrations/20260216_email_unsubscribe.sql",
+        "Migration adds email_unsubscribed_at TIMESTAMP WITH TIME ZONE column to public.user_progress with default NULL",
+        "Migration uses IF NOT EXISTS or equivalent for idempotency",
+        "In types/database.types.ts: user_progress.Row has email_unsubscribed_at: string | null",
+        "In types/database.types.ts: user_progress.Insert has email_unsubscribed_at?: string | null",
+        "In types/database.types.ts: user_progress.Update has email_unsubscribed_at?: string | null",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Follow the pattern from supabase/migrations/20260215_add_beta_flag.sql. TypeScript types in types/database.types.ts must be updated manually since npm run db:types requires a live Supabase connection. The user_progress type is in types/database.types.ts — search for 'user_progress' to find the Row, Insert, Update sections. NULL = subscribed (default), timestamp = unsubscribed."
+    },
+    {
+      "id": "US-002",
+      "title": "HMAC token utility and environment config",
+      "description": "As a developer, I need a shared HMAC utility and the UNSUBSCRIBE_SECRET configured so that unsubscribe tokens can be generated and validated consistently.",
+      "acceptanceCriteria": [
+        "Create server/utils/auth/hmac-tokens.ts",
+        "Export generateUnsubscribeToken(userId: string): string that returns HMAC-SHA256 of userId using UNSUBSCRIBE_SECRET, encoded as base64url",
+        "Export validateUnsubscribeToken(userId: string, signature: string): boolean using timing-safe comparison (crypto.timingSafeEqual)",
+        "Given the same userId, generateUnsubscribeToken() returns the same signature (deterministic)",
+        "Given a tampered signature, validateUnsubscribeToken() returns false",
+        "Given UNSUBSCRIBE_SECRET is not set, either function throws a descriptive error",
+        "In .env.example: add UNSUBSCRIBE_SECRET= with comment '# HMAC secret for email unsubscribe tokens (generate: openssl rand -hex 32)'",
+        "In nuxt.config.ts: add unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET to runtimeConfig",
+        "In nuxt.config.ts: add '/unsubscribe' to supabase.redirectOptions.exclude array",
+        "Create tests/unit/auth/hmac-tokens.test.ts with tests: deterministic output, different IDs produce different HMACs, validates correct signature, rejects incorrect signature, rejects empty signature, throws if secret not set",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Uses Node.js crypto: createHmac('sha256', secret).update(userId).digest('base64url'). Read UNSUBSCRIBE_SECRET via useRuntimeConfig().unsubscribeSecret. For timingSafeEqual, both buffers must be the same length — convert both to Buffer first. The supabase.redirectOptions.exclude array is in nuxt.config.ts (search for 'exclude'). Mock useRuntimeConfig() in tests. See tests/setup.ts for existing mock patterns."
+    },
+    {
+      "id": "US-003",
+      "title": "Rate limiting middleware for public endpoints",
+      "description": "As the system, I need IP-based rate limiting on public check-in endpoints to prevent abuse.",
+      "acceptanceCriteria": [
+        "Create server/middleware/rate-limit.ts",
+        "Rate limits to 10 requests per 60 seconds per IP",
+        "The 11th request within 60s returns 429 status with { error: 'Too many requests' }",
+        "After 60 seconds, the counter resets and requests succeed again",
+        "Only applies to paths starting with: /api/check-ins/open/, /api/check-ins/unsubscribe, /api/check-ins/resubscribe",
+        "Does NOT rate-limit other paths like /api/check-ins/pending",
+        "Extracts client IP from x-forwarded-for header (Vercel provides this), falls back to req.socket.remoteAddress",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Use in-memory Map<string, { count: number, resetAt: number }>. Clean up expired entries on each request. Use Nuxt server middleware pattern: defineEventHandler(). Check event.path for rate-limited prefixes. Return early with setResponseStatus(event, 429) for exceeded limits. This is a Nuxt server middleware in server/middleware/ — it auto-registers. Resets on deploy (acceptable at current scale)."
+    },
+    {
+      "id": "US-004",
+      "title": "Quiet hours deferral for all check-in types",
+      "description": "As a user, I never receive check-in emails during quiet hours (9pm–8am), because check-ins scheduled during that window are deferred to 8am instead of being dropped.",
+      "acceptanceCriteria": [
+        "Add applyQuietHours(scheduledFor: Date, timezone: string): Date function to check-in-scheduler.ts",
+        "If hour >= 21 (9pm), defer to 8am next day",
+        "If hour < 8 (before 8am), defer to 8am same day",
+        "If hour is 8-20 (8am-8:59pm), no change",
+        "Remove the POST_SESSION_CUTOFF_HOUR constant and the cutoff check at line 285 that drops post-session check-ins after 9pm",
+        "Replace with applyQuietHours() call on the calculated post-session time",
+        "Apply quiet hours to evidence bridge scheduling too (scheduleEvidenceBridgeCheckIn function)",
+        "Post-session check-ins after 9pm are now DEFERRED to 8am instead of DROPPED",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "File: server/utils/scheduling/check-in-scheduler.ts (473 lines). The POST_SESSION_CUTOFF_HOUR constant is on line 13. The cutoff logic is around line 285 (if hourInTimezone < POST_SESSION_CUTOFF_HOUR). Remove that conditional and replace with applyQuietHours(). Use existing helper functions getHourInTimezone() and createDateAtHour() which are already in this file. The addDays() helper may need to be added if not present — check date-fns imports."
+    },
+    {
+      "id": "US-005",
+      "title": "Personalization context population at scheduling time",
+      "description": "As the system, I store the user's preferred_name in personalization_context when scheduling check-ins so the email sender can personalize subjects without re-querying intake.",
+      "acceptanceCriteria": [
+        "Modify scheduleCheckIns() to query user_intake.preferred_name for the user",
+        "Modify scheduleEvidenceBridgeCheckIn() to also query preferred_name",
+        "Pass personalization_context: { name: preferredName } to createCheckIn() when name exists",
+        "Pass personalization_context: null when preferred_name is NULL or missing",
+        "Only one intake query per scheduling call (not per check-in)",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "File: server/utils/scheduling/check-in-scheduler.ts. Query: supabase.from('user_intake').select('preferred_name').eq('user_id', userId).single(). The createCheckIn() function already accepts a params object — add personalization_context to it and pass through to the insert. The personalization_context column is JSONB on check_in_schedule table."
+    },
+    {
+      "id": "US-006",
+      "title": "Email retry logic (3 attempts)",
+      "description": "As the system, I retry failed email sends up to 3 times on subsequent cron cycles, marking the check-in as failed after the 3rd attempt.",
+      "acceptanceCriteria": [
+        "In processScheduledCheckIns() query, add .lt('retry_count', 3) filter so failed check-ins aren't re-processed",
+        "On email send failure: increment retry_count on the check-in record",
+        "If retry_count reaches 3: set status to 'failed'",
+        "If retry_count is < 3: keep status as 'scheduled' (will be retried on next 5-min cron cycle)",
+        "On successful send after retries: set status to 'sent' and email_sent_at normally",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "File: server/utils/email/check-in-sender.ts (273 lines). The processScheduledCheckIns() function already queries scheduled check-ins. Add .lt('retry_count', 3) to the query. In the catch block (around line 109-115), increment retry_count. The retry_count column already exists on check_in_schedule with DEFAULT 0. The 5-min cron cycle provides natural backoff between retries."
+    },
+    {
+      "id": "US-007",
+      "title": "Cron-driven expiration sweep",
+      "description": "As the system, the cron job marks expired check-ins so queries don't need to calculate expiration at display time.",
+      "acceptanceCriteria": [
+        "Add expireOverdueCheckIns(now: Date) function to server/utils/scheduling/check-in-expiration.ts",
+        "Morning check-ins (9am) expire after 7pm local time",
+        "Evening check-ins (7pm) expire after 9am next day local time",
+        "Post-session check-ins expire at end of their window",
+        "Evidence bridge check-ins are NOT expired by cron (no time-based expiry)",
+        "Only check-ins in 'scheduled' or 'sent' status are eligible for expiration",
+        "Sets expired_at timestamp when marking as expired",
+        "Call expireOverdueCheckIns() from the cron endpoint after processing sends",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "File: server/utils/scheduling/check-in-expiration.ts (126 lines). The isCheckInExpired() and getCheckInExpiration() functions already exist — use them for the timezone-aware expiry calculation. Exclude evidence_bridge type from the query. The cron endpoint is server/api/cron/check-ins.get.ts — add a call to expireOverdueCheckIns() after processScheduledCheckIns()."
+    },
+    {
+      "id": "US-008",
+      "title": "Cancel evidence bridge check-in on session start",
+      "description": "As the system, when a user starts their next layer session, I cancel any pending evidence bridge check-ins for that illusion.",
+      "acceptanceCriteria": [
+        "In POST /api/conversations/index.post.ts, after creating the conversation, if illusionKey is provided: cancel pending evidence bridge check-ins",
+        "Cancel query: UPDATE check_in_schedule SET status='cancelled', cancellation_reason='user_continued_immediately' WHERE user_id=X AND trigger_illusion_key=illusionKey AND check_in_type='evidence_bridge' AND status IN ('scheduled', 'sent')",
+        "Cancellation is non-blocking: catch and log errors without failing conversation creation",
+        "If no pending evidence bridge exists, no error occurs (graceful no-op)",
+        "Conversations created WITHOUT illusionKey do not trigger cancellation",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "File: server/api/conversations/index.post.ts (77 lines). The illusionKey is already parsed from the request body (line 18-21). Add the cancellation logic after the conversation insert (around line 44). Use the existing supabase client from the handler. Wrap in try/catch so conversation creation is never blocked by cancellation errors. The trigger_illusion_key column on check_in_schedule stores the illusion key for evidence bridge check-ins."
+    },
+    {
+      "id": "US-009",
+      "title": "Evidence bridge timing 24h to 6h",
+      "description": "As a user, I receive my evidence bridge check-in 6 hours after an L1/L2 session instead of 24 hours, so the observation is still fresh.",
+      "acceptanceCriteria": [
+        "Change evidence bridge delay from 24 hours to 6 hours in scheduleEvidenceBridgeCheckIn()",
+        "Add or update EVIDENCE_BRIDGE_DELAY_HOURS constant to 6",
+        "Apply applyQuietHours() to the calculated time (from US-004)",
+        "Session at 11am → evidence bridge at 5pm (no deferral)",
+        "Session at 6pm → evidence bridge at midnight → deferred to 8am next day",
+        "Evidence bridge is NOT scheduled after L3 sessions (no observation assignment for L3)",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "File: server/utils/scheduling/check-in-scheduler.ts. The scheduleEvidenceBridgeCheckIn() function currently uses addHours(sessionEndTime, 24) — change to addHours(sessionEndTime, 6). Add the applyQuietHours() call on the result. The L3 exclusion should already be handled by the caller (only L1/L2 sessions schedule evidence bridges) but verify. Depends on US-004 for applyQuietHours()."
+    },
+    {
+      "id": "US-010",
+      "title": "Unsubscribed user handling in cron",
+      "description": "As the system, when processing check-ins for unsubscribed users, I advance the status to sent with null email_sent_at so the cron doesn't re-process but interstitials still work.",
+      "acceptanceCriteria": [
+        "In processScheduledCheckIns(), after fetching each check-in, query user_progress.email_unsubscribed_at for the user",
+        "If user has email_unsubscribed_at set: update check-in status to 'sent' with email_sent_at = null",
+        "No Resend email is sent for unsubscribed users",
+        "Log message: '[check-in-sender] User {id} unsubscribed, skipping email'",
+        "The check-in remains visible to the interstitial endpoint (interstitials still display for unsubscribed users)",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "File: server/utils/email/check-in-sender.ts. Add the unsubscribe check early in the processing loop (after fetching the check-in, before generating the magic link token). Query user_progress with .select('email_unsubscribed_at').eq('user_id', checkIn.user_id).single(). If unsubscribed, update status and continue to next check-in. Depends on US-001 (email_unsubscribed_at column)."
+    },
+    {
+      "id": "US-011",
+      "title": "Email template redesign with List-Unsubscribe headers",
+      "description": "As a user receiving check-in emails, I see a polished email with white outer background, per-type heading/body/CTA, footer unsubscribe link, and proper List-Unsubscribe headers for email client support.",
+      "acceptanceCriteria": [
+        "buildEmailHtml() outer background is white/transparent (not dark teal #041f21)",
+        "Per-type heading: post_session='Quick thought for you', evidence_bridge='What did you notice?', morning='Good morning', evening='Day\\'s winding down'",
+        "Per-type body text: post_session='A quick thought from your session earlier.', evidence_bridge includes observation assignment text, morning='Start your day with a quick reflection.', evening='Take a moment to reflect on your day.'",
+        "Per-type CTA button text: evidence_bridge='Share what you noticed', all others='Open check-in'",
+        "No 'This link expires in 24 hours' line anywhere in the template",
+        "Footer includes unsubscribe link with HMAC token: /api/check-ins/unsubscribe?uid={userId}&sig={hmac}",
+        "buildEmailText() includes same per-type content + unsubscribe URL in plain text",
+        "sendCheckInEmail() passes List-Unsubscribe header: <{appUrl}/api/check-ins/unsubscribe?token={magic_link_token}>",
+        "sendCheckInEmail() passes List-Unsubscribe-Post header: 'List-Unsubscribe=One-Click'",
+        "buildEmailHtml() and buildEmailText() accept checkInType and footerUnsubscribeLink parameters",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "File: server/utils/email/check-in-sender.ts. buildEmailHtml() starts at line 186, buildEmailText() at line 253, sendCheckInEmail() at line 148. Import generateUnsubscribeToken from server/utils/auth/hmac-tokens.ts (US-002). Create a config object mapping check-in types to their heading/body/CTA. The evidence_bridge body uses the prompt_template field from the check-in record (already contains the wrapped observation assignment). The footer unsubscribe link is HTML: <a href='{link}' style='color: rgba(255,255,255,0.4); text-decoration: underline;'>Unsubscribe from check-in emails</a>. List-Unsubscribe headers go in the headers object passed to resend.emails.send(). Depends on US-002 for HMAC utility."
+    },
+    {
+      "id": "US-012",
+      "title": "First-name personalization in email subjects",
+      "description": "As a user, I receive check-in emails with my first name in the subject line so the email feels personal.",
+      "acceptanceCriteria": [
+        "getSubjectLine() (or equivalent) accepts a name parameter: (type: string, name?: string | null): string",
+        "With name='Kevin', post_session subject is 'Kevin, quick thought from earlier...'",
+        "With name='Kevin', evidence_bridge subject is 'Kevin, what did you notice?'",
+        "With name='Kevin', morning subject is 'Kevin, good morning'",
+        "With name='Kevin', evening subject is 'Kevin, how was your day?'",
+        "With name=null, subjects omit the name prefix: 'Quick thought from earlier...', 'What did you notice?', etc.",
+        "processScheduledCheckIns() reads personalization_context.name from the check-in record and passes to subject builder",
+        "No re-query of user_intake during email send (name comes from personalization_context)",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Files: server/utils/email/resend-client.ts (39 lines, has getSubjectLine), server/utils/email/check-in-sender.ts (reads personalization_context). The personalization_context is a JSONB column on check_in_schedule populated at scheduling time (US-005). In check-in-sender.ts processScheduledCheckIns(), extract name from checkIn.personalization_context?.name and pass to getSubjectLine(). Depends on US-011 (template changes) and US-005 (personalization_context population)."
+    },
+    {
+      "id": "US-013",
+      "title": "Unsubscribe API endpoints (GET and POST)",
+      "description": "As a user who clicks unsubscribe in an email, I am immediately unsubscribed and redirected to a confirmation page.",
+      "acceptanceCriteria": [
+        "Create server/api/check-ins/unsubscribe.get.ts",
+        "GET with valid HMAC (?uid=X&sig=Y): sets email_unsubscribed_at on user_progress, 302 redirects to /unsubscribe?status=success&uid=X&sig=Y",
+        "GET with valid magic_link_token (?token=X): looks up check-in, identifies user, sets email_unsubscribed_at, 302 redirects to /unsubscribe?status=success&uid=X&sig=Y (generates HMAC for re-subscribe)",
+        "GET with invalid HMAC: 302 redirect to /unsubscribe?status=error",
+        "GET with expired/invalid magic_link_token: 302 redirect to /unsubscribe?status=error",
+        "Create server/api/check-ins/unsubscribe.post.ts",
+        "POST with valid magic_link_token (RFC 8058 one-click): sets email_unsubscribed_at, returns 200 OK",
+        "POST with invalid token: returns 400",
+        "Both endpoints are idempotent — calling on already-unsubscribed user succeeds without error",
+        "Both endpoints use serverSupabaseServiceRole(event) — no user auth required (public endpoints)",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "GET handler: check for uid+sig params first (HMAC path via validateUnsubscribeToken from US-002), then token param (magic_link_token path via check_in_schedule lookup). Use serverSupabaseServiceRole from #supabase/server (not serverSupabaseClient which requires auth). For magic_link_token path, look up in check_in_schedule table, extract user_id, then generate HMAC for the redirect URL. POST handler: simpler — just token param, look up check-in, set email_unsubscribed_at. Use sendRedirect(event, url) for 302 redirects. Depends on US-001, US-002, US-003."
+    },
+    {
+      "id": "US-014",
+      "title": "Resubscribe API endpoint",
+      "description": "As a user who previously unsubscribed, I can re-subscribe to check-in emails via the confirmation page.",
+      "acceptanceCriteria": [
+        "Create server/api/check-ins/resubscribe.post.ts",
+        "POST with valid HMAC (?uid=X&sig=Y): clears email_unsubscribed_at (sets to NULL) on user_progress, returns 200 with { success: true }",
+        "POST with invalid HMAC: returns 400 with { error: 'Invalid token' }",
+        "Idempotent: re-subscribing an already-subscribed user succeeds without error",
+        "Uses serverSupabaseServiceRole(event) — no user auth required",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "File: server/api/check-ins/resubscribe.post.ts. Read uid and sig from getQuery(event). Validate via validateUnsubscribeToken(uid, sig) from server/utils/auth/hmac-tokens.ts. Update user_progress: SET email_unsubscribed_at = null WHERE user_id = uid. Use serverSupabaseServiceRole(event) for the update. Depends on US-001, US-002, US-003."
+    },
+    {
+      "id": "US-015",
+      "title": "Unsubscribe confirmation page",
+      "description": "As a user who clicked unsubscribe, I see a branded confirmation page with the option to re-subscribe.",
+      "acceptanceCriteria": [
+        "Create pages/unsubscribe.vue with definePageMeta({ layout: false })",
+        "When status=success in query params: displays 'You\\'ve been unsubscribed from check-in emails.' with subtext 'You\\'ll still see check-ins when you open the app.' and a 'Re-subscribe' button",
+        "When Re-subscribe button is clicked: calls POST /api/check-ins/resubscribe?uid=X&sig=Y, on success updates page to show 'You\\'re subscribed to check-in emails again.' and hides button",
+        "When status=error in query params: displays 'This link doesn\\'t seem to be working.' with subtext 'Try clicking the unsubscribe link in a more recent email.'",
+        "Page uses layout: false — no header, no navigation, centered brand card on teal gradient background",
+        "UNHOOKED eyebrow text displayed at top of card",
+        "Re-subscribe button shows loading state while API call is in progress",
+        "Page loads without redirect for unauthenticated users (no auth middleware)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Follow the pattern from error.vue for layout: false pages. Read status, uid, sig from useRoute().query. Use $fetch for the resubscribe call. Brand styling: glass card (.glass rounded-card), teal gradient body (already applied globally via body CSS), pill button (.btn-primary rounded-pill), Inter font, .eyebrow class for UNHOOKED text. Use ref() for reactive state (isResubscribed, isLoading). Depends on US-013 and US-014."
+    },
+    {
+      "id": "US-016",
+      "title": "Audio completion gating for check-in responses",
+      "description": "As a user responding to a check-in, the AI's audio response must play in full before the check-in experience closes.",
+      "acceptanceCriteria": [
+        "Dashboard interstitial modal remains open while AI audio is playing after user responds",
+        "Email-linked check-in page does not navigate away while audio is playing",
+        "After audio playback ends (audio element 'ended' event), the experience closes normally",
+        "If audio playback fails or errors, the experience closes gracefully after a 3-second timeout",
+        "Add isAudioPlaying state flag to composables/useCheckIns.ts that prevents modal dismiss / page navigation",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "File: composables/useCheckIns.ts and components/CheckInInterstitial.vue (354 lines). Add an isAudioPlaying ref that gets set to true when TTS playback starts and false when it ends. Listen for the 'ended' event on the audio element. In CheckInInterstitial.vue, gate the dismiss/close logic behind !isAudioPlaying. Add a setTimeout fallback (3s) in case audio fails to load."
+    },
+    {
+      "id": "US-017",
+      "title": "Timezone change detection and update",
+      "description": "As a user who has traveled to a new timezone, the system detects my new timezone and updates it so future check-ins are scheduled correctly.",
+      "acceptanceCriteria": [
+        "POST /api/user/timezone.post.ts compares incoming timezone with stored value before updating",
+        "If timezone has changed: update stored timezone and log '[timezone] Updated user {id} timezone from {old} to {new}'",
+        "If timezone has NOT changed: no database write (skip unnecessary update)",
+        "If no stored timezone exists: store the detected timezone (first-time setup)",
+        "Endpoint returns { changed: boolean, timezone: string }",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "File: server/api/user/timezone.post.ts (81 lines). Currently does an unconditional upsert. Add a SELECT first to compare, then only UPDATE if different. Note: FR-12.3 (rescheduling pending check-ins on timezone change) is deferred to post-MVP — the new timezone takes effect on the next scheduling cycle."
+    },
+    {
+      "id": "US-018",
+      "title": "Interstitial modal accessibility (ARIA, focus trap, Escape)",
+      "description": "As a user navigating with keyboard or screen reader, the check-in interstitial modal meets accessibility standards.",
+      "acceptanceCriteria": [
+        "Modal has role='dialog' and aria-modal='true' attributes",
+        "When modal is open, Tab/Shift+Tab cycles focus within the modal only (focus trap)",
+        "When Escape is pressed, modal dismisses (same as clicking outside — hides without changing check-in status)",
+        "When modal opens, focus moves to the modal content",
+        "When modal closes, focus returns to the main dashboard content",
+        "Check-in prompt text is associated with modal via aria-labelledby or aria-describedby",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "File: components/CheckInInterstitial.vue (354 lines). Reference components/CeremonyExitDialog.vue for the existing focus trap and ARIA pattern already used in this codebase. Focus trap: intercept Tab keydown, get all focusable elements within the modal, cycle between first and last. Escape handler: call the dismiss function (same as click-outside behavior per FR-9.5). Use onMounted/onUnmounted for keydown listener lifecycle."
+    }
+  ]
+}

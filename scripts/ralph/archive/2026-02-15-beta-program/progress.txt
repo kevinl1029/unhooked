@@ -1,0 +1,76 @@
+# Ralph Progress Log
+Started: Sun Feb 15 20:28:04 EST 2026
+
+## Codebase Patterns
+- **Framework:** Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
+- **Database types:** types/database.types.ts follows Supabase conventions (Row, Insert, Update for each table)
+- **Migrations:** supabase/migrations/ with naming pattern YYYYMMDD_description.sql
+- **Migration best practices:** Always use `IF NOT EXISTS` for idempotent schema changes
+- **Supabase auth:** Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
+- **Supabase queries:** Return `{ data, error }` — always check error before using data
+- **Supabase .single():** Fetches exactly one row (returns error if 0 or >1 rows)
+- **Middleware:** middleware/auth.ts uses defineNuxtRouteMiddleware() — can be sync or async
+- **Middleware fail-closed pattern:** Redirect on any error (Supabase error or JS exception)
+- **Composables:** useSupabaseClient() for DB queries, useSupabaseUser() for current user
+- **Pages:** pages/login.vue for authentication UI
+- **Dead code cleanup:** After removing v-if conditions, clean up unused destructured variables
+
+---
+## 2026-02-15 20:30 - US-001
+- Created migration file at supabase/migrations/20260215_add_beta_flag.sql
+- Added is_beta BOOLEAN NOT NULL DEFAULT false column to profiles table
+- Created protect_is_beta() trigger function to prevent unauthorized modifications (only service_role can change is_beta)
+- Created protect_is_beta_trigger BEFORE UPDATE trigger on profiles table
+- Updated types/database.types.ts to add is_beta: boolean to profiles.Row
+- Updated types/database.types.ts to add is_beta?: boolean to profiles.Insert
+- Updated types/database.types.ts to add is_beta?: boolean to profiles.Update
+- Files changed: supabase/migrations/20260215_add_beta_flag.sql (new), types/database.types.ts
+- Build passed successfully
+
+**Learnings for future iterations:**
+- This codebase uses Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
+- Database types are in types/database.types.ts following Supabase conventions (Row, Insert, Update)
+- Migrations go in supabase/migrations/ with naming pattern YYYYMMDD_description.sql
+- The profiles table starts at line 584 in types/database.types.ts
+- Always add `IF NOT EXISTS` for column additions to ensure idempotent migrations
+- Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
+---
+
+## 2026-02-15 20:32 - US-002
+- Changed login page heading from "Welcome Back" to "Sign In"
+- Removed appAccessEnabled redirect block (lines 101-104) — login page is now accessible regardless of APP_MODE
+- Removed v-if="isStaging" from "Or continue with" divider — divider always visible
+- Removed v-if="isStaging" from Google SSO button — button always visible
+- Removed useAppMode() destructure from script setup — appAccessEnabled and isStaging are now dead code
+- Files changed: pages/login.vue
+- Build passed successfully
+
+**Learnings for future iterations:**
+- Login page is at pages/login.vue
+- Google SSO button was previously gated behind isStaging flag from useAppMode composable
+- After removing v-if conditions that use composable values, clean up the destructure to avoid unused imports
+---
+
+## 2026-02-15 20:34 - US-003
+- Converted middleware/auth.ts from synchronous to async (added `async` to defineNuxtRouteMiddleware callback)
+- Reordered logic: check user authentication first, then APP_MODE, then beta flag
+- When APP_MODE is enabled (appAccessEnabled is true): only checks authentication, allows access with no beta query (zero performance cost)
+- When APP_MODE is disabled: queries profiles table for is_beta using useSupabaseClient()
+- Beta query uses .from('profiles').select('is_beta').eq('id', user.value.id).single()
+- Fail closed: if Supabase error object is returned, redirect to /
+- Fail closed: if JavaScript exception is thrown, catch and redirect to /
+- Fail closed: if profile doesn't exist or is_beta is false, redirect to /
+- Only beta users with is_beta=true can access protected routes when APP_MODE is disabled
+- Files changed: middleware/auth.ts
+- Build passed successfully
+
+**Learnings for future iterations:**
+- Auth middleware is at middleware/auth.ts
+- Nuxt middleware uses defineNuxtRouteMiddleware() — can be sync or async
+- useSupabaseClient() returns a Supabase client for querying the database
+- useSupabaseUser() returns the current authenticated user
+- .single() is used to fetch exactly one row from Supabase (returns error if 0 or >1 rows)
+- Supabase queries return { data, error } — always check error before using data
+- Middleware fail-closed pattern: redirect on any error (Supabase error or JS exception)
+---
+
