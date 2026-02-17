@@ -613,6 +613,7 @@ export type Database = {
           created_at: string | null
           id: string
           longest_quit_duration: string | null
+          preferred_name: string | null
           previous_attempts: number | null
           primary_reason: string
           product_types: string[]
@@ -626,6 +627,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           longest_quit_duration?: string | null
+          preferred_name?: string | null
           previous_attempts?: number | null
           primary_reason: string
           product_types: string[]
@@ -639,6 +641,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           longest_quit_duration?: string | null
+          preferred_name?: string | null
           previous_attempts?: number | null
           primary_reason?: string
           product_types?: string[]

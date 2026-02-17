@@ -184,7 +184,8 @@ async function createCheckIn(
   triggerIllusionKey?: string,
   triggerSessionId?: string,
   promptTemplate?: string,
-  observationAssignment?: string
+  observationAssignment?: string,
+  personalizationContext?: { name: string } | null
 ): Promise<ScheduledCheckIn | null> {
   const magicLinkToken = generateMagicLinkToken()
 
@@ -201,6 +202,7 @@ async function createCheckIn(
       observation_assignment: observationAssignment || null,
       magic_link_token: magicLinkToken,
       status: 'scheduled',
+      personalization_context: personalizationContext || null,
     })
     .select('id')
     .single()
@@ -258,6 +260,16 @@ export async function scheduleEvidenceBridgeCheckIn(
       ? `You were going to ${observationAssignment.toLowerCase().replace(/^(notice|pay attention to|track)/i, 'notice')} — what did you observe?`
       : 'What did you observe?'
 
+    // Query preferred_name for personalization
+    const { data: intakeData } = await supabase
+      .from('user_intake')
+      .select('preferred_name')
+      .eq('user_id', userId)
+      .single()
+    const personalizationContext = intakeData?.preferred_name
+      ? { name: intakeData.preferred_name }
+      : null
+
     const checkIn = await createCheckIn(
       supabase,
       userId,
@@ -267,7 +279,8 @@ export async function scheduleEvidenceBridgeCheckIn(
       illusionKey,
       sessionId,
       promptTemplate,
-      observationAssignment || undefined
+      observationAssignment || undefined,
+      personalizationContext
     )
 
     if (checkIn) {
@@ -302,6 +315,16 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
     return scheduled
   }
 
+  // Query preferred_name once for personalization (single query per scheduling call)
+  const { data: intakeData } = await supabase
+    .from('user_intake')
+    .select('preferred_name')
+    .eq('user_id', userId)
+    .single()
+  const personalizationContext = intakeData?.preferred_name
+    ? { name: intakeData.preferred_name }
+    : null
+
   // Handle post-session check-in
   if (trigger === 'session_complete' && sessionEndTime) {
     const rawTime = addHours(sessionEndTime, POST_SESSION_DELAY_HOURS)
@@ -318,7 +341,10 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
         twoHoursLater,
         timezone,
         illusionKey,
-        sessionId
+        sessionId,
+        undefined,
+        undefined,
+        personalizationContext
       )
       if (checkIn) {
         scheduled.push(checkIn)
@@ -344,7 +370,12 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
             userId,
             'morning',
             morningTime,
-            timezone
+            timezone,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            personalizationContext
           )
           if (checkIn) {
             scheduled.push(checkIn)
@@ -363,7 +394,12 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
             userId,
             'evening',
             eveningTime,
-            timezone
+            timezone,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            personalizationContext
           )
           if (checkIn) {
             scheduled.push(checkIn)
