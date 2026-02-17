@@ -244,3 +244,18 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - Pattern for waiting on a ref with timeout: watch() inside a new Promise<void>, clearTimeout+stopWatcher when done, setTimeout for fallback
   - CheckInInterstitial backdrop click is already gated by state === 'ready'; audio states set state to 'speaking' or 'complete' naturally
 ---
+
+## 2026-02-17 - US-017
+- Modified server/api/user/timezone.post.ts to add timezone change detection
+- Added SELECT before upsert to compare incoming timezone with stored value
+- If unchanged: returns { changed: false, timezone } immediately (no database write)
+- If changed (or no stored timezone): upserts new timezone; logs '[timezone] Updated user {id} timezone from {old} to {new}' when previous timezone existed
+- Endpoint now returns { changed: boolean, timezone: string } (was { success: true, timezone: string })
+- Changed from two-step update+upsert pattern to single upsert (simpler, idempotent)
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/api/user/timezone.post.ts
+- **Learnings for future iterations:**
+  - The changes were already present as uncommitted modifications in the working directory — always check git diff before implementing
+  - Conditional logging pattern: only log timezone change message when storedTimezone !== null (skip for first-time setup)
+  - upsert handles both insert (new user) and update (existing user) in a single DB call
+---

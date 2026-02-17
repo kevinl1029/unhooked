@@ -305,7 +305,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/user/timezone.post.ts (81 lines). Currently does an unconditional upsert. Add a SELECT first to compare, then only UPDATE if different. Note: FR-12.3 (rescheduling pending check-ins on timezone change) is deferred to post-MVP — the new timezone takes effect on the next scheduling cycle."
     },
     {
