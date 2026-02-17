@@ -160,7 +160,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts. The scheduleEvidenceBridgeCheckIn() function currently uses addHours(sessionEndTime, 24) — change to addHours(sessionEndTime, 6). Add the applyQuietHours() call on the result. The L3 exclusion should already be handled by the caller (only L1/L2 sessions schedule evidence bridges) but verify. Depends on US-004 for applyQuietHours()."
     },
     {

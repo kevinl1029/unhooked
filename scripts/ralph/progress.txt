@@ -104,6 +104,19 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - effectiveIllusionKey (not illusionKey) is the correct variable to check, as it handles null for no-illusion conversations
 ---
 
+## 2026-02-16 - US-009
+- Changed evidence bridge delay from 24 hours to 6 hours in scheduleEvidenceBridgeCheckIn()
+- Added EVIDENCE_BRIDGE_DELAY_HOURS = 6 constant alongside existing POST_SESSION_DELAY_HOURS
+- Changed `addHours(sessionEndTime, 24)` to `addHours(sessionEndTime, EVIDENCE_BRIDGE_DELAY_HOURS)`
+- applyQuietHours() was already applied (from US-004) — session at 6pm → midnight → deferred to 8am
+- L3 exclusion confirmed handled by caller (not in scheduleEvidenceBridgeCheckIn itself)
+- All 436 unit tests pass
+- Files changed: server/utils/scheduling/check-in-scheduler.ts
+- **Learnings for future iterations:**
+  - The EVIDENCE_BRIDGE_DELAY_HOURS constant sits alongside POST_SESSION_DELAY_HOURS in the top config section
+  - applyQuietHours() was already wired in from US-004 — only needed to change the raw hour count
+---
+
 ## 2026-02-16 - US-006
 - Added `.lt('retry_count', 3)` filter to processScheduledCheckIns() query so check-ins with 3+ failed attempts are not re-processed
 - Added `retry_count` to the select fields in the query
