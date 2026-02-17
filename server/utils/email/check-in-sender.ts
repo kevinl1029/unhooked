@@ -19,6 +19,7 @@ interface CheckInToSend {
   scheduled_for: string
   prompt_template: string | null
   observation_assignment: string | null
+  retry_count: number
   user: {
     email: string
   }
@@ -44,7 +45,7 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
 }> {
   const now = new Date()
 
-  // Find all due scheduled check-ins. Keep retrying until sent or expired.
+  // Find all due scheduled check-ins. Keep retrying until sent or expired (max 3 attempts).
   const { data: checkIns, error } = await supabase
     .from('check_in_schedule')
     .select(`
@@ -54,10 +55,12 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
       magic_link_token,
       scheduled_for,
       prompt_template,
-      observation_assignment
+      observation_assignment,
+      retry_count
     `)
     .eq('status', 'scheduled')
     .lte('scheduled_for', now.toISOString())
+    .lt('retry_count', 3)
 
   if (error) {
     console.error('[check-in-sender] Failed to query check-ins:', error)
@@ -132,6 +135,20 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
       const message = err instanceof Error ? err.message : 'Unknown error'
       errors.push(`Failed to send check-in ${checkIn.id}: ${message}`)
       console.error(`[check-in-sender] Failed to process check-in ${checkIn.id}:`, err)
+
+      // Increment retry_count; mark as failed after 3rd attempt
+      const newRetryCount = (checkIn.retry_count ?? 0) + 1
+      if (newRetryCount >= 3) {
+        await supabase
+          .from('check_in_schedule')
+          .update({ retry_count: newRetryCount, status: 'failed' })
+          .eq('id', checkIn.id)
+      } else {
+        await supabase
+          .from('check_in_schedule')
+          .update({ retry_count: newRetryCount })
+          .eq('id', checkIn.id)
+      }
     }
   }
 
