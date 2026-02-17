@@ -76,6 +76,22 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - Test mocks that use a flat .mockReturnValue() chain break when the function starts making multiple Supabase queries — use table-aware mocking instead
 ---
 
+## 2026-02-16 - US-007
+- Added expireOverdueCheckIns(supabase, now) to server/utils/scheduling/check-in-expiration.ts
+- Function queries all 'scheduled'/'sent' check-ins excluding 'evidence_bridge' type
+- Uses existing getCheckInExpiration() for timezone-aware expiry calculation
+- Sets status='expired' and expired_at=now when expiration time is past
+- Added SupabaseClient import from @supabase/supabase-js
+- Updated cron endpoint (server/api/cron/check-ins.get.ts) to import and call expireOverdueCheckIns() after processScheduledCheckIns()
+- Cron response now includes expiration.expired and expiration.errors fields
+- Typecheck passed; all 436 unit tests pass
+- Files changed: server/utils/scheduling/check-in-expiration.ts, server/api/cron/check-ins.get.ts
+- **Learnings for future iterations:**
+  - expireOverdueCheckIns accepts optional `now` param for testability (same pattern as shouldExpireUnsentCheckIn)
+  - getCheckInExpiration() handles morning/evening/early-morning windows; safe to reuse for batch sweep
+  - check_in_schedule.timezone column is present — no need to join user_progress for timezone
+---
+
 ## 2026-02-16 - US-006
 - Added `.lt('retry_count', 3)` filter to processScheduledCheckIns() query so check-ins with 3+ failed attempts are not re-processed
 - Added `retry_count` to the select fields in the query

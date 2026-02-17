@@ -127,7 +127,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/scheduling/check-in-expiration.ts (126 lines). The isCheckInExpired() and getCheckInExpiration() functions already exist — use them for the timezone-aware expiry calculation. Exclude evidence_bridge type from the query. The cron endpoint is server/api/cron/check-ins.get.ts — add a call to expireOverdueCheckIns() after processScheduledCheckIns()."
     },
     {
