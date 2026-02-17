@@ -1,8 +1,8 @@
 # Unhooked: Check-In System Specification
 
-**Version:** 1.1
+**Version:** 1.3
 **Created:** 2026-01-28
-**Status:** Implemented
+**Status:** In Progress
 **Document Type:** Feature Specification (PRD + Technical Design)
 **Related Documents:**
 - `core-program-spec.md` (Program Structure)
@@ -81,14 +81,17 @@ Maintain active engagement and insight reinforcement between core sessions throu
 
 The Check-In System provides brief, daily touchpoints via email that link users back to the app for voice (or text) responses.
 
+<!-- UX-REFINED: Updated evidence bridge timing from 24h to 6h, added quiet hours note -->
 ### Check-In Types
 
 | Type | When | Duration | Purpose |
 |------|------|----------|---------|
-| **Post-Session** | 2 hours after core session | 1-2 min | Bridge insight to real life |
-| **Evidence Bridge** | 24 hours after L1/L2 session | 1-2 min | Prompt observation review before next layer |
+| **Post-Session** | 2 hours after core session (quiet hours aware) | 1-2 min | Bridge insight to real life |
+| **Evidence Bridge** | 6 hours after L1/L2 session (quiet hours aware) | 1-2 min | Prompt observation review before next layer |
 | **Morning** | 9am local | 1-2 min | Set intention, surface state |
 | **Evening** | 7pm local | 2-3 min | Reflect on day, gather evidence |
+
+All check-in types respect **quiet hours** (9pm–8am in user's timezone). Check-ins that would fall within the quiet window are deferred to 8am the following morning. See [Quiet Hours](#quiet-hours) for details.
 
 ### Core Design Principles
 
@@ -101,9 +104,10 @@ The Check-In System provides brief, daily touchpoints via email that link users 
 
 ## Check-In Types
 
+<!-- UX-REFINED: Post-session now defers to 8am instead of being dropped when hitting quiet hours -->
 ### 1. Post-Session Check-In
 
-**When:** 2 hours after any core session (with 9pm cutoff)
+**When:** 2 hours after any core session (respects quiet hours — deferred to 8am if 2hr later falls in 9pm–8am window)
 **Duration:** 1-2 minutes
 **Purpose:** Capture what's landing while fresh. Bridge "conversation space" to real life.
 **Tone:** Warm, curious, light.
@@ -181,9 +185,10 @@ The Check-In System provides brief, daily touchpoints via email that link users 
 
 ---
 
+<!-- UX-REFINED: Evidence bridge timing changed from 24h to 6h, cancellation window updated -->
 ### 4. Evidence Bridge Check-In
 
-**When:** 24 hours after completing a Layer 1 (Intellectual) or Layer 2 (Emotional) session
+**When:** 6 hours after completing a Layer 1 (Intellectual) or Layer 2 (Emotional) session (respects quiet hours)
 **Duration:** 1-2 minutes
 **Purpose:** Prompt the user to report on their observation assignment before moving to the next layer. Bridges real-world evidence into the next session.
 **Tone:** Curious, grounding, builds on their own assignment.
@@ -192,13 +197,13 @@ The Check-In System provides brief, daily touchpoints via email that link users 
 
 At the end of L1 and L2 sessions, the AI delivers a personalized observation assignment (e.g., "Pay attention to your stress — is it the situation, or has it been a while since your last use?"). This assignment is captured via the `[OBSERVATION_ASSIGNMENT: ...]` token in the AI's response and stored on the check-in record.
 
-24 hours later, the evidence bridge check-in wraps that assignment into a prompt:
+6 hours later, the evidence bridge check-in wraps that assignment into a prompt:
 
 > "You were going to notice [observation assignment] — what did you observe?"
 
 **Not triggered after Layer 3:** L3 (Identity Integration) is the final layer for each illusion and has no observation assignment, so no evidence bridge check-in is scheduled.
 
-**Cancellation:** If the user starts their next layer session before the 24-hour check-in fires, the pending evidence bridge check-in is cancelled with reason `user_continued_immediately`.
+**Cancellation:** If the user starts their next layer session before the 6-hour check-in fires (or before a deferred check-in sends), the pending evidence bridge check-in is cancelled with reason `user_continued_immediately`. This applies regardless of whether the check-in has been deferred by quiet hours.
 
 **Capture targets:** Real-world observations, evidence of belief shift in daily life, emotional reactions to noticing the pattern.
 
@@ -220,6 +225,7 @@ At the end of L1 and L2 sessions, the AI delivers a personalized observation ass
 - Modal overlay with check-in prompt
 - Can dismiss (swipe down on mobile, click outside on desktop)
 - "Skip for now" link also dismisses
+- Interstitials still appear even if user has unsubscribed from emails
 
 **Dashboard interstitial layout:**
 ```
@@ -236,15 +242,87 @@ At the end of L1 and L2 sessions, the AI delivers a personalized observation ass
 └─────────────────────────────────────────────────────────────┘
 ```
 
+<!-- UX-REFINED: New section — quiet hours scheduling logic -->
+### Quiet Hours
+
+All check-in email types respect a **quiet window of 9pm–8am** in the user's local timezone. This prevents emails from arriving at disruptive times.
+
+**Rules:**
+- The quiet window starts at **9pm inclusive** (>= 21:00) and ends at 8am
+- If a check-in's calculated send time falls within the quiet window, it is **deferred to 8am** the following morning
+- Deferral is applied at **scheduling time**, not send time — the `scheduled_for` timestamp is set to 8am
+- The cron job picks up deferred check-ins within its normal 5-minute cycle
+
+**Behavior by check-in type:**
+
+| Type | Without Quiet Hours | With Quiet Hours |
+|------|-------------------|-----------------|
+| **Post-Session** | Previously: dropped entirely if after 9pm | Now: deferred to 8am next morning |
+| **Evidence Bridge** | No time awareness (sent at any hour) | Deferred to 8am if 6h later falls in quiet window |
+| **Morning** | 9am (unaffected) | 9am (unaffected — already outside quiet window) |
+| **Evening** | 7pm (unaffected) | 7pm (unaffected — already outside quiet window) |
+
+**Example scenarios:**
+
+- Session ends at 8pm → post-session at 10pm → **deferred to 8am** next day
+- Session ends at 3pm → evidence bridge at 9pm → **deferred to 8am** next day
+- Session ends at 11am → evidence bridge at 5pm → **sends at 5pm** (outside quiet hours)
+- Session ends at 2pm → post-session at 4pm → **sends at 4pm** (outside quiet hours)
+
 ### Check-In Windows & Expiration
 
-Check-ins don't expire via database flag. Expiration is calculated at display time:
+<!-- REQ-REFINED: Added evidence bridge row (no time-based expiry), clarified cron-driven expiration -->
+Check-ins expire based on their type. The cron job marks check-ins as `expired` when their window has passed:
 
 | Check-In Type | Window | Expires At |
 |---------------|--------|------------|
 | Morning (9am) | 9am - 7pm | 7pm local time |
 | Evening (7pm) | 7pm - 9am next day | 9am next day |
 | Post-Session | 2hr after session | End of current window |
+| Evidence Bridge | No time-based expiry | Only cancelled (next session starts) or completed (user responds) |
+
+<!-- UX-REFINED: New section — unsubscribe flow -->
+### Email Preferences (Unsubscribe)
+
+Users can opt out of all check-in emails via a one-click unsubscribe mechanism. Unsubscribing stops email delivery but does **not** affect in-app check-in interstitials.
+
+**Unsubscribe flow:**
+
+1. User clicks "Unsubscribe" link in email footer
+2. Immediately unsubscribed (one-click, no confirmation prompt)
+3. Confirmation page displayed:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                    UNHOOKED                         │   │
+│  │                                                      │   │
+│  │  You've been unsubscribed from check-in emails.     │   │
+│  │                                                      │   │
+│  │  You'll still see check-ins when you open the app.  │   │
+│  │                                                      │   │
+│  │  ┌──────────────────────────────┐                   │   │
+│  │  │      Re-subscribe            │                   │   │
+│  │  └──────────────────────────────┘                   │   │
+│  │                                                      │   │
+│  │  Changed your mind? Click above to start receiving  │   │
+│  │  check-in emails again.                             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Re-subscribe flow:**
+1. User clicks "Re-subscribe" on the confirmation page
+2. Preference toggled back to subscribed
+3. Page updates to confirm: "You're subscribed to check-in emails again."
+
+**Scope:**
+- Single toggle: all check-in emails on or off (no per-type granularity)
+- Unsubscribe applies to emails only — in-app interstitials are unaffected
+- No in-app settings page for this preference (managed entirely via email link)
+- Check-ins are still scheduled when unsubscribed; only email sending is suppressed
 
 ### Response Handling
 
@@ -284,47 +362,157 @@ When users respond to check-ins, the AI should:
 
 **Requirements:**
 - FR-1.1: Schedule post-session check-in 2 hours after core session completion
-- FR-1.2: Only schedule post-session if 2 hours later is before 9pm in user's timezone
+- FR-1.2: Schedule evidence bridge check-in 6 hours after L1/L2 session completion
 - FR-1.3: Morning check-ins scheduled for 9am local time
 - FR-1.4: Evening check-ins scheduled for 7pm local time
 - FR-1.5: Use rolling 3-day scheduling window until ceremony complete
 - FR-1.6: Detect timezone via browser (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
 
-### FR-2: One Active Post-Session Rule (ADR-002)
+<!-- UX-REFINED: New requirement — quiet hours deferral replaces drop behavior -->
+### FR-2: Quiet Hours
+
+**Description:** Prevent check-in emails from being sent during quiet hours (9pm–8am user's timezone).
+
+**Requirements:**
+- FR-2.1: Define quiet window as >= 21:00 to < 08:00 in user's local timezone
+- FR-2.2: If a check-in's calculated send time falls within the quiet window, defer `scheduled_for` to 8am the following morning
+- FR-2.3: Apply quiet hours to all check-in types at scheduling time
+- FR-2.4: Post-session check-ins that would have been dropped (old 9pm cutoff) are now deferred to 8am instead
+
+### FR-3: One Active Post-Session Rule (ADR-002)
 
 **Description:** Prevent stacking of post-session check-ins.
 
 **Requirements:**
-- FR-2.1: When a new session completes, expire any pending post-session check-ins from previous sessions
-- FR-2.2: Users only receive check-ins about their most recent core session
+- FR-3.1: When a new session completes, expire any pending post-session check-ins from previous sessions
+- FR-3.2: Users only receive check-ins about their most recent core session
 
-### FR-3: Email Delivery
+<!-- UX-REFINED: Added deliverability requirements — List-Unsubscribe, per-type subjects, unsubscribe link -->
+### FR-4: Email Delivery
 
-**Description:** Send check-in emails via email service.
+**Description:** Send check-in emails via email service with deliverability best practices.
 
 **Requirements:**
-- FR-3.1: Send emails via Resend from `coach@getunhooked.app`
-- FR-3.2: Email contains link only, no prompt content (prompt shown in app)
-- FR-3.3: Generate 24-hour magic link token for authentication
-- FR-3.4: Store token in `magic_link_token` column
+- FR-4.1: Send emails via Resend from `coach@getunhooked.app`
+- FR-4.2: Email contains link only, no prompt content (prompt shown in app). Exception: evidence bridge emails include the observation prompt as body text.
+- FR-4.3: Generate 24-hour magic link token for authentication
+- FR-4.4: Store token in `magic_link_token` column
+- FR-4.5: Use per-type email subject lines (see [Appendix B](#b-email-subject-lines))
+- FR-4.6: Include `List-Unsubscribe` and `List-Unsubscribe-Post` headers on all emails (RFC 8058 one-click). `List-Unsubscribe` header uses the `magic_link_token` (email clients act immediately, 24h expiry is acceptable).
+- FR-4.7: Include visible unsubscribe link in email footer using HMAC-signed user ID token (non-expiring — see FR-7.7)
+- FR-4.8: For unsubscribed users, the cron marks the check-in as `sent` with `email_sent_at = null` (advances status to prevent re-processing) but does not send the email
 
-### FR-4: Check-In Completion
+<!-- REQ-REFINED: Added email retry logic and email body structure -->
+**Retry on failure:**
+- FR-4.9: If Resend returns an error, retry up to 3 times with exponential backoff (1 min, 5 min, 15 min)
+- FR-4.10: After 3 failed attempts, mark check-in status as `failed`. Log the failure for monitoring.
+- FR-4.11: Track retry attempts via `retry_count` column on `check_in_schedule`
+
+**Email body structure:**
+
+All check-in emails follow this structure:
+
+| Section | Content |
+|---------|---------|
+| **Header** | "UNHOOKED" brand text |
+| **Body** | Per-type contextual line (see below) |
+| **CTA** | Pill-shaped button linking to app via magic link |
+| **Footer** | Unsubscribe link (HMAC token, non-expiring) |
+
+Per-type body and CTA text:
+
+| Type | Body text | CTA button |
+|------|-----------|------------|
+| Post-Session | "A quick thought from your session earlier." | "Open check-in" |
+| Evidence Bridge | "You were going to [observation assignment] — what did you observe?" | "Share what you noticed" |
+| Morning | "Start your day with a quick reflection." | "Open check-in" |
+| Evening | "Take a moment to reflect on your day." | "Open check-in" |
+
+### FR-5: Check-In Completion
 
 **Description:** Mark check-ins complete when user responds.
 
 **Requirements:**
-- FR-4.1: Create new conversation for check-in response
-- FR-4.2: Mark check-in status as 'completed' with timestamp
-- FR-4.3: Link response conversation to check-in record
-- FR-4.4: Capture significant moments from response (see [moment-capture-spec.md](moment-capture-spec.md))
+- FR-5.1: Create new conversation for check-in response
+- FR-5.2: Mark check-in status as 'completed' with timestamp
+- FR-5.3: Link response conversation to check-in record
+- FR-5.4: Capture significant moments from response (see [moment-capture-spec.md](moment-capture-spec.md))
 
-### FR-5: Expired Link Handling
+### FR-6: Expired Link Handling
 
 **Description:** Handle expired magic links gracefully.
 
 **Requirements:**
-- FR-5.1: If token is expired, redirect to most recent pending check-in
-- FR-5.2: If no pending check-ins, redirect to dashboard
+- FR-6.1: If token is expired, redirect to most recent pending check-in
+- FR-6.2: If no pending check-ins, redirect to dashboard
+
+<!-- UX-REFINED: New requirement — email unsubscribe mechanism -->
+### FR-7: Email Preferences (Unsubscribe)
+
+**Description:** Allow users to opt out of check-in emails via one-click unsubscribe.
+
+**Requirements:**
+- FR-7.1: One-click unsubscribe via link in email footer (immediately effective, no confirmation prompt)
+- FR-7.2: Display confirmation page after unsubscribe with re-subscribe option
+- FR-7.3: Re-subscribe via button on confirmation page
+- FR-7.4: Unsubscribe stops all check-in email types (single toggle, not per-type)
+- FR-7.5: Unsubscribe does NOT affect in-app check-in interstitials
+- FR-7.6: Check-ins continue to be scheduled when unsubscribed; only email delivery is suppressed
+- FR-7.7: Footer unsubscribe link uses an HMAC-signed user ID (`HMAC-SHA256(user_id, UNSUBSCRIBE_SECRET)`) — non-expiring, deterministic, no DB storage required. Prevents user ID enumeration while ensuring unsubscribe links work indefinitely regardless of when the email was received.
+- FR-7.8: The `List-Unsubscribe` header uses the `magic_link_token` (24h expiry acceptable — email clients send the POST immediately)
+
+### FR-8: Evidence Bridge Cancellation
+
+**Description:** Cancel evidence bridge check-ins when the user moves on.
+
+**Requirements:**
+- FR-8.1: If user starts next layer session before evidence bridge fires, cancel with reason `user_continued_immediately`
+- FR-8.2: Cancellation applies to deferred check-ins too (if evidence bridge was deferred to 8am by quiet hours and user starts next session before 8am, cancel it)
+
+<!-- REQ-REFINED: New requirements — interstitial behavior, expiration, AI response, timezone -->
+### FR-9: Dashboard Interstitial Behavior
+
+**Description:** Display pending check-ins as a modal overlay when user opens the dashboard.
+
+**Requirements:**
+- FR-9.1: Show interstitial when user has a pending check-in (status `scheduled` or `sent`, within its display window) and navigates to the dashboard
+- FR-9.2: Interstitial displays the `prompt_template` text from the check-in record
+- FR-9.3: Dismissal (swipe down on mobile, click outside on desktop, or "Skip for now" link) hides the modal for the current browser session (sessionStorage flag)
+- FR-9.4: Dismissing via "Skip for now" marks the check-in status as `skipped`
+- FR-9.5: Dismissing via swipe/click-outside hides the modal without changing check-in status — modal reappears on next fresh app open if the check-in hasn't expired
+- FR-9.6: Interstitials display regardless of email subscription status (unsubscribed users still see them)
+- FR-9.7: Only one interstitial is shown at a time. If multiple pending check-ins exist, show the most recently scheduled one.
+
+### FR-10: Check-In Expiration
+
+**Description:** Expire check-ins when their display window has passed.
+
+**Requirements:**
+- FR-10.1: The cron job marks check-ins as `expired` when their window has passed (morning: after 7pm, evening: after 9am next day, post-session: end of current window)
+- FR-10.2: Evidence bridge check-ins have **no time-based expiry** — they remain pending until the user responds (completed) or starts the next session (cancelled per FR-8)
+- FR-10.3: Only check-ins in `scheduled` or `sent` status are eligible for expiration
+- FR-10.4: The `expired_at` timestamp is set when the cron marks a check-in as expired
+
+### FR-11: AI Response Behavior During Check-Ins
+
+**Description:** Define how the AI responds when a user engages with a check-in.
+
+**Requirements:**
+- FR-11.1: AI acknowledges the user's response warmly (not robotic)
+- FR-11.2: AI reflects back briefly so the user feels heard
+- FR-11.3: AI captures significant moments from the response and tags them for later use (see moment-capture-spec.md)
+- FR-11.4: AI may ask one follow-up question if something rich surfaces, but must close cleanly — do not spiral into a full session
+- FR-11.5: AI closes the check-in with a brief forward-looking statement (e.g., "I'll check in with you tomorrow morning")
+- FR-11.6: **Audio completion requirement:** The AI's audio response must play in full before the check-in experience closes. The interstitial modal must not auto-dismiss, and the check-in page must not navigate away, until audio playback is complete. This applies to both the dashboard interstitial and the email-linked check-in page.
+
+### FR-12: Timezone Detection & Update
+
+**Description:** Handle timezone changes when users travel or relocate.
+
+**Requirements:**
+- FR-12.1: Detect user timezone via browser on each app open (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
+- FR-12.2: If detected timezone differs from stored timezone on `check_in_schedule`, update the stored timezone
+- FR-12.3: Reschedule any pending check-ins (status `scheduled`) using the new timezone — recalculate `scheduled_for` timestamps and re-apply quiet hours
 
 ---
 
@@ -341,6 +529,28 @@ When users respond to check-ins, the AI should:
 - NFR-2.1: Email sending batch must complete within 5 minutes
 - NFR-2.2: Interstitial check must complete within 200ms
 
+### NFR-3: Deliverability
+
+- NFR-3.1: All emails must include `List-Unsubscribe` header (RFC 8058)
+- NFR-3.2: Email subject lines must vary by check-in type (avoid repetitive subjects)
+- NFR-3.3: SPF, DKIM, and DMARC must be configured for `getunhooked.app` (verified)
+
+<!-- REQ-REFINED: New NFRs — Security and Accessibility -->
+### NFR-4: Security
+
+- NFR-4.1: Magic link tokens must be 32+ bytes of cryptographically random data, encoded as URL-safe base64. Generated via `crypto.randomBytes()` or equivalent.
+- NFR-4.2: Public-facing token endpoints (`/api/check-ins/open/:token`, `/api/check-ins/unsubscribe`, `/api/check-ins/resubscribe`) must be rate-limited to 10 requests/minute per IP
+- NFR-4.3: HMAC unsubscribe tokens are computed as `HMAC-SHA256(user_id, UNSUBSCRIBE_SECRET)` — the `UNSUBSCRIBE_SECRET` must be a separate environment variable, not reused from other secrets
+- NFR-4.4: The CRON_SECRET for the cron endpoint must be validated on every request (already implemented)
+
+### NFR-5: Accessibility
+
+- NFR-5.1: The dashboard interstitial modal must implement a focus trap — keyboard focus is constrained within the modal while it's open
+- NFR-5.2: Pressing Escape must dismiss the modal (equivalent to clicking outside)
+- NFR-5.3: The modal must use `role="dialog"` and `aria-modal="true"`
+- NFR-5.4: When the modal opens, focus must move to the modal. When the modal closes, focus must return to the element that triggered it (or the main dashboard content if no trigger element).
+- NFR-5.5: The check-in prompt text must be associated with the modal via `aria-labelledby` or `aria-describedby`
+
 ---
 
 ## Key Product Decisions
@@ -352,6 +562,18 @@ When users respond to check-ins, the AI should:
 | **Skipped check-in handling** | Silent (no guilt) | Check-ins are invitations, not obligations |
 | **Morning/evening check-ins** | Dormant for MVP (ADR-002) | Focus on post-session; daily check-ins added later |
 | **Prompt in email** | No (link only) | Voice response requires app; keeps email simple |
+| **Evidence bridge timing** | 6 hours after session | Close enough for fresh recall; enough time for some real-world observation |
+| **Quiet hours** | 9pm–8am, defer to 8am | Prevents late-night emails; defers instead of dropping so no check-ins are lost |
+| **Quiet hours scope** | All check-in types | Consistent behavior; post-session now deferred instead of dropped |
+| **Unsubscribe granularity** | All emails on/off | Simple toggle; no per-type preferences needed |
+| **Unsubscribe scope** | Emails only | In-app interstitials still show; user opted out of email nudges, not the check-in system |
+| **Email subjects** | Per-type (varied) | Avoids spam filter repetition; feels more personal |
+| **Interstitial dismissal** | Hide for session (sessionStorage) | Reappears on next app open if check-in still valid; "Skip for now" marks as skipped |
+| **Evidence bridge expiry** | No time-based expiry | Only cancelled (next session) or completed (user responds); email sent once |
+| **Check-in expiry mechanism** | Cron updates DB status | Keeps DB clean; simpler queries than display-time calculation |
+| **Unsubscribe token (footer)** | HMAC-signed user ID | Non-expiring; works indefinitely; no DB storage; prevents enumeration |
+| **Email send retry** | 3 attempts, exponential backoff | Handles transient Resend failures without overcomplicating |
+| **One check-in per trigger** | Only post-session OR evidence bridge | System design ensures only one type scheduled per session trigger; no priority/ordering needed |
 
 ---
 
@@ -382,26 +604,30 @@ CREATE TABLE public.check_in_schedule (
   trigger_session_id UUID REFERENCES public.conversations(id),
 
   -- Content
-  prompt_template TEXT NOT NULL,
-  observation_assignment TEXT,          -- Captured from [OBSERVATION_ASSIGNMENT: ...] token
-  personalization_context JSONB,
+  prompt_template TEXT NOT NULL,        -- Full prompt text displayed to the user (generated at scheduling time)
+  observation_assignment TEXT,          -- Captured from [OBSERVATION_ASSIGNMENT: ...] token. Falls back to template text if AI token missing (per evidence-based-coaching-spec REQ-24/25/42)
+  personalization_context JSONB,       -- Optional. May contain { name?: string } from intake. Nullable.
 
-  -- State
+  -- State (see State Transition Diagram below)
   status TEXT DEFAULT 'scheduled' CHECK (status IN (
     'scheduled',
     'sent',
     'opened',
     'completed',
     'skipped',
-    'expired'
+    'expired',
+    'cancelled',
+    'failed'
   )),
+  cancellation_reason TEXT,            -- e.g., 'user_continued_immediately' (see evidence-based-coaching-spec REQ-26)
 
   -- Auth token for magic link (24-hour validity)
   magic_link_token TEXT,
 
   -- Delivery tracking
-  email_sent_at TIMESTAMP WITH TIME ZONE,
-  opened_at TIMESTAMP WITH TIME ZONE,
+  retry_count INTEGER DEFAULT 0,       -- Number of email send attempts (max 3)
+  email_sent_at TIMESTAMP WITH TIME ZONE,  -- NULL if email was suppressed (user unsubscribed)
+  opened_at TIMESTAMP WITH TIME ZONE,      -- Set when user clicks magic link
   completed_at TIMESTAMP WITH TIME ZONE,
   expired_at TIMESTAMP WITH TIME ZONE,
   response_conversation_id UUID REFERENCES public.conversations(id),
@@ -428,18 +654,140 @@ CREATE POLICY "Users can update own check-ins"
   USING (auth.uid() = user_id);
 ```
 
+<!-- UX-REFINED: New schema — email preference on user_progress -->
+#### Email Preference (on `user_progress` table)
+
+```sql
+-- Add to existing user_progress table
+ALTER TABLE public.user_progress
+  ADD COLUMN email_unsubscribed_at TIMESTAMP WITH TIME ZONE;
+
+-- NULL = subscribed (default), set = unsubscribed
+-- Stores the timestamp of when the user unsubscribed
+-- Cleared (set back to NULL) when user re-subscribes
+```
+
+<!-- REQ-REFINED: Updated unsubscribe token to HMAC approach -->
+#### Unsubscribe Token
+
+Two token strategies are used for unsubscribe:
+
+| Context | Token | Lifetime | Storage |
+|---------|-------|----------|---------|
+| `List-Unsubscribe` header (RFC 8058) | `magic_link_token` | 24 hours | `check_in_schedule` record |
+| Visible footer link | HMAC-signed user ID | Non-expiring | Computed (no storage) |
+
+```
+-- Footer unsubscribe URL: /api/check-ins/unsubscribe?uid={user_id}&sig={hmac_signature}
+-- HMAC signature: HMAC-SHA256(user_id, UNSUBSCRIBE_SECRET)
+-- Non-expiring — works indefinitely regardless of when the email was received
+-- UNSUBSCRIBE_SECRET is a dedicated environment variable (not reused from other secrets)
+```
+
+<!-- REQ-REFINED: New section — state transition diagram -->
+### State Transition Diagram
+
+```
+                                    ┌──────────┐
+                              ┌────▸│ cancelled │  (evidence bridge only — FR-8)
+                              │     └──────────┘
+                              │
+              ┌───────────┐   │     ┌──────────┐
+  ─────────▸  │ scheduled  │──┼────▸│  failed   │  (email send failed after 3 retries)
+              └─────┬──┬──┘   │     └──────────┘
+                    │  │      │
+                    │  │      │     ┌──────────┐
+                    │  │      ├────▸│  expired  │  (window passed — cron marks)
+                    │  │      │     └──────────┘
+                    │  │      │
+                    │  │      │     ┌──────────┐
+                    │  ├──────┼────▸│ completed │  (user responds via interstitial
+                    │  │      │     └──────────┘   — unsubscribed users, no email)
+                    │  │      │
+                    │  │      │     ┌──────────┐
+                    │  └──────┴────▸│  skipped  │  (user clicks "Skip for now"
+                    │               └──────────┘   in interstitial — no email)
+                    │
+                    ▾
+              ┌──────────┐          ┌──────────┐
+              │   sent    │────────▸│  opened   │  (user clicks magic link)
+              └────┬──┬──┘          └──┬──┬────┘
+                   │  │                │  │
+                   │  │                │  │     ┌──────────┐
+                   │  │                │  └────▸│ completed │
+                   │  │                │        └──────────┘
+                   │  │                │
+                   │  │                │        ┌──────────┐
+                   │  │                └───────▸│  expired  │
+                   │  │                         └──────────┘
+                   │  │
+                   │  │     ┌──────────┐
+                   │  ├────▸│ completed │  (user responds via interstitial)
+                   │  │     └──────────┘
+                   │  │
+                   │  │     ┌──────────┐
+                   │  ├────▸│  skipped  │  (user clicks "Skip for now")
+                   │  │     └──────────┘
+                   │  │
+                   │  │     ┌──────────┐
+                   │  └────▸│  expired  │  (window passed — cron marks)
+                   │        └──────────┘
+                   │
+                   │        ┌──────────┐
+                   └───────▸│ cancelled │  (evidence bridge — user starts next session)
+                            └──────────┘
+```
+
+**Transition triggers:**
+
+| From | To | Trigger |
+|------|----|---------|
+| `scheduled` | `sent` | Cron sends email (or marks sent with `email_sent_at = null` for unsubscribed users) |
+| `scheduled` | `cancelled` | Evidence bridge: user starts next layer session (FR-8) |
+| `scheduled` | `failed` | Email send failed after 3 retries |
+| `scheduled` | `expired` | Cron detects window has passed |
+| `scheduled` | `completed` | User responds via interstitial (no email was sent — unsubscribed user path) |
+| `scheduled` | `skipped` | User clicks "Skip for now" in interstitial (no email was sent) |
+| `sent` | `opened` | User clicks magic link in email |
+| `sent` | `completed` | User responds via interstitial (email was sent but user came through app) |
+| `sent` | `skipped` | User clicks "Skip for now" in interstitial |
+| `sent` | `expired` | Cron detects window has passed |
+| `sent` | `cancelled` | Evidence bridge: user starts next layer session after email sent |
+| `opened` | `completed` | User submits response |
+| `opened` | `expired` | Window passes without response |
+
+**Note:** Evidence bridge check-ins have no time-based expiry — they cannot transition to `expired` via cron. They remain in their current state until the user responds (`completed`) or starts the next session (`cancelled`).
+
+<!-- UX-REFINED: Updated scheduling engine — quiet hours deferral, 6h evidence bridge -->
 ### Scheduling Engine
 
 ```typescript
 // server/utils/scheduling/check-in-scheduler.ts
 
-interface ScheduleConfig {
-  userId: string
-  timezone: string
-  trigger: 'session_complete' | 'program_start' | 'daily_refresh'
-  sessionId?: string
-  mythKey?: string
-  sessionEndTime?: Date
+const QUIET_HOUR_START = 21  // 9pm local
+const QUIET_HOUR_END = 8     // 8am local
+const EVIDENCE_BRIDGE_DELAY_HOURS = 6
+const POST_SESSION_DELAY_HOURS = 2
+
+/**
+ * Apply quiet hours: if scheduledFor falls in 9pm-8am,
+ * defer to 8am the following morning.
+ */
+function applyQuietHours(scheduledFor: Date, timezone: string): Date {
+  const hour = getHourInTimezone(scheduledFor, timezone)
+
+  if (hour >= QUIET_HOUR_START || hour < QUIET_HOUR_END) {
+    // In quiet window — defer to 8am next morning
+    // If it's before 8am, defer to 8am same day
+    // If it's >= 9pm, defer to 8am next day
+    if (hour >= QUIET_HOUR_START) {
+      return createDateAtHour(addDays(scheduledFor, 1), QUIET_HOUR_END, timezone)
+    } else {
+      return createDateAtHour(scheduledFor, QUIET_HOUR_END, timezone)
+    }
+  }
+
+  return scheduledFor // Outside quiet hours — no change
 }
 
 export async function scheduleCheckIns(config: ScheduleConfig): Promise<CheckIn[]> {
@@ -447,29 +795,42 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<CheckIn[
   const scheduled: CheckIn[] = []
 
   if (trigger === 'session_complete' && sessionEndTime) {
-    // Post-session check-in: 2 hours later if before 9pm
-    const twoHoursLater = addHours(sessionEndTime, 2)
-    const twoHoursLaterLocal = toZonedTime(twoHoursLater, timezone)
+    const twoHoursLater = addHours(sessionEndTime, POST_SESSION_DELAY_HOURS)
+    const adjustedTime = applyQuietHours(twoHoursLater, timezone)
 
-    if (getHours(twoHoursLaterLocal) < 21) {  // Before 9pm
-      // Expire any pending post-session check-ins (ADR-002)
-      await expirePendingPostSessionCheckIns(userId)
+    // Expire any pending post-session check-ins (ADR-002)
+    await expirePendingPostSessionCheckIns(userId)
 
-      scheduled.push(await createCheckIn({
-        userId,
-        type: 'post_session',
-        scheduledFor: twoHoursLater,
-        timezone,
-        mythKey,
-        sessionId: config.sessionId
-      }))
-    }
+    scheduled.push(await createCheckIn({
+      userId,
+      type: 'post_session',
+      scheduledFor: adjustedTime,
+      timezone,
+      mythKey,
+      sessionId: config.sessionId
+    }))
   }
 
   // Morning/evening check-ins (dormant for MVP per ADR-002)
   // Code exists but triggers not wired up
 
   return scheduled
+}
+
+export async function scheduleEvidenceBridgeCheckIn(...): Promise<CheckIn | null> {
+  const sixHoursLater = addHours(sessionEndTime, EVIDENCE_BRIDGE_DELAY_HOURS)
+  const adjustedTime = applyQuietHours(sixHoursLater, timezone)
+
+  return await createCheckIn({
+    userId,
+    type: 'evidence_bridge',
+    scheduledFor: adjustedTime,
+    timezone,
+    illusionKey,
+    sessionId,
+    promptTemplate,
+    observationAssignment
+  })
 }
 ```
 
@@ -495,6 +856,8 @@ export default defineEventHandler(async (event) => {
 })
 ```
 
+<!-- UX-REFINED: Updated email delivery — per-type subjects, List-Unsubscribe header, unsubscribe footer, preference check -->
+<!-- REQ-REFINED: Updated cron logic — unsubscribed user handling, retry with backoff, expiration sweep -->
 ### Email Delivery
 
 ```typescript
@@ -502,31 +865,64 @@ export default defineEventHandler(async (event) => {
 
 export async function processScheduledCheckIns() {
   const now = new Date()
-  const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
+  // 1. Process pending check-ins ready to send
   const checkIns = await supabase
     .from('check_in_schedule')
     .select('*, user:auth.users(email)')
     .eq('status', 'scheduled')
-    .gte('scheduled_for', windowStart.toISOString())
-    .lt('scheduled_for', windowEnd.toISOString())
+    .lte('scheduled_for', now.toISOString())
 
   for (const checkIn of checkIns.data) {
-    const token = generateSecureToken()
+    // Check if user has unsubscribed from emails
+    const { data: userProgress } = await supabase
+      .from('user_progress')
+      .select('email_unsubscribed_at')
+      .eq('user_id', checkIn.user_id)
+      .single()
+
+    if (userProgress?.email_unsubscribed_at) {
+      // User unsubscribed — advance status to 'sent' with null email_sent_at
+      // Prevents cron from re-processing. Interstitial can still display this check-in.
+      await supabase
+        .from('check_in_schedule')
+        .update({ status: 'sent', email_sent_at: null })
+        .eq('id', checkIn.id)
+      continue
+    }
+
+    const token = generateSecureToken()  // 32+ bytes, URL-safe base64
 
     await supabase
       .from('check_in_schedule')
       .update({ magic_link_token: token })
       .eq('id', checkIn.id)
 
-    await sendCheckInEmail(checkIn, token)
-
-    await supabase
-      .from('check_in_schedule')
-      .update({ status: 'sent', email_sent_at: now.toISOString() })
-      .eq('id', checkIn.id)
+    try {
+      await sendCheckInEmail(checkIn, token)
+      await supabase
+        .from('check_in_schedule')
+        .update({ status: 'sent', email_sent_at: now.toISOString() })
+        .eq('id', checkIn.id)
+    } catch (error) {
+      const newRetryCount = (checkIn.retry_count || 0) + 1
+      if (newRetryCount >= 3) {
+        await supabase
+          .from('check_in_schedule')
+          .update({ status: 'failed', retry_count: newRetryCount })
+          .eq('id', checkIn.id)
+      } else {
+        await supabase
+          .from('check_in_schedule')
+          .update({ retry_count: newRetryCount })
+          .eq('id', checkIn.id)
+        // Will be retried on next cron cycle (backoff via retry_count check)
+      }
+    }
   }
+
+  // 2. Expire check-ins whose window has passed
+  await expireOverdueCheckIns(now)
 }
 
 function getSubjectLine(type: string): string {
@@ -534,12 +930,64 @@ function getSubjectLine(type: string): string {
     case 'morning': return 'Good morning — quick check-in'
     case 'evening': return "Day's winding down — how did it go?"
     case 'post_session': return 'Quick thought from earlier...'
+    case 'evidence_bridge': return 'What did you notice?'
     default: return 'Checking in with you'
   }
 }
 ```
 
+<!-- REQ-REFINED: Updated email headers — dual token approach for unsubscribe -->
+**Email headers (Resend):**
+
+```typescript
+// Two unsubscribe mechanisms:
+// 1. List-Unsubscribe header — uses magic_link_token (email clients act immediately, 24h expiry OK)
+// 2. Footer link — uses HMAC-signed user ID (non-expiring, works indefinitely)
+const hmacSignature = createHmac('sha256', process.env.UNSUBSCRIBE_SECRET)
+  .update(userId)
+  .digest('base64url')
+const footerUnsubscribeLink = `${appUrl}/api/check-ins/unsubscribe?uid=${userId}&sig=${hmacSignature}`
+
+await resend.emails.send({
+  from: 'Unhooked Coach <coach@getunhooked.app>',
+  to: userEmail,
+  subject: getSubjectLine(checkInType),
+  headers: {
+    'List-Unsubscribe': `<${appUrl}/api/check-ins/unsubscribe?token=${token}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  },
+  html: buildEmailHtml(magicLink, footerUnsubscribeLink),
+  text: buildEmailText(magicLink, footerUnsubscribeLink),
+})
+```
+
+**Email footer (HTML):**
+
+```html
+<!-- Footer with unsubscribe link (HMAC token — non-expiring) -->
+<p style="color: rgba(255, 255, 255, 0.4); font-size: 11px; margin-top: 32px;">
+  <a href="{footerUnsubscribeLink}" style="color: rgba(255, 255, 255, 0.4); text-decoration: underline;">
+    Unsubscribe from check-in emails
+  </a>
+</p>
+```
+
 ### API Endpoints
+
+<!-- REQ-REFINED: Added per-endpoint authentication requirements -->
+**Authentication by endpoint:**
+
+| Endpoint | Auth Method | Notes |
+|----------|-------------|-------|
+| `POST /api/check-ins/schedule` | Supabase Auth (JWT) | Authenticated user only |
+| `GET /api/check-ins/pending` | Supabase Auth (JWT) | Returns own check-ins (RLS) |
+| `GET /api/check-ins/open/:token` | Magic link token | 24-hour token validity |
+| `POST /api/check-ins/:id/complete` | Supabase Auth (JWT) | User must own the check-in (RLS) |
+| `GET /api/check-ins/interstitial` | Supabase Auth (JWT) | Returns own pending check-in |
+| `GET /api/check-ins/unsubscribe` | Magic link token OR HMAC token | Accepts both (header vs footer link) |
+| `POST /api/check-ins/unsubscribe` | Magic link token | RFC 8058 one-click (header) |
+| `POST /api/check-ins/resubscribe` | HMAC token | Same HMAC token from footer link |
+| `POST /api/cron/check-ins` | CRON_SECRET header | Server-to-server only |
 
 #### `POST /api/check-ins/schedule`
 
@@ -611,6 +1059,42 @@ Check if user has pending check-in for dashboard modal.
 }
 ```
 
+<!-- UX-REFINED: New endpoint — unsubscribe -->
+<!-- REQ-REFINED: Updated — dual token support (magic_link for header, HMAC for footer) -->
+#### `GET /api/check-ins/unsubscribe`
+
+Unsubscribe from check-in emails via footer link. Accepts HMAC-signed token (non-expiring) or magic_link_token (24h).
+
+```typescript
+// Query params (one of):
+//   ?uid={user_id}&sig={hmac_signature}   — footer link (HMAC, non-expiring)
+//   ?token={magic_link_token}             — fallback / List-Unsubscribe header
+
+// GET: Validates token, sets email_unsubscribed_at, renders confirmation page
+//      with re-subscribe button (passes uid + sig for re-subscribe)
+```
+
+#### `POST /api/check-ins/unsubscribe`
+
+RFC 8058 one-click unsubscribe (called by email clients via `List-Unsubscribe-Post` header).
+
+```typescript
+// Body: List-Unsubscribe=One-Click (per RFC 8058)
+// Uses magic_link_token from List-Unsubscribe header URL
+// Sets email_unsubscribed_at, returns 200
+```
+
+#### `POST /api/check-ins/resubscribe`
+
+Re-subscribe to check-in emails (called from confirmation page).
+
+```typescript
+// Query params: ?uid={user_id}&sig={hmac_signature}
+// Validates HMAC signature
+// Clears email_unsubscribed_at on user_progress
+// Returns 200 with confirmation
+```
+
 ---
 
 ## Out of Scope / Deferred
@@ -622,6 +1106,8 @@ Check if user has pending check-in for dashboard modal.
 | **Push notifications** | Web-only MVP; requires native app | Post-MVP |
 | **Check-in frequency settings** | Simplicity for MVP | Post-MVP |
 | **Observation debrief check-ins** | Removed from scope | Not planned |
+| **In-app email preferences** | Unsubscribe page handles it; settings page deferred | Post-MVP |
+| **Per-type unsubscribe** | Single toggle sufficient for now | Post-MVP |
 
 ---
 
@@ -633,6 +1119,11 @@ Check if user has pending check-in for dashboard modal.
 - [x] How to handle timezone? **Browser detection**
 - [x] Push vs email? **Email for web MVP**
 - [x] Prompt in email or app? **App only (link in email)**
+- [x] Evidence bridge timing? **6 hours (close enough for fresh recall, enough for observation)**
+- [x] What if check-in falls late at night? **Quiet hours 9pm–8am, defer to 8am**
+- [x] Should post-session be dropped or deferred after 9pm? **Deferred to 8am**
+- [x] Unsubscribe granularity? **All emails on/off**
+- [x] Unsubscribe scope? **Emails only, interstitials still show**
 
 ### Still Open
 
@@ -664,3 +1155,5 @@ See [Check-In Types](#check-in-types) section for full prompt templates organize
 |---------|------|---------|
 | 1.0 | 2026-01-28 | Initial specification created from core-program-epic.md and core-program-spec.md |
 | 1.1 | 2026-02-09 | Added evidence bridge check-in type (24-hour timing, observation assignments, cancellation behavior) per evidence-based-coaching-spec integration |
+| 1.2 | 2026-02-16 | Email deliverability enhancements: per-type subject lines, List-Unsubscribe headers, unsubscribe footer link, one-click unsubscribe/resubscribe flow. Evidence bridge timing reduced from 24h to 6h. Quiet hours (9pm–8am) added for all check-in types — post-session now deferred to 8am instead of dropped. Evidence bridge cancellation updated for 6h window and deferred check-ins. |
+| 1.3 | 2026-02-16 | Requirements refinement pass. **New FRs:** FR-9 (dashboard interstitial behavior — dismissal, session hiding, skip), FR-10 (check-in expiration — cron-driven, evidence bridge no time-based expiry), FR-11 (AI response behavior — 5 behaviors, audio must complete before experience closes), FR-12 (timezone detection & rescheduling on change). **Updated FRs:** FR-4 (email body structure per type, retry up to 3x with backoff, unsubscribed user cron handling), FR-7 (HMAC-signed unsubscribe token for footer link, dual-token approach). **New NFRs:** NFR-4 (security — rate limiting, token format, HMAC secret), NFR-5 (accessibility — modal focus trap, Escape dismiss, ARIA). **Technical design:** Added state transition diagram with 8 statuses (added `cancelled`, `failed`), `cancellation_reason` and `retry_count` columns, per-endpoint auth table, updated cron pseudocode, HMAC unsubscribe token implementation. |
