@@ -1,8 +1,9 @@
 /**
  * Check-In Expiration Utilities
- * Calculates expiration at display time (no cron job needed)
+ * Calculates expiration at display time and provides cron-driven expiration sweep.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CheckInType } from '../llm/task-types'
 
 /**
@@ -123,4 +124,61 @@ export function filterExpiredCheckIns<T extends { scheduled_for: string; timezon
   checkIns: T[]
 ): T[] {
   return checkIns.filter(checkIn => !isCheckInExpired(checkIn.scheduled_for, checkIn.timezone))
+}
+
+/**
+ * Cron-driven expiration sweep.
+ * Marks check-ins as expired when their window has passed.
+ *
+ * Expiry rules:
+ * - Morning check-ins (9am): expire at 7pm local time
+ * - Evening check-ins (7pm): expire at 9am next day local time
+ * - Post-session check-ins: expire at end of their window
+ * - Evidence bridge check-ins: NOT expired by this function (no time-based expiry)
+ *
+ * Only check-ins in 'scheduled' or 'sent' status are eligible.
+ */
+export async function expireOverdueCheckIns(
+  supabase: SupabaseClient,
+  now: Date = new Date()
+): Promise<{ expired: number; errors: string[] }> {
+  // Fetch all non-evidence-bridge check-ins that are scheduled or sent
+  const { data: checkIns, error } = await supabase
+    .from('check_in_schedule')
+    .select('id, scheduled_for, timezone, check_in_type')
+    .in('status', ['scheduled', 'sent'])
+    .neq('check_in_type', 'evidence_bridge')
+
+  if (error) {
+    console.error('[check-in-expiration] Failed to query check-ins:', error)
+    return { expired: 0, errors: [error.message] }
+  }
+
+  if (!checkIns || checkIns.length === 0) {
+    return { expired: 0, errors: [] }
+  }
+
+  const errors: string[] = []
+  let expired = 0
+
+  for (const checkIn of checkIns) {
+    const expiration = getCheckInExpiration(checkIn.scheduled_for, checkIn.timezone)
+    if (now > expiration) {
+      const { error: updateError } = await supabase
+        .from('check_in_schedule')
+        .update({ status: 'expired', expired_at: now.toISOString() })
+        .eq('id', checkIn.id)
+
+      if (updateError) {
+        const msg = `Failed to expire check-in ${checkIn.id}: ${updateError.message}`
+        errors.push(msg)
+        console.error(`[check-in-expiration] ${msg}`)
+      } else {
+        expired++
+        console.log(`[check-in-expiration] Expired check-in ${checkIn.id} (${checkIn.check_in_type})`)
+      }
+    }
+  }
+
+  return { expired, errors }
 }
