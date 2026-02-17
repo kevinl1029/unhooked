@@ -75,3 +75,18 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - When adding new Supabase queries to a function under test, update the test mock's from() implementation to use vi.fn().mockImplementation((table) => ...) to return different mock chains per table
   - Test mocks that use a flat .mockReturnValue() chain break when the function starts making multiple Supabase queries — use table-aware mocking instead
 ---
+
+## 2026-02-16 - US-006
+- Added `.lt('retry_count', 3)` filter to processScheduledCheckIns() query so check-ins with 3+ failed attempts are not re-processed
+- Added `retry_count` to the select fields in the query
+- Added `retry_count` field to the `CheckInToSend` interface
+- In the catch block: increments retry_count; sets status to 'failed' if newRetryCount >= 3, otherwise leaves status as 'scheduled' for next cron cycle
+- Updated existing test mock to include `retry_count: 0` in stale check-in fixture and extended `.lte().lt()` chain
+- Added 2 new tests: first failure increments retry_count without status change; 3rd failure sets status to 'failed'
+- All 436 unit tests pass (up from 434)
+- Files changed: server/utils/email/check-in-sender.ts, tests/unit/email/check-in-sender.test.ts
+- **Learnings for future iterations:**
+  - When adding a new filter to a Supabase query chain (.lt() after .lte()), existing test mocks that resolve at .lte() need to be updated to chain .lt() further
+  - To test Resend failures, mock `~/server/utils/email/resend-client` with `vi.mock()` and have `getResendClient` return `{ emails: { send: vi.fn().mockResolvedValue({ error: {...} }) } }`
+  - The mock Supabase client needs `auth.admin.getUserById` for the email lookup fallback path
+---

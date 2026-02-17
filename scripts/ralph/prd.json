@@ -108,7 +108,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/email/check-in-sender.ts (273 lines). The processScheduledCheckIns() function already queries scheduled check-ins. Add .lt('retry_count', 3) to the query. In the catch block (around line 109-115), increment retry_count. The retry_count column already exists on check_in_schedule with DEFAULT 0. The 5-min cron cycle provides natural backoff between retries."
     },
     {
