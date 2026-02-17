@@ -253,7 +253,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/check-ins/resubscribe.post.ts. Read uid and sig from getQuery(event). Validate via validateUnsubscribeToken(uid, sig) from server/utils/auth/hmac-tokens.ts. Update user_progress: SET email_unsubscribed_at = null WHERE user_id = uid. Use serverSupabaseServiceRole(event) for the update. Depends on US-001, US-002, US-003."
     },
     {

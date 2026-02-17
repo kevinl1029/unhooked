@@ -197,3 +197,18 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - serverSupabaseServiceRole from '#supabase/server' bypasses RLS for public endpoints
   - getQuery(event) returns all query params; String() coercion handles potential array values
 ---
+
+## 2026-02-16 - US-014
+- Created server/api/check-ins/resubscribe.post.ts (POST endpoint)
+  - Accepts ?uid=X&sig=Y query params
+  - Validates HMAC via validateUnsubscribeToken(uid, sig)
+  - Clears email_unsubscribed_at (sets to null) on user_progress for the user
+  - Returns { success: true } on success; 400 on invalid/missing params
+  - Idempotent: setting null on an already-null field is a no-op
+  - Uses serverSupabaseServiceRole — no user auth required
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/api/check-ins/resubscribe.post.ts (new)
+- **Learnings for future iterations:**
+  - The HMAC validation via validateUnsubscribeToken is the same pattern used in the unsubscribe GET endpoint
+  - Setting a column to null via Supabase .update({ field: null }) works correctly for clearing timestamps
+---
