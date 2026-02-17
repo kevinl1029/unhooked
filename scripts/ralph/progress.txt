@@ -259,3 +259,21 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - Conditional logging pattern: only log timezone change message when storedTimezone !== null (skip for first-time setup)
   - upsert handles both insert (new user) and update (existing user) in a single DB call
 ---
+
+## 2026-02-17 - US-018
+- Added ARIA accessibility attributes to CheckInInterstitial.vue modal
+- Added role="dialog", aria-modal="true", tabindex="-1", :aria-describedby to the modal div
+- Added a unique promptId (random suffix) and bound it to the prompt <p> element via :id
+- Added focus trap: @keydown on backdrop div bubbles Tab/Shift+Tab events, cycles focus between first/last focusable elements in modal
+- Added Escape key handler: dismisses modal if state === 'ready' (consistent with backdrop click behavior)
+- Added focus save/restore: save document.activeElement before modal mounts; focus() modal div on mount (via nextTick); restore focus on unmount
+- Added focus:outline-none to modal div to suppress browser focus ring (modal has custom styling)
+- Followed CeremonyExitDialog.vue pattern for focus trap implementation
+- All 438 unit tests pass; typecheck passes
+- Files changed: components/CheckInInterstitial.vue
+- **Learnings for future iterations:**
+  - The @keydown handler on the backdrop div catches keyboard events via bubbling — no need for a separate global event listener
+  - tabindex="-1" on the modal div enables programmatic .focus() without adding it to the tab order
+  - The focus trap query excludes tabindex="-1" elements so the modal div itself isn't included in the cycle
+  - Save previouslyFocusedElement as a plain let variable (not a ref) since it doesn't need reactivity
+---

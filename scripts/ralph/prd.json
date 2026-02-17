@@ -322,7 +322,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "File: components/CheckInInterstitial.vue (354 lines). Reference components/CeremonyExitDialog.vue for the existing focus trap and ARIA pattern already used in this codebase. Focus trap: intercept Tab keydown, get all focusable elements within the modal, cycle between first and last. Escape handler: call the dismiss function (same as click-outside behavior per FR-9.5). Use onMounted/onUnmounted for keydown listener lifecycle."
     }
   ]
