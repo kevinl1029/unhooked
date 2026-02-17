@@ -216,7 +216,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Files: server/utils/email/resend-client.ts (39 lines, has getSubjectLine), server/utils/email/check-in-sender.ts (reads personalization_context). The personalization_context is a JSONB column on check_in_schedule populated at scheduling time (US-005). In check-in-sender.ts processScheduledCheckIns(), extract name from checkIn.personalization_context?.name and pass to getSubjectLine(). Depends on US-011 (template changes) and US-005 (personalization_context population)."
     },
     {

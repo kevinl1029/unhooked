@@ -163,3 +163,20 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - Resend's headers field accepts Record<string, string> for custom email headers
   - Per-type CTA: evidence_bridge uses 'Share what you noticed', all others use 'Open check-in'
 ---
+
+## 2026-02-16 - US-012
+- Updated getEmailSubject() in resend-client.ts to accept (type: string, name?: string | null): string
+- Added SUBJECTS_WITHOUT_NAME and SUBJECTS_WITH_NAME maps with per-type subject lines
+- With name: '{name}, quick thought from earlier...', '{name}, what did you notice?', '{name}, good morning', '{name}, how was your day?'
+- Without name: 'Quick thought from earlier...', 'What did you notice?', 'Good morning', 'How was your day?'
+- Added personalization_context: { name?: string } | null to CheckInToSend interface in check-in-sender.ts
+- Added personalization_context to the Supabase query select fields
+- sendCheckInEmail() extracts name from checkIn.personalization_context?.name and passes to getEmailSubject()
+- Updated test mock: added hmac-tokens mock to prevent real token generation errors in tests; added personalization_context: null to makeFreshCheckIn()
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/utils/email/resend-client.ts, server/utils/email/check-in-sender.ts, tests/unit/email/check-in-sender.test.ts
+- **Learnings for future iterations:**
+  - When check-in-sender.ts imports hmac-tokens (added in US-011), test files must mock that module to avoid UNSUBSCRIBE_SECRET errors during tests
+  - getEmailSubject mock in tests is fine as a simple vi.fn() since we're testing sender logic, not subject generation
+  - personalization_context is JSONB on check_in_schedule, typed as { name?: string } | null in TypeScript
+---

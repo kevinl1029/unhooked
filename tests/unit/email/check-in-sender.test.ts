@@ -10,6 +10,10 @@ vi.mock('~/server/utils/email/resend-client', () => ({
   getEmailSubject: vi.fn().mockReturnValue('Your check-in'),
 }))
 
+vi.mock('~/server/utils/auth/hmac-tokens', () => ({
+  generateUnsubscribeToken: vi.fn().mockReturnValue('mock-hmac-sig'),
+}))
+
 const { getResendClient } = await import('~/server/utils/email/resend-client')
 
 function makeFreshCheckIn(overrides: Partial<{
@@ -18,6 +22,7 @@ function makeFreshCheckIn(overrides: Partial<{
   check_in_type: string
   retry_count: number
   scheduled_for: string
+  personalization_context: { name?: string } | null
 }> = {}) {
   return {
     id: 'checkin-1',
@@ -27,6 +32,7 @@ function makeFreshCheckIn(overrides: Partial<{
     scheduled_for: '2026-02-16T10:00:00Z',
     prompt_template: null,
     observation_assignment: null,
+    personalization_context: null,
     retry_count: 0,
     ...overrides,
   }

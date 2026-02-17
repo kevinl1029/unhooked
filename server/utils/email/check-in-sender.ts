@@ -20,6 +20,7 @@ interface CheckInToSend {
   scheduled_for: string
   prompt_template: string | null
   observation_assignment: string | null
+  personalization_context: { name?: string } | null
   retry_count: number
   user: {
     email: string
@@ -57,6 +58,7 @@ export async function processScheduledCheckIns(supabase: SupabaseClient): Promis
       scheduled_for,
       prompt_template,
       observation_assignment,
+      personalization_context,
       retry_count
     `)
     .eq('status', 'scheduled')
@@ -186,7 +188,8 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
   const appUrl = config.public.appUrl || 'https://getunhooked.app'
 
   const magicLink = `${appUrl}/check-in/open/${checkIn.magic_link_token}`
-  const subject = getEmailSubject()
+  const name = checkIn.personalization_context?.name ?? null
+  const subject = getEmailSubject(checkIn.check_in_type, name)
 
   const hmacSig = generateUnsubscribeToken(checkIn.user_id)
   const footerUnsubscribeLink = `${appUrl}/api/check-ins/unsubscribe?uid=${checkIn.user_id}&sig=${hmacSig}`
