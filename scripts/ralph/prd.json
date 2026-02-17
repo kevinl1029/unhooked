@@ -176,7 +176,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/email/check-in-sender.ts. Add the unsubscribe check early in the processing loop (after fetching the check-in, before generating the magic link token). Query user_progress with .select('email_unsubscribed_at').eq('user_id', checkIn.user_id).single(). If unsubscribed, update status and continue to next check-in. Depends on US-001 (email_unsubscribed_at column)."
     },
     {
@@ -197,7 +197,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/email/check-in-sender.ts. buildEmailHtml() starts at line 186, buildEmailText() at line 253, sendCheckInEmail() at line 148. Import generateUnsubscribeToken from server/utils/auth/hmac-tokens.ts (US-002). Create a config object mapping check-in types to their heading/body/CTA. The evidence_bridge body uses the prompt_template field from the check-in record (already contains the wrapped observation assignment). The footer unsubscribe link is HTML: <a href='{link}' style='color: rgba(255,255,255,0.4); text-decoration: underline;'>Unsubscribe from check-in emails</a>. List-Unsubscribe headers go in the headers object passed to resend.emails.send(). Depends on US-002 for HMAC utility."
     },
     {

@@ -117,6 +117,20 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - applyQuietHours() was already wired in from US-004 — only needed to change the raw hour count
 ---
 
+## 2026-02-16 - US-010
+- Added unsubscribe check in processScheduledCheckIns() before email send
+- Queries user_progress.email_unsubscribed_at for each check-in user
+- If unsubscribed: logs '[check-in-sender] User {id} unsubscribed, skipping email', updates status='sent' with email_sent_at=null, increments sent count, continues to next check-in
+- Check-in advances to 'sent' state so cron doesn't re-process it, but interstitials still display (they query by magic_link_token, not email status)
+- Added 2 new tests: unsubscribed user skips email send + advances to sent; subscribed user (null) sends normally
+- Updated makeSupabaseMock() to accept emailUnsubscribedAt param and return user_progress mock
+- All 438 unit tests pass
+- Files changed: server/utils/email/check-in-sender.ts, tests/unit/email/check-in-sender.test.ts
+- **Learnings for future iterations:**
+  - When adding a new Supabase query (user_progress) inside the processing loop, update makeSupabaseMock to handle that table via if (table === 'user_progress') pattern
+  - The check-in advances to 'sent' (not 'skipped') to prevent re-processing while keeping interstitial accessibility
+---
+
 ## 2026-02-16 - US-006
 - Added `.lt('retry_count', 3)` filter to processScheduledCheckIns() query so check-ins with 3+ failed attempts are not re-processed
 - Added `retry_count` to the select fields in the query
@@ -130,4 +144,22 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - When adding a new filter to a Supabase query chain (.lt() after .lte()), existing test mocks that resolve at .lte() need to be updated to chain .lt() further
   - To test Resend failures, mock `~/server/utils/email/resend-client` with `vi.mock()` and have `getResendClient` return `{ emails: { send: vi.fn().mockResolvedValue({ error: {...} }) } }`
   - The mock Supabase client needs `auth.admin.getUserById` for the email lookup fallback path
+---
+
+## 2026-02-16 - US-011
+- Redesigned email template: white/transparent outer background (was dark teal #041f21)
+- Added CHECK_IN_EMAIL_CONFIG map with per-type heading, body, and CTA for post_session, evidence_bridge, morning, evening
+- buildEmailHtml() and buildEmailText() now accept footerUnsubscribeLink parameter
+- Footer includes unsubscribe link: <a href="...">Unsubscribe from check-in emails</a>
+- Removed "This link expires in 24 hours" line from both HTML and text templates
+- sendCheckInEmail() generates HMAC token via generateUnsubscribeToken(userId) and builds footer link
+- Added List-Unsubscribe header (magic_link_token path) and List-Unsubscribe-Post: List-Unsubscribe=One-Click headers to Resend send call
+- Imported generateUnsubscribeToken from server/utils/auth/hmac-tokens.ts
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/utils/email/check-in-sender.ts
+- **Learnings for future iterations:**
+  - generateUnsubscribeToken is imported from server/utils/auth/hmac-tokens.ts; it reads UNSUBSCRIBE_SECRET from runtimeConfig
+  - When check-in-sender.ts calls generateUnsubscribeToken in tests, the existing mock for resend-client already mocks resend — but hmac-tokens is NOT mocked, so it uses the real implementation with .env.test secret (UNSUBSCRIBE_SECRET=test-secret-for-unit-tests)
+  - Resend's headers field accepts Record<string, string> for custom email headers
+  - Per-type CTA: evidence_bridge uses 'Share what you noticed', all others use 'Open check-in'
 ---

@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getResendClient, getEmailSubject } from './resend-client'
+import { generateUnsubscribeToken } from '../auth/hmac-tokens'
 
 // From email address
 const FROM_EMAIL = 'coach@getunhooked.app'
@@ -187,6 +188,10 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
   const magicLink = `${appUrl}/check-in/open/${checkIn.magic_link_token}`
   const subject = getEmailSubject()
 
+  const hmacSig = generateUnsubscribeToken(checkIn.user_id)
+  const footerUnsubscribeLink = `${appUrl}/api/check-ins/unsubscribe?uid=${checkIn.user_id}&sig=${hmacSig}`
+  const listUnsubscribeUrl = `${appUrl}/api/check-ins/unsubscribe?token=${checkIn.magic_link_token}`
+
   const { error } = await resend.emails.send({
     from: `${FROM_NAME} <${FROM_EMAIL}>`,
     to: checkIn.user.email,
@@ -195,14 +200,20 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
       magicLink,
       checkIn.check_in_type,
       checkIn.prompt_template,
-      checkIn.observation_assignment
+      checkIn.observation_assignment,
+      footerUnsubscribeLink
     ),
     text: buildEmailText(
       magicLink,
       checkIn.check_in_type,
       checkIn.prompt_template,
-      checkIn.observation_assignment
+      checkIn.observation_assignment,
+      footerUnsubscribeLink
     ),
+    headers: {
+      'List-Unsubscribe': `<${listUnsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   })
 
   if (error) {
@@ -210,6 +221,38 @@ async function sendCheckInEmail(checkIn: CheckInToSend): Promise<void> {
   }
 
   console.log(`[check-in-sender] Sent ${checkIn.check_in_type} email to ${checkIn.user.email}`)
+}
+
+// Per-type email content config
+const CHECK_IN_EMAIL_CONFIG: Record<string, { heading: string; body: string; cta: string }> = {
+  post_session: {
+    heading: 'Quick thought for you',
+    body: 'A quick thought from your session earlier.',
+    cta: 'Open check-in',
+  },
+  evidence_bridge: {
+    heading: 'What did you notice?',
+    body: '', // populated from prompt_template
+    cta: 'Share what you noticed',
+  },
+  morning: {
+    heading: 'Good morning',
+    body: 'Start your day with a quick reflection.',
+    cta: 'Open check-in',
+  },
+  evening: {
+    heading: "Day's winding down",
+    body: 'Take a moment to reflect on your day.',
+    cta: 'Open check-in',
+  },
+}
+
+function getEmailConfig(checkInType: string): { heading: string; body: string; cta: string } {
+  return CHECK_IN_EMAIL_CONFIG[checkInType] ?? {
+    heading: 'Your check-in is ready',
+    body: 'Take a moment to reflect on how things are going.',
+    cta: 'Open check-in',
+  }
 }
 
 /**
@@ -221,12 +264,13 @@ function buildEmailHtml(
   magicLink: string,
   checkInType: string,
   promptTemplate: string | null,
-  observationAssignment: string | null
+  observationAssignment: string | null,
+  footerUnsubscribeLink: string
 ): string {
-  // Evidence bridge emails should use prompt_template as the source of truth.
+  const emailConfig = getEmailConfig(checkInType)
   const bodyText = checkInType === 'evidence_bridge'
     ? (promptTemplate || observationAssignment || 'Take a moment to reflect on how things are going.')
-    : 'Take a moment to reflect on how things are going.'
+    : emailConfig.body
 
   return `
 <!DOCTYPE html>
@@ -236,8 +280,8 @@ function buildEmailHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Unhooked Check-in</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #041f21;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #041f21; padding: 40px 20px;">
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; padding: 40px 20px;">
     <tr>
       <td align="center">
         <table width="100%" max-width="480" cellpadding="0" cellspacing="0" style="background: linear-gradient(180deg, #104e54 0%, #0a3a3f 100%); border-radius: 16px; padding: 40px; max-width: 480px;">
@@ -248,7 +292,7 @@ function buildEmailHtml(
           </tr>
           <tr>
             <td align="center" style="padding-bottom: 24px;">
-              <h1 style="color: #ffffff; font-size: 24px; font-weight: 600; margin: 0;">Your check-in is ready</h1>
+              <h1 style="color: #ffffff; font-size: 24px; font-weight: 600; margin: 0;">${emailConfig.heading}</h1>
             </td>
           </tr>
           <tr>
@@ -261,14 +305,14 @@ function buildEmailHtml(
           <tr>
             <td align="center">
               <a href="${magicLink}" style="display: inline-block; background: linear-gradient(135deg, #fc4a1a, #f7b733); color: #ffffff; text-decoration: none; font-weight: 600; padding: 14px 32px; border-radius: 9999px; font-size: 16px;">
-                Open Check-in
+                ${emailConfig.cta}
               </a>
             </td>
           </tr>
           <tr>
             <td align="center" style="padding-top: 40px;">
-              <p style="color: rgba(255, 255, 255, 0.5); font-size: 12px; margin: 0;">
-                This link expires in 24 hours.
+              <p style="color: rgba(255, 255, 255, 0.4); font-size: 12px; margin: 0;">
+                <a href="${footerUnsubscribeLink}" style="color: rgba(255, 255, 255, 0.4); text-decoration: underline;">Unsubscribe from check-in emails</a>
               </p>
             </td>
           </tr>
@@ -288,20 +332,21 @@ function buildEmailText(
   magicLink: string,
   checkInType: string,
   promptTemplate: string | null,
-  observationAssignment: string | null
+  observationAssignment: string | null,
+  footerUnsubscribeLink: string
 ): string {
-  // Evidence bridge emails should use prompt_template as the source of truth.
+  const emailConfig = getEmailConfig(checkInType)
   const bodyText = checkInType === 'evidence_bridge'
     ? (promptTemplate || observationAssignment || 'Take a moment to reflect on how things are going.')
-    : 'Take a moment to reflect on how things are going.'
+    : emailConfig.body
 
   return `UNHOOKED
 
-Your check-in is ready
+${emailConfig.heading}
 
 ${bodyText}
 
-Open Check-in: ${magicLink}
+${emailConfig.cta}: ${magicLink}
 
-This link expires in 24 hours.`
+Unsubscribe from check-in emails: ${footerUnsubscribeLink}`
 }
