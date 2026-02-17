@@ -92,6 +92,18 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - check_in_schedule.timezone column is present — no need to join user_progress for timezone
 ---
 
+## 2026-02-16 - US-008
+- Added cancellation logic in server/api/conversations/index.post.ts
+- After conversation insert, if illusionKey is provided: cancels pending evidence bridge check-ins via UPDATE check_in_schedule SET status='cancelled', cancellation_reason='user_continued_immediately' WHERE user_id=X AND trigger_illusion_key=illusionKey AND check_in_type='evidence_bridge' AND status IN ('scheduled', 'sent')
+- Wrapped in try/catch so conversation creation is never blocked by cancellation errors
+- Typecheck passed; all 436 unit tests pass
+- Files changed: server/api/conversations/index.post.ts
+- **Learnings for future iterations:**
+  - The .in('status', ['scheduled', 'sent']) Supabase filter works cleanly for multi-value matching
+  - Non-blocking pattern: catch errors and log, never throw — ensures conversation creation always succeeds
+  - effectiveIllusionKey (not illusionKey) is the correct variable to check, as it handles null for no-illusion conversations
+---
+
 ## 2026-02-16 - US-006
 - Added `.lt('retry_count', 3)` filter to processScheduledCheckIns() query so check-ins with 3+ failed attempts are not re-processed
 - Added `retry_count` to the select fields in the query
