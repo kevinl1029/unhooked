@@ -48,3 +48,30 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - database.types.ts fields are alphabetically sorted within each section (Row, Insert, Update)
   - Project is on feature/checkin-email-enhancements branch; ralph branch was created fresh from that
 ---
+
+## 2026-02-16 - US-004
+- Added applyQuietHours(scheduledFor: Date, timezone: string): Date to check-in-scheduler.ts
+- Defers hour >= 21 to 8am next day; defers hour < 8 to 8am same day; no change otherwise
+- Removed POST_SESSION_CUTOFF_HOUR constant and the drop-check (if hourInTimezone < POST_SESSION_CUTOFF_HOUR)
+- Post-session check-in now defers to 8am instead of being dropped when after 9pm
+- Applied applyQuietHours() to evidence bridge scheduling (rawTime = addHours(sessionEndTime, 24), then applyQuietHours)
+- Typecheck passed; all 434 unit tests pass
+- Files changed: server/utils/scheduling/check-in-scheduler.ts
+- **Learnings for future iterations:**
+  - addDays(), addHours(), getHourInTimezone(), createDateAtHour() all already exist in this file — no date-fns needed
+  - applyQuietHours must call createDateAtHour on the nextDay object for correct timezone-aware hour setting
+---
+
+## 2026-02-16 - US-005
+- Added preferred_name to user_intake Row/Insert/Update in types/database.types.ts (the column was added via 20260215_personalization_v11.sql migration but missing from TS types)
+- Added personalizationContext parameter to createCheckIn() and included it in the insert payload
+- Modified scheduleCheckIns() to query user_intake.preferred_name once per scheduling call, passing { name } or null to each createCheckIn() call
+- Modified scheduleEvidenceBridgeCheckIn() to query user_intake.preferred_name and pass personalization_context to createCheckIn()
+- Fixed 2 failing unit tests by updating createMockSupabase() to differentiate between user_intake queries and check_in_schedule inserts
+- Typecheck passed; all 434 unit tests pass
+- Files changed: types/database.types.ts, server/utils/scheduling/check-in-scheduler.ts, tests/unit/scheduling/check-in-scheduler.test.ts
+- **Learnings for future iterations:**
+  - preferred_name was added to user_intake via migration 20260215_personalization_v11.sql but NOT in database.types.ts — always check migrations for columns missing from types
+  - When adding new Supabase queries to a function under test, update the test mock's from() implementation to use vi.fn().mockImplementation((table) => ...) to return different mock chains per table
+  - Test mocks that use a flat .mockReturnValue() chain break when the function starts making multiple Supabase queries — use table-aware mocking instead
+---

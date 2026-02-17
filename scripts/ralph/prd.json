@@ -76,7 +76,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts (473 lines). The POST_SESSION_CUTOFF_HOUR constant is on line 13. The cutoff logic is around line 285 (if hourInTimezone < POST_SESSION_CUTOFF_HOUR). Remove that conditional and replace with applyQuietHours(). Use existing helper functions getHourInTimezone() and createDateAtHour() which are already in this file. The addDays() helper may need to be added if not present — check date-fns imports."
     },
     {
@@ -92,7 +92,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts. Query: supabase.from('user_intake').select('preferred_name').eq('user_id', userId).single(). The createCheckIn() function already accepts a params object — add personalization_context to it and pass through to the insert. The personalization_context column is JSONB on check_in_schedule table."
     },
     {
