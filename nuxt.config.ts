@@ -72,7 +72,7 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: '/login',
       callback: '/auth/callback',
-      exclude: ['/', '/login', '/test-login', '/checkout/*', '/privacy', '/terms', '/listen', '/site.webmanifest'],
+      exclude: ['/', '/login', '/test-login', '/checkout/*', '/privacy', '/terms', '/listen', '/unsubscribe', '/site.webmanifest'],
     },
     cookieOptions: {
       maxAge: 60 * 60 * 8,
@@ -147,6 +147,7 @@ export default defineNuxtConfig({
     llmTaskKeyInsightSelectModel: process.env.LLM_TASK_KEY_INSIGHT_SELECT_MODEL,
 
     // Email Configuration (Phase 4B)
+    unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET,
     resendApiKey: process.env.RESEND_API_KEY,
     resendAudienceId: process.env.RESEND_AUDIENCE_ID,
     sendEmails: process.env.SEND_EMAILS || 'true',
