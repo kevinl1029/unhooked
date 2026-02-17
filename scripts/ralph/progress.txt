@@ -229,3 +229,18 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - $fetch with { method: 'POST' } works for client-side API calls in Vue components
   - The teal gradient background is applied globally via body CSS in assets/css/main.css, so layout:false pages get it automatically
 ---
+
+## 2026-02-16 - US-016
+- Added isAudioPlaying ref and setAudioPlaying(v) function to useCheckIns.ts
+- dismissInterstitial() now returns early if isAudioPlaying is true (prevents modal close while audio plays)
+- isAudioPlaying and setAudioPlaying exposed in useCheckIns return
+- CheckInInterstitial.vue: added 'audio-playing-change' emit; handleComplete() now waits for isAISpeaking to go false (or 3s timeout) before emitting 'complete'
+- dashboard.vue: wires @audio-playing-change="setAudioPlaying" on CheckInInterstitial; destructures setAudioPlaying from useCheckIns()
+- pages/check-in/[id].vue: handleComplete() waits for voiceChat.isAISpeaking to finish (or 3s timeout) before calling navigateTo('/dashboard')
+- All 438 unit tests pass; typecheck passes
+- Files changed: composables/useCheckIns.ts, components/CheckInInterstitial.vue, pages/dashboard.vue, pages/check-in/[id].vue
+- **Learnings for future iterations:**
+  - The isAISpeaking ref in useVoiceChat/useVoiceSession goes false when audio 'ended' event fires or when audio errors
+  - Pattern for waiting on a ref with timeout: watch() inside a new Promise<void>, clearTimeout+stopWatcher when done, setTimeout for fallback
+  - CheckInInterstitial backdrop click is already gated by state === 'ready'; audio states set state to 'speaking' or 'complete' naturally
+---

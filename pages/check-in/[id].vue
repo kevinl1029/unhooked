@@ -149,9 +149,28 @@ async function handleComplete() {
     // Still show toast and navigate even if API fails
   }
 
-  // Show toast and navigate
+  // Show toast briefly
   showToast.value = true
   await new Promise(resolve => setTimeout(resolve, 1500))
+
+  // Wait for AI audio to finish before navigating away
+  if (voiceChat?.isAISpeaking.value) {
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        stopWatcher()
+        resolve()
+      }, 3000)
+
+      const stopWatcher = watch(voiceChat!.isAISpeaking, (speaking) => {
+        if (!speaking) {
+          clearTimeout(timeout)
+          stopWatcher()
+          resolve()
+        }
+      })
+    })
+  }
+
   await navigateTo('/dashboard')
 }
 

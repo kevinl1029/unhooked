@@ -289,7 +289,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "File: composables/useCheckIns.ts and components/CheckInInterstitial.vue (354 lines). Add an isAudioPlaying ref that gets set to true when TTS playback starts and false when it ends. Listen for the 'ended' event on the audio element. In CheckInInterstitial.vue, gate the dismiss/close logic behind !isAudioPlaying. Add a setTimeout fallback (3s) in case audio fails to load."
     },
     {

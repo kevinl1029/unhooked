@@ -23,6 +23,7 @@ const emit = defineEmits<{
   skip: [id: string]
   respond: [id: string]
   complete: [id: string, conversationId: string | null]
+  'audio-playing-change': [playing: boolean]
 }>()
 
 // Check-in states
@@ -124,9 +125,29 @@ async function handleComplete() {
     console.error('[check-in-interstitial] Failed to mark complete:', err)
   }
 
-  // Show toast briefly then emit complete
+  // Show toast briefly
   showToast.value = true
   await new Promise(resolve => setTimeout(resolve, 1500))
+
+  // Wait for AI audio to finish before closing modal
+  if (voiceChat?.isAISpeaking.value) {
+    emit('audio-playing-change', true)
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        stopWatcher()
+        resolve()
+      }, 3000)
+
+      const stopWatcher = watch(voiceChat!.isAISpeaking, (speaking) => {
+        if (!speaking) {
+          clearTimeout(timeout)
+          stopWatcher()
+          resolve()
+        }
+      })
+    })
+    emit('audio-playing-change', false)
+  }
 
   emit('complete', props.checkIn.id, responseConversationId || null)
 }

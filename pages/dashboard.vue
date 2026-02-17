@@ -371,6 +371,7 @@
       @skip="skipCheckIn"
       @respond="respondToCheckIn"
       @complete="completeCheckInInline"
+      @audio-playing-change="setAudioPlaying"
     />
   </div>
 </template>
@@ -412,6 +413,7 @@ const {
   skipCheckIn,
   respondToCheckIn,
   completeCheckInInline,
+  setAudioPlaying,
 } = useCheckIns()
 
 // Timezone detection
