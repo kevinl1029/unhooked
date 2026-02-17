@@ -273,7 +273,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the pattern from error.vue for layout: false pages. Read status, uid, sig from useRoute().query. Use $fetch for the resubscribe call. Brand styling: glass card (.glass rounded-card), teal gradient body (already applied globally via body CSS), pill button (.btn-primary rounded-pill), Inter font, .eyebrow class for UNHOOKED text. Use ref() for reactive state (isResubscribed, isLoading). Depends on US-013 and US-014."
     },
     {

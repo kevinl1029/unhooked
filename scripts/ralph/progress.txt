@@ -212,3 +212,20 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - The HMAC validation via validateUnsubscribeToken is the same pattern used in the unsubscribe GET endpoint
   - Setting a column to null via Supabase .update({ field: null }) works correctly for clearing timestamps
 ---
+
+## 2026-02-16 - US-015
+- Created pages/unsubscribe.vue with definePageMeta({ layout: false })
+- Centered glass card on teal gradient background (global body CSS)
+- UNHOOKED eyebrow text at top of card
+- status=success: shows "You've been unsubscribed..." message + subtext + Re-subscribe button
+- Re-subscribe button: calls POST /api/check-ins/resubscribe?uid=X&sig=Y, shows loading state, on success shows "You're subscribed to check-in emails again." and hides button
+- status=error: shows "This link doesn't seem to be working." + subtext
+- No auth middleware — page loads for unauthenticated users
+- Browser-verified: both success and error states render correctly
+- All 438 unit tests pass; typecheck passes
+- Files changed: pages/unsubscribe.vue (new)
+- **Learnings for future iterations:**
+  - definePageMeta({ layout: false }) skips the default layout entirely (no AppHeader, no wrapper)
+  - $fetch with { method: 'POST' } works for client-side API calls in Vue components
+  - The teal gradient background is applied globally via body CSS in assets/css/main.css, so layout:false pages get it automatically
+---
