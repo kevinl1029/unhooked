@@ -11,6 +11,20 @@ Started: Mon Feb 16 23:19:21 EST 2026
 - Nuxt test env overrides vi.stubGlobal('useRuntimeConfig'): use optional secret param in utility functions for testability, or add env vars to .env.test
 - For server utilities that read useRuntimeConfig, accept optional dep-injection params (e.g., `secret?: string`) to enable direct unit testing without mocking Nuxt's runtime config
 
+## 2026-02-16 - US-003
+- Created server/middleware/rate-limit.ts with in-memory IP-based rate limiting
+- Limits 10 requests/60s per IP; only applies to /api/check-ins/open/, /api/check-ins/unsubscribe, /api/check-ins/resubscribe
+- Extracts IP from x-forwarded-for header, falls back to socket.remoteAddress
+- Returns 429 { error: 'Too many requests' } on limit exceeded
+- Cleans up expired entries on each request to avoid memory leaks
+- Typecheck passed; all 434 unit tests pass
+- Files changed: server/middleware/rate-limit.ts
+- **Learnings for future iterations:**
+  - Nuxt server middleware in server/middleware/ auto-registers; no imports needed
+  - Use getHeader(event, 'x-forwarded-for') and event.node.req.socket.remoteAddress for IP extraction
+  - setResponseStatus(event, 429) + returning a JSON object sends the status + body correctly
+---
+
 ## 2026-02-17 - US-002
 - Created server/utils/auth/hmac-tokens.ts with generateUnsubscribeToken() and validateUnsubscribeToken()
 - Added UNSUBSCRIBE_SECRET to .env.example with comment

@@ -57,7 +57,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Use in-memory Map<string, { count: number, resetAt: number }>. Clean up expired entries on each request. Use Nuxt server middleware pattern: defineEventHandler(). Check event.path for rate-limited prefixes. Return early with setResponseStatus(event, 429) for exceeded limits. This is a Nuxt server middleware in server/middleware/ — it auto-registers. Resets on deploy (acceptable at current scale)."
     },
     {
