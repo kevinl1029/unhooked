@@ -180,3 +180,20 @@ Started: Mon Feb 16 23:19:21 EST 2026
   - getEmailSubject mock in tests is fine as a simple vi.fn() since we're testing sender logic, not subject generation
   - personalization_context is JSONB on check_in_schedule, typed as { name?: string } | null in TypeScript
 ---
+
+## 2026-02-16 - US-013
+- Created server/api/check-ins/unsubscribe.get.ts (GET endpoint)
+  - HMAC path (?uid=X&sig=Y): validates with validateUnsubscribeToken, updates email_unsubscribed_at, redirects to /unsubscribe?status=success&uid=X&sig=Y
+  - Magic link token path (?token=X): looks up check_in_schedule.user_id, updates email_unsubscribed_at, generates HMAC for redirect, redirects to /unsubscribe?status=success&uid=X&sig=Y
+  - Invalid HMAC or token: redirects to /unsubscribe?status=error
+- Created server/api/check-ins/unsubscribe.post.ts (POST endpoint, RFC 8058 one-click)
+  - Accepts ?token=X, looks up check_in_schedule, updates user_progress.email_unsubscribed_at, returns { ok: true }
+  - Invalid/missing token: returns 400
+- Both endpoints use serverSupabaseServiceRole (no user auth required)
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/api/check-ins/unsubscribe.get.ts (new), server/api/check-ins/unsubscribe.post.ts (new)
+- **Learnings for future iterations:**
+  - sendRedirect(event, url, 302) is the Nuxt H3 way to redirect; import is auto-available
+  - serverSupabaseServiceRole from '#supabase/server' bypasses RLS for public endpoints
+  - getQuery(event) returns all query params; String() coercion handles potential array values
+---

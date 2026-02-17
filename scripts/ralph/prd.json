@@ -237,7 +237,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "GET handler: check for uid+sig params first (HMAC path via validateUnsubscribeToken from US-002), then token param (magic_link_token path via check_in_schedule lookup). Use serverSupabaseServiceRole from #supabase/server (not serverSupabaseClient which requires auth). For magic_link_token path, look up in check_in_schedule table, extract user_id, then generate HMAC for the redirect URL. POST handler: simpler — just token param, look up check-in, set email_unsubscribed_at. Use sendRedirect(event, url) for 302 redirects. Depends on US-001, US-002, US-003."
     },
     {
