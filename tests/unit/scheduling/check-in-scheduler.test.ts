@@ -279,10 +279,20 @@ describe('Check-In Scheduler', () => {
 
   describe('Evidence bridge check-in trigger_session_id', () => {
     function createMockSupabase(insertResult: { data: any; error: any }) {
+      // intake query chain: from('user_intake').select().eq().single() → no preferred_name
+      const intakeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+      const intakeEq = vi.fn().mockReturnValue({ single: intakeSingle })
+      const intakeSelect = vi.fn().mockReturnValue({ eq: intakeEq })
+
+      // insert chain: from('check_in_schedule').insert().select().single() → insertResult
       const single = vi.fn().mockResolvedValue(insertResult)
       const select = vi.fn().mockReturnValue({ single })
       const insert = vi.fn().mockReturnValue({ select })
-      const from = vi.fn().mockReturnValue({ insert })
+
+      const from = vi.fn().mockImplementation((table: string) => {
+        if (table === 'user_intake') return { select: intakeSelect }
+        return { insert }
+      })
       return { from, insert, select, single }
     }
 

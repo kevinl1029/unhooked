@@ -1,0 +1,26 @@
+# Ralph Progress Log
+Started: Sun Feb 16 2026
+
+## Codebase Patterns
+- **Framework:** Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
+- **Database types:** types/database.types.ts follows Supabase conventions (Row, Insert, Update for each table)
+- **Migrations:** supabase/migrations/ with naming pattern YYYYMMDD_description.sql
+- **Migration best practices:** Always use `IF NOT EXISTS` for idempotent schema changes
+- **Supabase auth:** Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
+- **Supabase queries:** Return `{ data, error }` — always check error before using data
+- **Supabase .single():** Fetches exactly one row (returns error if 0 or >1 rows)
+- **Supabase service role:** Use `serverSupabaseServiceRole(event)` from `#supabase/server` for server-side operations without user auth
+- **Middleware:** middleware/auth.ts uses defineNuxtRouteMiddleware() — can be sync or async
+- **Server middleware:** server/middleware/ auto-registers with defineEventHandler()
+- **Composables:** useSupabaseClient() for DB queries, useSupabaseUser() for current user
+- **Check-in sender:** server/utils/email/check-in-sender.ts — processScheduledCheckIns(), sendCheckInEmail(), buildEmailHtml(), buildEmailText()
+- **Check-in scheduler:** server/utils/scheduling/check-in-scheduler.ts — scheduleCheckIns(), scheduleEvidenceBridgeCheckIn(), createCheckIn()
+- **Check-in expiration:** server/utils/scheduling/check-in-expiration.ts — isCheckInExpired(), getCheckInExpiration()
+- **Resend client:** server/utils/email/resend-client.ts — getSubjectLine()
+- **Cron endpoint:** server/api/cron/check-ins.get.ts — calls processScheduledCheckIns()
+- **Conversations:** server/api/conversations/index.post.ts — creates conversations, parses illusionKey
+- **Brand styling:** .glass, .rounded-card, .btn-primary, .rounded-pill, .eyebrow classes in assets/css/main.css
+- **Layout-less pages:** Use definePageMeta({ layout: false }) — see error.vue for pattern
+- **ARIA patterns:** See components/CeremonyExitDialog.vue for focus trap and dialog accessibility pattern
+
+---

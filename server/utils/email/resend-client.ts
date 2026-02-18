@@ -25,15 +25,32 @@ export function getResendClient(): Resend {
   return resendClient
 }
 
-/**
- * Email subject for check-ins
- * Using clear branded subject to avoid spam filters
- */
-export const EMAIL_SUBJECT = 'Unhooked: Your check-in is ready'
+// Per-type subjects without name prefix
+const SUBJECTS_WITHOUT_NAME: Record<string, string> = {
+  post_session: 'Quick thought from earlier...',
+  evidence_bridge: 'What did you notice?',
+  morning: 'Good morning',
+  evening: 'How was your day?',
+}
+
+// Per-type subjects with name prefix
+const SUBJECTS_WITH_NAME: Record<string, string> = {
+  post_session: '{name}, quick thought from earlier...',
+  evidence_bridge: '{name}, what did you notice?',
+  morning: '{name}, good morning',
+  evening: '{name}, how was your day?',
+}
 
 /**
- * Get the email subject for check-ins
+ * Get the email subject for a check-in, optionally personalized with a name
  */
-export function getEmailSubject(): string {
-  return EMAIL_SUBJECT
+export function getEmailSubject(type: string, name?: string | null): string {
+  if (name) {
+    const template = SUBJECTS_WITH_NAME[type]
+    if (template) {
+      return template.replace('{name}', name)
+    }
+    return `${name}, your check-in is ready`
+  }
+  return SUBJECTS_WITHOUT_NAME[type] ?? 'Your check-in is ready'
 }

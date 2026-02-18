@@ -10,9 +10,11 @@ import crypto from 'crypto'
 // Check-in schedule configuration
 const MORNING_HOUR = 9    // 9am local
 const EVENING_HOUR = 19   // 7pm local
-const POST_SESSION_CUTOFF_HOUR = 21  // Don't schedule post-session after 9pm
 const POST_SESSION_DELAY_HOURS = 2   // 2 hours after session
+const EVIDENCE_BRIDGE_DELAY_HOURS = 6  // 6 hours after session
 const ROLLING_WINDOW_DAYS = 3        // Schedule 3 days ahead
+const QUIET_HOURS_START = 21  // 9pm — begin quiet hours
+const QUIET_HOURS_END = 8     // 8am — end quiet hours
 
 interface ScheduleConfig {
   userId: string
@@ -97,6 +99,30 @@ function addHours(date: Date, hours: number): Date {
 }
 
 /**
+ * Defer a scheduled time to outside quiet hours (9pm–8am local time).
+ * If hour >= 21 (9pm): defer to 8am next day.
+ * If hour < 8 (before 8am): defer to 8am same day.
+ * Otherwise: no change.
+ */
+function applyQuietHours(scheduledFor: Date, timezone: string): Date {
+  const hour = getHourInTimezone(scheduledFor, timezone)
+
+  if (hour >= QUIET_HOURS_START) {
+    // After 9pm — defer to 8am next day
+    const nextDay = addDays(scheduledFor, 1)
+    return createDateAtHour(nextDay, QUIET_HOURS_END, timezone)
+  }
+
+  if (hour < QUIET_HOURS_END) {
+    // Before 8am — defer to 8am same day
+    return createDateAtHour(scheduledFor, QUIET_HOURS_END, timezone)
+  }
+
+  // Within allowed hours — no change
+  return scheduledFor
+}
+
+/**
  * Check if a check-in already exists at this time
  */
 async function checkInExists(
@@ -159,7 +185,8 @@ async function createCheckIn(
   triggerIllusionKey?: string,
   triggerSessionId?: string,
   promptTemplate?: string,
-  observationAssignment?: string
+  observationAssignment?: string,
+  personalizationContext?: { name: string } | null
 ): Promise<ScheduledCheckIn | null> {
   const magicLinkToken = generateMagicLinkToken()
 
@@ -176,6 +203,7 @@ async function createCheckIn(
       observation_assignment: observationAssignment || null,
       magic_link_token: magicLinkToken,
       status: 'scheduled',
+      personalization_context: personalizationContext || null,
     })
     .select('id')
     .single()
@@ -224,28 +252,40 @@ export async function scheduleEvidenceBridgeCheckIn(
   sessionId: string
 ): Promise<ScheduledCheckIn | null> {
   try {
-    // Schedule for 24 hours later
-    const twentyFourHoursLater = addHours(sessionEndTime, 24)
+    // Schedule for 6 hours later, then apply quiet hours deferral
+    const rawTime = addHours(sessionEndTime, EVIDENCE_BRIDGE_DELAY_HOURS)
+    const scheduledTime = applyQuietHours(rawTime, timezone)
 
     // Build the prompt template wrapping the observation
     const promptTemplate = observationAssignment
       ? `You were going to ${observationAssignment.toLowerCase().replace(/^(notice|pay attention to|track)/i, 'notice')} — what did you observe?`
       : 'What did you observe?'
 
+    // Query preferred_name for personalization
+    const { data: intakeData } = await supabase
+      .from('user_intake')
+      .select('preferred_name')
+      .eq('user_id', userId)
+      .single()
+    const personalizationContext = intakeData?.preferred_name
+      ? { name: intakeData.preferred_name }
+      : null
+
     const checkIn = await createCheckIn(
       supabase,
       userId,
       'evidence_bridge',
-      twentyFourHoursLater,
+      scheduledTime,
       timezone,
       illusionKey,
       sessionId,
       promptTemplate,
-      observationAssignment || undefined
+      observationAssignment || undefined,
+      personalizationContext
     )
 
     if (checkIn) {
-      console.log(`[check-in-scheduler] Scheduled evidence_bridge check-in for ${twentyFourHoursLater.toISOString()}`)
+      console.log(`[check-in-scheduler] Scheduled evidence_bridge check-in for ${scheduledTime.toISOString()}`)
     }
 
     return checkIn
@@ -276,35 +316,43 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
     return scheduled
   }
 
+  // Query preferred_name once for personalization (single query per scheduling call)
+  const { data: intakeData } = await supabase
+    .from('user_intake')
+    .select('preferred_name')
+    .eq('user_id', userId)
+    .single()
+  const personalizationContext = intakeData?.preferred_name
+    ? { name: intakeData.preferred_name }
+    : null
+
   // Handle post-session check-in
   if (trigger === 'session_complete' && sessionEndTime) {
-    const twoHoursLater = addHours(sessionEndTime, POST_SESSION_DELAY_HOURS)
-    const hourInTimezone = getHourInTimezone(twoHoursLater, timezone)
+    const rawTime = addHours(sessionEndTime, POST_SESSION_DELAY_HOURS)
+    const twoHoursLater = applyQuietHours(rawTime, timezone)
 
-    // Only schedule if before 9pm in user's timezone
-    if (hourInTimezone < POST_SESSION_CUTOFF_HOUR) {
-      // Check for conflicts (within 60 minutes)
-      const hasConflict = await hasConflictingCheckIn(supabase, userId, twoHoursLater, 60)
+    // Check for conflicts (within 60 minutes)
+    const hasConflict = await hasConflictingCheckIn(supabase, userId, twoHoursLater, 60)
 
-      if (!hasConflict) {
-        const checkIn = await createCheckIn(
-          supabase,
-          userId,
-          'post_session',
-          twoHoursLater,
-          timezone,
-          illusionKey,
-          sessionId
-        )
-        if (checkIn) {
-          scheduled.push(checkIn)
-          console.log(`[check-in-scheduler] Scheduled post_session check-in for ${twoHoursLater.toISOString()}`)
-        }
-      } else {
-        console.log('[check-in-scheduler] Skipping post_session - conflict exists')
+    if (!hasConflict) {
+      const checkIn = await createCheckIn(
+        supabase,
+        userId,
+        'post_session',
+        twoHoursLater,
+        timezone,
+        illusionKey,
+        sessionId,
+        undefined,
+        undefined,
+        personalizationContext
+      )
+      if (checkIn) {
+        scheduled.push(checkIn)
+        console.log(`[check-in-scheduler] Scheduled post_session check-in for ${twoHoursLater.toISOString()}`)
       }
     } else {
-      console.log('[check-in-scheduler] Skipping post_session - too late in day')
+      console.log('[check-in-scheduler] Skipping post_session - conflict exists')
     }
   }
 
@@ -323,7 +371,12 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
             userId,
             'morning',
             morningTime,
-            timezone
+            timezone,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            personalizationContext
           )
           if (checkIn) {
             scheduled.push(checkIn)
@@ -342,7 +395,12 @@ export async function scheduleCheckIns(config: ScheduleConfig): Promise<Schedule
             userId,
             'evening',
             eveningTime,
-            timezone
+            timezone,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            personalizationContext
           )
           if (checkIn) {
             scheduled.push(checkIn)

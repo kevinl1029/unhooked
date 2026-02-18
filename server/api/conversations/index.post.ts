@@ -50,6 +50,28 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: convError.message })
   }
 
+  // If illusionKey is provided, cancel any pending evidence bridge check-ins for that illusion
+  if (effectiveIllusionKey) {
+    try {
+      const { error: cancelError } = await supabase
+        .from('check_in_schedule')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: 'user_continued_immediately'
+        })
+        .eq('user_id', user.sub)
+        .eq('trigger_illusion_key', effectiveIllusionKey)
+        .eq('check_in_type', 'evidence_bridge')
+        .in('status', ['scheduled', 'sent'])
+
+      if (cancelError) {
+        console.error('[conversations] Failed to cancel evidence bridge check-ins:', cancelError)
+      }
+    } catch (err) {
+      console.error('[conversations] Unexpected error cancelling evidence bridge check-ins:', err)
+    }
+  }
+
   // If initial messages provided, save them to the database
   if (initialMessages && initialMessages.length > 0) {
     const messageInserts = initialMessages.map((msg: Message) => ({

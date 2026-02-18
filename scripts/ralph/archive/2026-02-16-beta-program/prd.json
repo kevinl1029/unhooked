@@ -17,7 +17,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": "Follow the pattern from supabase/migrations/20260215_add_beta_flag.sql. TypeScript types in types/database.types.ts must be updated manually since npm run db:types requires a live Supabase connection. The user_progress type is in types/database.types.ts — search for 'user_progress' to find the Row, Insert, Update sections. NULL = subscribed (default), timestamp = unsubscribed."
     },
     {
@@ -39,7 +39,7 @@
         "Tests pass"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": "Uses Node.js crypto: createHmac('sha256', secret).update(userId).digest('base64url'). Read UNSUBSCRIBE_SECRET via useRuntimeConfig().unsubscribeSecret. For timingSafeEqual, both buffers must be the same length — convert both to Buffer first. The supabase.redirectOptions.exclude array is in nuxt.config.ts (search for 'exclude'). Mock useRuntimeConfig() in tests. See tests/setup.ts for existing mock patterns."
     },
     {
@@ -57,7 +57,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": "Use in-memory Map<string, { count: number, resetAt: number }>. Clean up expired entries on each request. Use Nuxt server middleware pattern: defineEventHandler(). Check event.path for rate-limited prefixes. Return early with setResponseStatus(event, 429) for exceeded limits. This is a Nuxt server middleware in server/middleware/ — it auto-registers. Resets on deploy (acceptable at current scale)."
     },
     {
@@ -76,7 +76,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts (473 lines). The POST_SESSION_CUTOFF_HOUR constant is on line 13. The cutoff logic is around line 285 (if hourInTimezone < POST_SESSION_CUTOFF_HOUR). Remove that conditional and replace with applyQuietHours(). Use existing helper functions getHourInTimezone() and createDateAtHour() which are already in this file. The addDays() helper may need to be added if not present — check date-fns imports."
     },
     {
@@ -92,7 +92,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts. Query: supabase.from('user_intake').select('preferred_name').eq('user_id', userId).single(). The createCheckIn() function already accepts a params object — add personalization_context to it and pass through to the insert. The personalization_context column is JSONB on check_in_schedule table."
     },
     {
@@ -108,7 +108,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/email/check-in-sender.ts (273 lines). The processScheduledCheckIns() function already queries scheduled check-ins. Add .lt('retry_count', 3) to the query. In the catch block (around line 109-115), increment retry_count. The retry_count column already exists on check_in_schedule with DEFAULT 0. The 5-min cron cycle provides natural backoff between retries."
     },
     {
@@ -127,7 +127,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/scheduling/check-in-expiration.ts (126 lines). The isCheckInExpired() and getCheckInExpiration() functions already exist — use them for the timezone-aware expiry calculation. Exclude evidence_bridge type from the query. The cron endpoint is server/api/cron/check-ins.get.ts — add a call to expireOverdueCheckIns() after processScheduledCheckIns()."
     },
     {
@@ -143,7 +143,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/conversations/index.post.ts (77 lines). The illusionKey is already parsed from the request body (line 18-21). Add the cancellation logic after the conversation insert (around line 44). Use the existing supabase client from the handler. Wrap in try/catch so conversation creation is never blocked by cancellation errors. The trigger_illusion_key column on check_in_schedule stores the illusion key for evidence bridge check-ins."
     },
     {
@@ -160,7 +160,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/scheduling/check-in-scheduler.ts. The scheduleEvidenceBridgeCheckIn() function currently uses addHours(sessionEndTime, 24) — change to addHours(sessionEndTime, 6). Add the applyQuietHours() call on the result. The L3 exclusion should already be handled by the caller (only L1/L2 sessions schedule evidence bridges) but verify. Depends on US-004 for applyQuietHours()."
     },
     {
@@ -176,7 +176,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/email/check-in-sender.ts. Add the unsubscribe check early in the processing loop (after fetching the check-in, before generating the magic link token). Query user_progress with .select('email_unsubscribed_at').eq('user_id', checkIn.user_id).single(). If unsubscribed, update status and continue to next check-in. Depends on US-001 (email_unsubscribed_at column)."
     },
     {
@@ -197,7 +197,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/email/check-in-sender.ts. buildEmailHtml() starts at line 186, buildEmailText() at line 253, sendCheckInEmail() at line 148. Import generateUnsubscribeToken from server/utils/auth/hmac-tokens.ts (US-002). Create a config object mapping check-in types to their heading/body/CTA. The evidence_bridge body uses the prompt_template field from the check-in record (already contains the wrapped observation assignment). The footer unsubscribe link is HTML: <a href='{link}' style='color: rgba(255,255,255,0.4); text-decoration: underline;'>Unsubscribe from check-in emails</a>. List-Unsubscribe headers go in the headers object passed to resend.emails.send(). Depends on US-002 for HMAC utility."
     },
     {
@@ -216,7 +216,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": true,
+      "passes": false,
       "notes": "Files: server/utils/email/resend-client.ts (39 lines, has getSubjectLine), server/utils/email/check-in-sender.ts (reads personalization_context). The personalization_context is a JSONB column on check_in_schedule populated at scheduling time (US-005). In check-in-sender.ts processScheduledCheckIns(), extract name from checkIn.personalization_context?.name and pass to getSubjectLine(). Depends on US-011 (template changes) and US-005 (personalization_context population)."
     },
     {
@@ -237,7 +237,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": true,
+      "passes": false,
       "notes": "GET handler: check for uid+sig params first (HMAC path via validateUnsubscribeToken from US-002), then token param (magic_link_token path via check_in_schedule lookup). Use serverSupabaseServiceRole from #supabase/server (not serverSupabaseClient which requires auth). For magic_link_token path, look up in check_in_schedule table, extract user_id, then generate HMAC for the redirect URL. POST handler: simpler — just token param, look up check-in, set email_unsubscribed_at. Use sendRedirect(event, url) for 302 redirects. Depends on US-001, US-002, US-003."
     },
     {
@@ -253,7 +253,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/check-ins/resubscribe.post.ts. Read uid and sig from getQuery(event). Validate via validateUnsubscribeToken(uid, sig) from server/utils/auth/hmac-tokens.ts. Update user_progress: SET email_unsubscribed_at = null WHERE user_id = uid. Use serverSupabaseServiceRole(event) for the update. Depends on US-001, US-002, US-003."
     },
     {
@@ -273,7 +273,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": true,
+      "passes": false,
       "notes": "Follow the pattern from error.vue for layout: false pages. Read status, uid, sig from useRoute().query. Use $fetch for the resubscribe call. Brand styling: glass card (.glass rounded-card), teal gradient body (already applied globally via body CSS), pill button (.btn-primary rounded-pill), Inter font, .eyebrow class for UNHOOKED text. Use ref() for reactive state (isResubscribed, isLoading). Depends on US-013 and US-014."
     },
     {
@@ -289,7 +289,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": true,
+      "passes": false,
       "notes": "File: composables/useCheckIns.ts and components/CheckInInterstitial.vue (354 lines). Add an isAudioPlaying ref that gets set to true when TTS playback starts and false when it ends. Listen for the 'ended' event on the audio element. In CheckInInterstitial.vue, gate the dismiss/close logic behind !isAudioPlaying. Add a setTimeout fallback (3s) in case audio fails to load."
     },
     {
@@ -305,7 +305,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/user/timezone.post.ts (81 lines). Currently does an unconditional upsert. Add a SELECT first to compare, then only UPDATE if different. Note: FR-12.3 (rescheduling pending check-ins on timezone change) is deferred to post-MVP — the new timezone takes effect on the next scheduling cycle."
     },
     {
@@ -322,7 +322,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": true,
+      "passes": false,
       "notes": "File: components/CheckInInterstitial.vue (354 lines). Reference components/CeremonyExitDialog.vue for the existing focus trap and ARIA pattern already used in this codebase. Focus trap: intercept Tab keydown, get all focusable elements within the modal, cycle between first and last. Escape handler: call the dismiss function (same as click-outside behavior per FR-9.5). Use onMounted/onUnmounted for keydown listener lifecycle."
     }
   ]

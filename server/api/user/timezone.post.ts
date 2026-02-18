@@ -57,25 +57,34 @@ export default defineEventHandler(async (event) => {
 
   const supabase = serverSupabaseServiceRole(event)
 
-  // Update user_progress with timezone
-  const { error } = await supabase
+  // Check current stored timezone to avoid unnecessary writes
+  const { data: current } = await supabase
     .from('user_progress')
-    .update({ timezone: body.timezone })
+    .select('timezone')
     .eq('user_id', user.sub)
+    .single()
 
-  if (error) {
-    // If no row exists, try to upsert
-    const { error: upsertError } = await supabase
-      .from('user_progress')
-      .upsert({
-        user_id: user.sub,
-        timezone: body.timezone,
-      })
+  const storedTimezone = current?.timezone ?? null
 
-    if (upsertError) {
-      throw createError({ statusCode: 500, message: upsertError.message })
-    }
+  if (storedTimezone === body.timezone) {
+    return { changed: false, timezone: body.timezone }
   }
 
-  return { success: true, timezone: body.timezone }
+  // Timezone has changed (or no stored timezone) — update it
+  if (storedTimezone !== null) {
+    console.log(`[timezone] Updated user ${user.sub} timezone from ${storedTimezone} to ${body.timezone}`)
+  }
+
+  const { error } = await supabase
+    .from('user_progress')
+    .upsert({
+      user_id: user.sub,
+      timezone: body.timezone,
+    })
+
+  if (error) {
+    throw createError({ statusCode: 500, message: error.message })
+  }
+
+  return { changed: true, timezone: body.timezone }
 })

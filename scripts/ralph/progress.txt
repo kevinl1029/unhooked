@@ -1,76 +1,279 @@
 # Ralph Progress Log
-Started: Sun Feb 15 20:28:04 EST 2026
+Started: Mon Feb 16 23:19:21 EST 2026
+---
 
 ## Codebase Patterns
-- **Framework:** Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
-- **Database types:** types/database.types.ts follows Supabase conventions (Row, Insert, Update for each table)
-- **Migrations:** supabase/migrations/ with naming pattern YYYYMMDD_description.sql
-- **Migration best practices:** Always use `IF NOT EXISTS` for idempotent schema changes
-- **Supabase auth:** Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
-- **Supabase queries:** Return `{ data, error }` — always check error before using data
-- **Supabase .single():** Fetches exactly one row (returns error if 0 or >1 rows)
-- **Middleware:** middleware/auth.ts uses defineNuxtRouteMiddleware() — can be sync or async
-- **Middleware fail-closed pattern:** Redirect on any error (Supabase error or JS exception)
-- **Composables:** useSupabaseClient() for DB queries, useSupabaseUser() for current user
-- **Pages:** pages/login.vue for authentication UI
-- **Dead code cleanup:** After removing v-if conditions, clean up unused destructured variables
+- TypeScript types in types/database.types.ts must be updated manually (npm run db:types requires live Supabase connection)
+- No tsc binary in project — use `node_modules/.bin/nuxi prepare` to verify types generate correctly
+- Migration pattern: ALTER TABLE public.X ADD COLUMN IF NOT EXISTS y TYPE DEFAULT value;
+- Nuxt's typecheck: `node_modules/.bin/nuxi prepare` generates types; no typecheck script available
+- Available npm scripts: dev, build, preview, postinstall, test:unit, test:unit:watch, test:unit:coverage, test:e2e, test:e2e:ui, db:types
+- Nuxt test env overrides vi.stubGlobal('useRuntimeConfig'): use optional secret param in utility functions for testability, or add env vars to .env.test
+- For server utilities that read useRuntimeConfig, accept optional dep-injection params (e.g., `secret?: string`) to enable direct unit testing without mocking Nuxt's runtime config
 
----
-## 2026-02-15 20:30 - US-001
-- Created migration file at supabase/migrations/20260215_add_beta_flag.sql
-- Added is_beta BOOLEAN NOT NULL DEFAULT false column to profiles table
-- Created protect_is_beta() trigger function to prevent unauthorized modifications (only service_role can change is_beta)
-- Created protect_is_beta_trigger BEFORE UPDATE trigger on profiles table
-- Updated types/database.types.ts to add is_beta: boolean to profiles.Row
-- Updated types/database.types.ts to add is_beta?: boolean to profiles.Insert
-- Updated types/database.types.ts to add is_beta?: boolean to profiles.Update
-- Files changed: supabase/migrations/20260215_add_beta_flag.sql (new), types/database.types.ts
-- Build passed successfully
-
-**Learnings for future iterations:**
-- This codebase uses Nuxt 3 with TypeScript — use `npm run build` to verify types (no dedicated typecheck script)
-- Database types are in types/database.types.ts following Supabase conventions (Row, Insert, Update)
-- Migrations go in supabase/migrations/ with naming pattern YYYYMMDD_description.sql
-- The profiles table starts at line 584 in types/database.types.ts
-- Always add `IF NOT EXISTS` for column additions to ensure idempotent migrations
-- Trigger functions use `request.jwt.claims->>'role'` to check for service_role access
+## 2026-02-16 - US-003
+- Created server/middleware/rate-limit.ts with in-memory IP-based rate limiting
+- Limits 10 requests/60s per IP; only applies to /api/check-ins/open/, /api/check-ins/unsubscribe, /api/check-ins/resubscribe
+- Extracts IP from x-forwarded-for header, falls back to socket.remoteAddress
+- Returns 429 { error: 'Too many requests' } on limit exceeded
+- Cleans up expired entries on each request to avoid memory leaks
+- Typecheck passed; all 434 unit tests pass
+- Files changed: server/middleware/rate-limit.ts
+- **Learnings for future iterations:**
+  - Nuxt server middleware in server/middleware/ auto-registers; no imports needed
+  - Use getHeader(event, 'x-forwarded-for') and event.node.req.socket.remoteAddress for IP extraction
+  - setResponseStatus(event, 429) + returning a JSON object sends the status + body correctly
 ---
 
-## 2026-02-15 20:32 - US-002
-- Changed login page heading from "Welcome Back" to "Sign In"
-- Removed appAccessEnabled redirect block (lines 101-104) — login page is now accessible regardless of APP_MODE
-- Removed v-if="isStaging" from "Or continue with" divider — divider always visible
-- Removed v-if="isStaging" from Google SSO button — button always visible
-- Removed useAppMode() destructure from script setup — appAccessEnabled and isStaging are now dead code
-- Files changed: pages/login.vue
-- Build passed successfully
-
-**Learnings for future iterations:**
-- Login page is at pages/login.vue
-- Google SSO button was previously gated behind isStaging flag from useAppMode composable
-- After removing v-if conditions that use composable values, clean up the destructure to avoid unused imports
+## 2026-02-17 - US-002
+- Created server/utils/auth/hmac-tokens.ts with generateUnsubscribeToken() and validateUnsubscribeToken()
+- Added UNSUBSCRIBE_SECRET to .env.example with comment
+- Added unsubscribeSecret to nuxt.config.ts runtimeConfig
+- Added '/unsubscribe' to supabase.redirectOptions.exclude array
+- Added UNSUBSCRIBE_SECRET test value to .env.test
+- Created tests/unit/auth/hmac-tokens.test.ts with 6 passing tests
+- Functions accept optional `secret` param for testability (Nuxt test env overrides vi.stubGlobal)
+- Files changed: server/utils/auth/hmac-tokens.ts, .env.example, .env.test, nuxt.config.ts, tests/unit/auth/hmac-tokens.test.ts
+- **Learnings for future iterations:**
+  - Nuxt's test environment provides its own useRuntimeConfig that vi.stubGlobal cannot override
+  - Workaround: add optional secret/dep-injection params to server utils, or set env vars in .env.test
+  - The optional param approach keeps the production API clean while enabling direct unit testing
 ---
 
-## 2026-02-15 20:34 - US-003
-- Converted middleware/auth.ts from synchronous to async (added `async` to defineNuxtRouteMiddleware callback)
-- Reordered logic: check user authentication first, then APP_MODE, then beta flag
-- When APP_MODE is enabled (appAccessEnabled is true): only checks authentication, allows access with no beta query (zero performance cost)
-- When APP_MODE is disabled: queries profiles table for is_beta using useSupabaseClient()
-- Beta query uses .from('profiles').select('is_beta').eq('id', user.value.id).single()
-- Fail closed: if Supabase error object is returned, redirect to /
-- Fail closed: if JavaScript exception is thrown, catch and redirect to /
-- Fail closed: if profile doesn't exist or is_beta is false, redirect to /
-- Only beta users with is_beta=true can access protected routes when APP_MODE is disabled
-- Files changed: middleware/auth.ts
-- Build passed successfully
-
-**Learnings for future iterations:**
-- Auth middleware is at middleware/auth.ts
-- Nuxt middleware uses defineNuxtRouteMiddleware() — can be sync or async
-- useSupabaseClient() returns a Supabase client for querying the database
-- useSupabaseUser() returns the current authenticated user
-- .single() is used to fetch exactly one row from Supabase (returns error if 0 or >1 rows)
-- Supabase queries return { data, error } — always check error before using data
-- Middleware fail-closed pattern: redirect on any error (Supabase error or JS exception)
+## 2026-02-17 - US-001
+- Created supabase/migrations/20260216_email_unsubscribe.sql with ADD COLUMN IF NOT EXISTS email_unsubscribed_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
+- Updated types/database.types.ts: added email_unsubscribed_at: string | null to user_progress.Row, email_unsubscribed_at?: string | null to Insert and Update
+- **Learnings for future iterations:**
+  - No tsc binary installed; use `node_modules/.bin/nuxi prepare` to check types generate without error
+  - database.types.ts fields are alphabetically sorted within each section (Row, Insert, Update)
+  - Project is on feature/checkin-email-enhancements branch; ralph branch was created fresh from that
 ---
 
+## 2026-02-16 - US-004
+- Added applyQuietHours(scheduledFor: Date, timezone: string): Date to check-in-scheduler.ts
+- Defers hour >= 21 to 8am next day; defers hour < 8 to 8am same day; no change otherwise
+- Removed POST_SESSION_CUTOFF_HOUR constant and the drop-check (if hourInTimezone < POST_SESSION_CUTOFF_HOUR)
+- Post-session check-in now defers to 8am instead of being dropped when after 9pm
+- Applied applyQuietHours() to evidence bridge scheduling (rawTime = addHours(sessionEndTime, 24), then applyQuietHours)
+- Typecheck passed; all 434 unit tests pass
+- Files changed: server/utils/scheduling/check-in-scheduler.ts
+- **Learnings for future iterations:**
+  - addDays(), addHours(), getHourInTimezone(), createDateAtHour() all already exist in this file — no date-fns needed
+  - applyQuietHours must call createDateAtHour on the nextDay object for correct timezone-aware hour setting
+---
+
+## 2026-02-16 - US-005
+- Added preferred_name to user_intake Row/Insert/Update in types/database.types.ts (the column was added via 20260215_personalization_v11.sql migration but missing from TS types)
+- Added personalizationContext parameter to createCheckIn() and included it in the insert payload
+- Modified scheduleCheckIns() to query user_intake.preferred_name once per scheduling call, passing { name } or null to each createCheckIn() call
+- Modified scheduleEvidenceBridgeCheckIn() to query user_intake.preferred_name and pass personalization_context to createCheckIn()
+- Fixed 2 failing unit tests by updating createMockSupabase() to differentiate between user_intake queries and check_in_schedule inserts
+- Typecheck passed; all 434 unit tests pass
+- Files changed: types/database.types.ts, server/utils/scheduling/check-in-scheduler.ts, tests/unit/scheduling/check-in-scheduler.test.ts
+- **Learnings for future iterations:**
+  - preferred_name was added to user_intake via migration 20260215_personalization_v11.sql but NOT in database.types.ts — always check migrations for columns missing from types
+  - When adding new Supabase queries to a function under test, update the test mock's from() implementation to use vi.fn().mockImplementation((table) => ...) to return different mock chains per table
+  - Test mocks that use a flat .mockReturnValue() chain break when the function starts making multiple Supabase queries — use table-aware mocking instead
+---
+
+## 2026-02-16 - US-007
+- Added expireOverdueCheckIns(supabase, now) to server/utils/scheduling/check-in-expiration.ts
+- Function queries all 'scheduled'/'sent' check-ins excluding 'evidence_bridge' type
+- Uses existing getCheckInExpiration() for timezone-aware expiry calculation
+- Sets status='expired' and expired_at=now when expiration time is past
+- Added SupabaseClient import from @supabase/supabase-js
+- Updated cron endpoint (server/api/cron/check-ins.get.ts) to import and call expireOverdueCheckIns() after processScheduledCheckIns()
+- Cron response now includes expiration.expired and expiration.errors fields
+- Typecheck passed; all 436 unit tests pass
+- Files changed: server/utils/scheduling/check-in-expiration.ts, server/api/cron/check-ins.get.ts
+- **Learnings for future iterations:**
+  - expireOverdueCheckIns accepts optional `now` param for testability (same pattern as shouldExpireUnsentCheckIn)
+  - getCheckInExpiration() handles morning/evening/early-morning windows; safe to reuse for batch sweep
+  - check_in_schedule.timezone column is present — no need to join user_progress for timezone
+---
+
+## 2026-02-16 - US-008
+- Added cancellation logic in server/api/conversations/index.post.ts
+- After conversation insert, if illusionKey is provided: cancels pending evidence bridge check-ins via UPDATE check_in_schedule SET status='cancelled', cancellation_reason='user_continued_immediately' WHERE user_id=X AND trigger_illusion_key=illusionKey AND check_in_type='evidence_bridge' AND status IN ('scheduled', 'sent')
+- Wrapped in try/catch so conversation creation is never blocked by cancellation errors
+- Typecheck passed; all 436 unit tests pass
+- Files changed: server/api/conversations/index.post.ts
+- **Learnings for future iterations:**
+  - The .in('status', ['scheduled', 'sent']) Supabase filter works cleanly for multi-value matching
+  - Non-blocking pattern: catch errors and log, never throw — ensures conversation creation always succeeds
+  - effectiveIllusionKey (not illusionKey) is the correct variable to check, as it handles null for no-illusion conversations
+---
+
+## 2026-02-16 - US-009
+- Changed evidence bridge delay from 24 hours to 6 hours in scheduleEvidenceBridgeCheckIn()
+- Added EVIDENCE_BRIDGE_DELAY_HOURS = 6 constant alongside existing POST_SESSION_DELAY_HOURS
+- Changed `addHours(sessionEndTime, 24)` to `addHours(sessionEndTime, EVIDENCE_BRIDGE_DELAY_HOURS)`
+- applyQuietHours() was already applied (from US-004) — session at 6pm → midnight → deferred to 8am
+- L3 exclusion confirmed handled by caller (not in scheduleEvidenceBridgeCheckIn itself)
+- All 436 unit tests pass
+- Files changed: server/utils/scheduling/check-in-scheduler.ts
+- **Learnings for future iterations:**
+  - The EVIDENCE_BRIDGE_DELAY_HOURS constant sits alongside POST_SESSION_DELAY_HOURS in the top config section
+  - applyQuietHours() was already wired in from US-004 — only needed to change the raw hour count
+---
+
+## 2026-02-16 - US-010
+- Added unsubscribe check in processScheduledCheckIns() before email send
+- Queries user_progress.email_unsubscribed_at for each check-in user
+- If unsubscribed: logs '[check-in-sender] User {id} unsubscribed, skipping email', updates status='sent' with email_sent_at=null, increments sent count, continues to next check-in
+- Check-in advances to 'sent' state so cron doesn't re-process it, but interstitials still display (they query by magic_link_token, not email status)
+- Added 2 new tests: unsubscribed user skips email send + advances to sent; subscribed user (null) sends normally
+- Updated makeSupabaseMock() to accept emailUnsubscribedAt param and return user_progress mock
+- All 438 unit tests pass
+- Files changed: server/utils/email/check-in-sender.ts, tests/unit/email/check-in-sender.test.ts
+- **Learnings for future iterations:**
+  - When adding a new Supabase query (user_progress) inside the processing loop, update makeSupabaseMock to handle that table via if (table === 'user_progress') pattern
+  - The check-in advances to 'sent' (not 'skipped') to prevent re-processing while keeping interstitial accessibility
+---
+
+## 2026-02-16 - US-006
+- Added `.lt('retry_count', 3)` filter to processScheduledCheckIns() query so check-ins with 3+ failed attempts are not re-processed
+- Added `retry_count` to the select fields in the query
+- Added `retry_count` field to the `CheckInToSend` interface
+- In the catch block: increments retry_count; sets status to 'failed' if newRetryCount >= 3, otherwise leaves status as 'scheduled' for next cron cycle
+- Updated existing test mock to include `retry_count: 0` in stale check-in fixture and extended `.lte().lt()` chain
+- Added 2 new tests: first failure increments retry_count without status change; 3rd failure sets status to 'failed'
+- All 436 unit tests pass (up from 434)
+- Files changed: server/utils/email/check-in-sender.ts, tests/unit/email/check-in-sender.test.ts
+- **Learnings for future iterations:**
+  - When adding a new filter to a Supabase query chain (.lt() after .lte()), existing test mocks that resolve at .lte() need to be updated to chain .lt() further
+  - To test Resend failures, mock `~/server/utils/email/resend-client` with `vi.mock()` and have `getResendClient` return `{ emails: { send: vi.fn().mockResolvedValue({ error: {...} }) } }`
+  - The mock Supabase client needs `auth.admin.getUserById` for the email lookup fallback path
+---
+
+## 2026-02-16 - US-011
+- Redesigned email template: white/transparent outer background (was dark teal #041f21)
+- Added CHECK_IN_EMAIL_CONFIG map with per-type heading, body, and CTA for post_session, evidence_bridge, morning, evening
+- buildEmailHtml() and buildEmailText() now accept footerUnsubscribeLink parameter
+- Footer includes unsubscribe link: <a href="...">Unsubscribe from check-in emails</a>
+- Removed "This link expires in 24 hours" line from both HTML and text templates
+- sendCheckInEmail() generates HMAC token via generateUnsubscribeToken(userId) and builds footer link
+- Added List-Unsubscribe header (magic_link_token path) and List-Unsubscribe-Post: List-Unsubscribe=One-Click headers to Resend send call
+- Imported generateUnsubscribeToken from server/utils/auth/hmac-tokens.ts
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/utils/email/check-in-sender.ts
+- **Learnings for future iterations:**
+  - generateUnsubscribeToken is imported from server/utils/auth/hmac-tokens.ts; it reads UNSUBSCRIBE_SECRET from runtimeConfig
+  - When check-in-sender.ts calls generateUnsubscribeToken in tests, the existing mock for resend-client already mocks resend — but hmac-tokens is NOT mocked, so it uses the real implementation with .env.test secret (UNSUBSCRIBE_SECRET=test-secret-for-unit-tests)
+  - Resend's headers field accepts Record<string, string> for custom email headers
+  - Per-type CTA: evidence_bridge uses 'Share what you noticed', all others use 'Open check-in'
+---
+
+## 2026-02-16 - US-012
+- Updated getEmailSubject() in resend-client.ts to accept (type: string, name?: string | null): string
+- Added SUBJECTS_WITHOUT_NAME and SUBJECTS_WITH_NAME maps with per-type subject lines
+- With name: '{name}, quick thought from earlier...', '{name}, what did you notice?', '{name}, good morning', '{name}, how was your day?'
+- Without name: 'Quick thought from earlier...', 'What did you notice?', 'Good morning', 'How was your day?'
+- Added personalization_context: { name?: string } | null to CheckInToSend interface in check-in-sender.ts
+- Added personalization_context to the Supabase query select fields
+- sendCheckInEmail() extracts name from checkIn.personalization_context?.name and passes to getEmailSubject()
+- Updated test mock: added hmac-tokens mock to prevent real token generation errors in tests; added personalization_context: null to makeFreshCheckIn()
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/utils/email/resend-client.ts, server/utils/email/check-in-sender.ts, tests/unit/email/check-in-sender.test.ts
+- **Learnings for future iterations:**
+  - When check-in-sender.ts imports hmac-tokens (added in US-011), test files must mock that module to avoid UNSUBSCRIBE_SECRET errors during tests
+  - getEmailSubject mock in tests is fine as a simple vi.fn() since we're testing sender logic, not subject generation
+  - personalization_context is JSONB on check_in_schedule, typed as { name?: string } | null in TypeScript
+---
+
+## 2026-02-16 - US-013
+- Created server/api/check-ins/unsubscribe.get.ts (GET endpoint)
+  - HMAC path (?uid=X&sig=Y): validates with validateUnsubscribeToken, updates email_unsubscribed_at, redirects to /unsubscribe?status=success&uid=X&sig=Y
+  - Magic link token path (?token=X): looks up check_in_schedule.user_id, updates email_unsubscribed_at, generates HMAC for redirect, redirects to /unsubscribe?status=success&uid=X&sig=Y
+  - Invalid HMAC or token: redirects to /unsubscribe?status=error
+- Created server/api/check-ins/unsubscribe.post.ts (POST endpoint, RFC 8058 one-click)
+  - Accepts ?token=X, looks up check_in_schedule, updates user_progress.email_unsubscribed_at, returns { ok: true }
+  - Invalid/missing token: returns 400
+- Both endpoints use serverSupabaseServiceRole (no user auth required)
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/api/check-ins/unsubscribe.get.ts (new), server/api/check-ins/unsubscribe.post.ts (new)
+- **Learnings for future iterations:**
+  - sendRedirect(event, url, 302) is the Nuxt H3 way to redirect; import is auto-available
+  - serverSupabaseServiceRole from '#supabase/server' bypasses RLS for public endpoints
+  - getQuery(event) returns all query params; String() coercion handles potential array values
+---
+
+## 2026-02-16 - US-014
+- Created server/api/check-ins/resubscribe.post.ts (POST endpoint)
+  - Accepts ?uid=X&sig=Y query params
+  - Validates HMAC via validateUnsubscribeToken(uid, sig)
+  - Clears email_unsubscribed_at (sets to null) on user_progress for the user
+  - Returns { success: true } on success; 400 on invalid/missing params
+  - Idempotent: setting null on an already-null field is a no-op
+  - Uses serverSupabaseServiceRole — no user auth required
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/api/check-ins/resubscribe.post.ts (new)
+- **Learnings for future iterations:**
+  - The HMAC validation via validateUnsubscribeToken is the same pattern used in the unsubscribe GET endpoint
+  - Setting a column to null via Supabase .update({ field: null }) works correctly for clearing timestamps
+---
+
+## 2026-02-16 - US-015
+- Created pages/unsubscribe.vue with definePageMeta({ layout: false })
+- Centered glass card on teal gradient background (global body CSS)
+- UNHOOKED eyebrow text at top of card
+- status=success: shows "You've been unsubscribed..." message + subtext + Re-subscribe button
+- Re-subscribe button: calls POST /api/check-ins/resubscribe?uid=X&sig=Y, shows loading state, on success shows "You're subscribed to check-in emails again." and hides button
+- status=error: shows "This link doesn't seem to be working." + subtext
+- No auth middleware — page loads for unauthenticated users
+- Browser-verified: both success and error states render correctly
+- All 438 unit tests pass; typecheck passes
+- Files changed: pages/unsubscribe.vue (new)
+- **Learnings for future iterations:**
+  - definePageMeta({ layout: false }) skips the default layout entirely (no AppHeader, no wrapper)
+  - $fetch with { method: 'POST' } works for client-side API calls in Vue components
+  - The teal gradient background is applied globally via body CSS in assets/css/main.css, so layout:false pages get it automatically
+---
+
+## 2026-02-16 - US-016
+- Added isAudioPlaying ref and setAudioPlaying(v) function to useCheckIns.ts
+- dismissInterstitial() now returns early if isAudioPlaying is true (prevents modal close while audio plays)
+- isAudioPlaying and setAudioPlaying exposed in useCheckIns return
+- CheckInInterstitial.vue: added 'audio-playing-change' emit; handleComplete() now waits for isAISpeaking to go false (or 3s timeout) before emitting 'complete'
+- dashboard.vue: wires @audio-playing-change="setAudioPlaying" on CheckInInterstitial; destructures setAudioPlaying from useCheckIns()
+- pages/check-in/[id].vue: handleComplete() waits for voiceChat.isAISpeaking to finish (or 3s timeout) before calling navigateTo('/dashboard')
+- All 438 unit tests pass; typecheck passes
+- Files changed: composables/useCheckIns.ts, components/CheckInInterstitial.vue, pages/dashboard.vue, pages/check-in/[id].vue
+- **Learnings for future iterations:**
+  - The isAISpeaking ref in useVoiceChat/useVoiceSession goes false when audio 'ended' event fires or when audio errors
+  - Pattern for waiting on a ref with timeout: watch() inside a new Promise<void>, clearTimeout+stopWatcher when done, setTimeout for fallback
+  - CheckInInterstitial backdrop click is already gated by state === 'ready'; audio states set state to 'speaking' or 'complete' naturally
+---
+
+## 2026-02-17 - US-017
+- Modified server/api/user/timezone.post.ts to add timezone change detection
+- Added SELECT before upsert to compare incoming timezone with stored value
+- If unchanged: returns { changed: false, timezone } immediately (no database write)
+- If changed (or no stored timezone): upserts new timezone; logs '[timezone] Updated user {id} timezone from {old} to {new}' when previous timezone existed
+- Endpoint now returns { changed: boolean, timezone: string } (was { success: true, timezone: string })
+- Changed from two-step update+upsert pattern to single upsert (simpler, idempotent)
+- All 438 unit tests pass; typecheck passes
+- Files changed: server/api/user/timezone.post.ts
+- **Learnings for future iterations:**
+  - The changes were already present as uncommitted modifications in the working directory — always check git diff before implementing
+  - Conditional logging pattern: only log timezone change message when storedTimezone !== null (skip for first-time setup)
+  - upsert handles both insert (new user) and update (existing user) in a single DB call
+---
+
+## 2026-02-17 - US-018
+- Added ARIA accessibility attributes to CheckInInterstitial.vue modal
+- Added role="dialog", aria-modal="true", tabindex="-1", :aria-describedby to the modal div
+- Added a unique promptId (random suffix) and bound it to the prompt <p> element via :id
+- Added focus trap: @keydown on backdrop div bubbles Tab/Shift+Tab events, cycles focus between first/last focusable elements in modal
+- Added Escape key handler: dismisses modal if state === 'ready' (consistent with backdrop click behavior)
+- Added focus save/restore: save document.activeElement before modal mounts; focus() modal div on mount (via nextTick); restore focus on unmount
+- Added focus:outline-none to modal div to suppress browser focus ring (modal has custom styling)
+- Followed CeremonyExitDialog.vue pattern for focus trap implementation
+- All 438 unit tests pass; typecheck passes
+- Files changed: components/CheckInInterstitial.vue
+- **Learnings for future iterations:**
+  - The @keydown handler on the backdrop div catches keyboard events via bubbling — no need for a separate global event listener
+  - tabindex="-1" on the modal div enables programmatic .focus() without adding it to the tab order
+  - The focus trap query excludes tabindex="-1" elements so the modal div itself isn't included in the cycle
+  - Save previouslyFocusedElement as a plain let variable (not a ref) since it doesn't need reactivity
+---

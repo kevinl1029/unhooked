@@ -23,6 +23,7 @@ const emit = defineEmits<{
   skip: [id: string]
   respond: [id: string]
   complete: [id: string, conversationId: string | null]
+  'audio-playing-change': [playing: boolean]
 }>()
 
 // Check-in states
@@ -47,6 +48,12 @@ const updateAudioLevel = () => {
 }
 
 onMounted(() => {
+  // Save focus and move it into the modal
+  previouslyFocusedElement = document.activeElement as HTMLElement | null
+  nextTick(() => {
+    modalRef.value?.focus()
+  })
+
   const checkInIllusionKey = props.checkIn.illusion_key && ILLUSION_KEYS.includes(props.checkIn.illusion_key as IllusionKey)
     ? props.checkIn.illusion_key as IllusionKey
     : undefined
@@ -92,6 +99,8 @@ onUnmounted(() => {
   if (audioLevelFrame) {
     cancelAnimationFrame(audioLevelFrame)
   }
+  // Restore focus to the element that was focused before the modal opened
+  previouslyFocusedElement?.focus()
 })
 
 // Handle backdrop click - only dismiss in ready state
@@ -124,9 +133,29 @@ async function handleComplete() {
     console.error('[check-in-interstitial] Failed to mark complete:', err)
   }
 
-  // Show toast briefly then emit complete
+  // Show toast briefly
   showToast.value = true
   await new Promise(resolve => setTimeout(resolve, 1500))
+
+  // Wait for AI audio to finish before closing modal
+  if (voiceChat?.isAISpeaking.value) {
+    emit('audio-playing-change', true)
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        stopWatcher()
+        resolve()
+      }, 3000)
+
+      const stopWatcher = watch(voiceChat!.isAISpeaking, (speaking) => {
+        if (!speaking) {
+          clearTimeout(timeout)
+          stopWatcher()
+          resolve()
+        }
+      })
+    })
+    emit('audio-playing-change', false)
+  }
 
   emit('complete', props.checkIn.id, responseConversationId || null)
 }
@@ -144,6 +173,53 @@ async function handleMicTap() {
   } else {
     // Start recording
     await voiceChat.recordAndSend()
+  }
+}
+
+// Accessibility: track element focused before modal opened so we can restore focus on close
+let previouslyFocusedElement: HTMLElement | null = null
+
+const promptId = `check-in-prompt-${Math.random().toString(36).slice(2, 9)}`
+
+// Get all focusable elements within the modal
+function getFocusableElements(): HTMLElement[] {
+  if (!modalRef.value) return []
+  return Array.from(
+    modalRef.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter(el => !el.hasAttribute('disabled'))
+}
+
+// Focus trap: handle Tab/Shift+Tab and Escape
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    if (state.value === 'ready') {
+      emit('dismiss')
+    }
+    return
+  }
+
+  if (event.key === 'Tab') {
+    const focusable = getFocusableElements()
+    if (focusable.length === 0) {
+      event.preventDefault()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+
+    if (event.shiftKey) {
+      if (document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else {
+      if (document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
   }
 }
 
@@ -210,10 +286,15 @@ function handleTouchEnd() {
     <div
       class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
       @click="handleBackdropClick"
+      @keydown="handleKeydown"
     >
       <div
         ref="modalRef"
-        class="w-full md:max-w-md glass rounded-t-3xl md:rounded-card p-8 shadow-card border border-brand-border animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        :aria-describedby="promptId"
+        tabindex="-1"
+        class="w-full md:max-w-md glass rounded-t-3xl md:rounded-card p-8 shadow-card border border-brand-border animate-slide-up focus:outline-none"
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
@@ -229,7 +310,7 @@ function handleTouchEnd() {
         </div>
 
         <div class="mb-8">
-          <p class="text-xl text-white text-center leading-relaxed">{{ checkIn.prompt }}</p>
+          <p :id="promptId" class="text-xl text-white text-center leading-relaxed">{{ checkIn.prompt }}</p>
         </div>
 
         <!-- Voice response area -->

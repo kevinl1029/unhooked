@@ -19,6 +19,7 @@ export function useCheckIns() {
   const showInterstitial = ref(false)
   const pendingCheckIn = ref<PendingCheckIn | null>(null)
   const isLoading = ref(false)
+  const isAudioPlaying = ref(false)
 
   /**
    * Check for pending interstitial check-in
@@ -45,9 +46,15 @@ export function useCheckIns() {
 
   /**
    * Dismiss the interstitial (without skipping)
+   * Blocked while AI audio is playing
    */
   function dismissInterstitial() {
+    if (isAudioPlaying.value) return
     showInterstitial.value = false
+  }
+
+  function setAudioPlaying(playing: boolean) {
+    isAudioPlaying.value = playing
   }
 
   /**
@@ -87,11 +94,13 @@ export function useCheckIns() {
     showInterstitial: readonly(showInterstitial),
     pendingCheckIn: readonly(pendingCheckIn),
     isLoading: readonly(isLoading),
+    isAudioPlaying: readonly(isAudioPlaying),
     checkForInterstitial,
     dismissInterstitial,
     skipCheckIn,
     respondToCheckIn,
     completeCheckInInline,
+    setAudioPlaying,
   }
 }
 
