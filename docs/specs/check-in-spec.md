@@ -1210,6 +1210,7 @@ The following decisions were made during the technical design session:
 | File | Action | Purpose |
 |------|--------|---------|
 | `supabase/migrations/20260216_email_unsubscribe.sql` | **Create** | Add `email_unsubscribed_at` to `user_progress` |
+| `supabase/migrations/20260218_checkin_missing_columns.sql` | **Create** | Add `retry_count`, `observation_assignment`, `cancellation_reason` to `check_in_schedule` (columns in spec schema but missing from baseline) |
 | `server/utils/auth/hmac-tokens.ts` | **Create** | HMAC token generation + validation for unsubscribe |
 | `server/middleware/rate-limit.ts` | **Create** | IP-based rate limiting (10 req/min) for public endpoints |
 | `server/api/check-ins/unsubscribe.get.ts` | **Create** | Footer link unsubscribe (HMAC or magic_link_token) |
@@ -1251,6 +1252,28 @@ The following decisions were made during the technical design session:
 **Dependencies:** None (first story)
 **Test Requirements:** Verify via SQL after applying migration
 **Estimated Complexity:** S — Single ALTER TABLE
+
+---
+
+##### US-F01b: Database Migration — Check-In Schedule Missing Columns
+
+**Description:** As the system, I need `retry_count`, `observation_assignment`, and `cancellation_reason` columns on `check_in_schedule` so that email retry logic, evidence bridge prompts, and cancellation tracking work correctly.
+
+**Context:** The spec's schema definition includes these columns in the `CREATE TABLE` statement, but the `check_in_schedule` table was created in the baseline migration (`20260100_baseline_schema.sql`) before these columns were designed. This migration adds them retroactively.
+
+**Acceptance Criteria:**
+
+1. Given the migration file `supabase/migrations/20260218_checkin_missing_columns.sql` exists, when it is applied, then `retry_count INTEGER NOT NULL DEFAULT 0`, `observation_assignment TEXT`, and `cancellation_reason TEXT` columns are added to `check_in_schedule`.
+2. Given the columns are added, when querying existing rows, then `retry_count = 0` and the other columns are `NULL`.
+
+**Technical Notes:**
+- File: `supabase/migrations/20260218_checkin_missing_columns.sql`
+- Uses `ADD COLUMN IF NOT EXISTS` for idempotency
+- Must be applied before cron email processing will work (sender queries `retry_count`)
+
+**Dependencies:** None
+**Test Requirements:** Verify via SQL after applying migration
+**Estimated Complexity:** S — Single ALTER TABLE with three columns
 
 ---
 
