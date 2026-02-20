@@ -416,7 +416,7 @@ const displayMessages = computed(() => {
   // isTextStreaming: text tokens arriving from LLM
   // isStreamingMode: streaming TTS audio is playing
   // isPaused: audio is paused but not finished
-  const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value || isPaused.value) && currentTranscript.value
+  const showStreamingTranscript = (isTextStreaming.value || isStreamingMode.value || isPaused.value || isAISpeaking.value) && currentTranscript.value
 
   if (showStreamingTranscript) {
     // Always use currentTranscript for the message content (full text from LLM)
@@ -444,7 +444,7 @@ const displayMessages = computed(() => {
 })
 
 const showStreamingTranscript = computed(() => {
-  return Boolean((isTextStreaming.value || isStreamingMode.value || isPaused.value) && currentTranscript.value)
+  return Boolean((isTextStreaming.value || isStreamingMode.value || isPaused.value || isAISpeaking.value) && currentTranscript.value)
 })
 
 // While streaming/highlighting is active, let WordByWordTranscript own scroll focus.

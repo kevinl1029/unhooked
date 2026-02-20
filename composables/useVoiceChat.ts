@@ -458,29 +458,29 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
               illusionLayer
             })
 
-            // Start audio playback and bootstrap in parallel
-            const audioPromise = voiceSession.playAIResponse(openingTextResult.text)
-            const bootstrapPromise = bootstrapWithRetry(openingTextResult.text)
+            // Add message immediately so text displays during audio playback
+            messages.value.push({ role: 'assistant', content: openingTextResult.text })
+
+            // Bootstrap in background (non-blocking so skip isn't delayed)
+            bootstrapWithRetry(openingTextResult.text).then(result => {
+              if (result?.conversationId) {
+                conversationId.value = result.conversationId
+              }
+            }).catch(() => {})
+
+            // Conversation has started - allow user interaction while audio plays
+            isLoading.value = false
 
             try {
-              // Wait for audio to complete
-              await audioPromise
-
-              // Add assistant message to local state
-              messages.value.push({ role: 'assistant', content: openingTextResult.text })
-
-              // Wait for bootstrap to complete (non-blocking for conversation flow)
-              const bootstrapResult = await bootstrapPromise
-              if (bootstrapResult?.conversationId) {
-                conversationId.value = bootstrapResult.conversationId
-              }
-
-              isLoading.value = false
+              await voiceSession.playAIResponse(openingTextResult.text)
               return true
             } catch (audioError: any) {
               console.log('[useVoiceChat] Fast-start audio playback failed, falling back to regular flow', {
                 error: audioError?.message
               })
+              // Remove the message we added and reset for fall-through
+              messages.value.pop()
+              isLoading.value = true
               // Fall through to existing code below
             }
           } else {

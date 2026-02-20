@@ -44,6 +44,7 @@ export const useVoiceSession = () => {
   let wordTimings: WordTiming[] = []
   let playbackStartTime = 0
   let wordTimingInterval: ReturnType<typeof setInterval> | null = null
+  let batchAudioResolve: ((value: boolean) => void) | null = null
 
   // Audio recorder
   const recorder = useAudioRecorder()
@@ -120,6 +121,8 @@ export const useVoiceSession = () => {
       audioElement = new Audio(audioUrl)
 
       return new Promise((resolve) => {
+        batchAudioResolve = resolve
+
         audioElement!.onloadedmetadata = () => {
           // Only scale word timings if they were estimated (not actual from ElevenLabs)
           // ElevenLabs provides actual word timings that don't need rescaling
@@ -148,6 +151,7 @@ export const useVoiceSession = () => {
         }
 
         audioElement!.onended = () => {
+          batchAudioResolve = null
           isAISpeaking.value = false
           currentWordIndex.value = wordTimings.length - 1 // Show last word
           stopWordTracking()
@@ -156,6 +160,7 @@ export const useVoiceSession = () => {
         }
 
         audioElement!.onerror = (e) => {
+          batchAudioResolve = null
           console.error('[useVoiceSession] Audio playback error:', e)
           error.value = 'Failed to play audio'
           isAISpeaking.value = false
@@ -165,6 +170,7 @@ export const useVoiceSession = () => {
         }
 
         audioElement!.play().catch((e) => {
+          batchAudioResolve = null
           console.error('[useVoiceSession] Audio play() failed:', e)
           error.value = 'Failed to start audio playback'
           isAISpeaking.value = false
@@ -384,6 +390,13 @@ export const useVoiceSession = () => {
       audioElement.pause()
       audioElement.currentTime = 0
       stopWordTracking()
+    }
+
+    // Resolve any pending batch audio promise so callers aren't stuck awaiting
+    if (batchAudioResolve) {
+      const resolve = batchAudioResolve
+      batchAudioResolve = null
+      resolve(false)
     }
 
     // Stop streaming TTS audio (this triggers onAudioComplete via the callback)
