@@ -19,7 +19,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": "Follow the pattern from supabase/migrations/20260216_email_unsubscribe.sql (simple ALTER TABLE ADD COLUMN IF NOT EXISTS). TypeScript types in types/database.types.ts must be updated manually since npm run db:types requires a live Supabase connection. The user_progress type is at lines 656-723 in types/database.types.ts — search for 'user_progress' to find the Row, Insert, Update sections. Fields are alphabetically sorted within each section. The email_unsubscribed_at column (added in a previous Ralph run) is a good pattern to follow for placement."
     },
     {
@@ -39,7 +39,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/session/opening-text.get.ts. Import ILLUSION_OPENING_MESSAGES from server/utils/prompts (defined at lines 182-202 in server/utils/prompts/index.ts — it's a Record<IllusionKey, string> with keys: stress_relief, pleasure, willpower, focus, identity). Import IllusionKey, IllusionLayer, SessionType from server/utils/llm/task-types. Auth: serverSupabaseUser() from #supabase/server for auth check, serverSupabaseServiceRole() for DB read on user_progress. Read query params with getQuery(event). For L2/L3 path: query user_progress.precomputed_opening_text where user_id matches. The user_progress table has a UNIQUE(user_id) constraint so the read is already optimally indexed. Use console.log for [instant-start] tagged log messages."
     },
     {
@@ -59,7 +59,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/session/bootstrap.post.ts. Mirror the conversation creation from server/api/chat.post.ts lines 363-380: insert into conversations with user_id, model, title, session_type, illusion_key, illusion_layer, then .select('id').single(). Mirror evidence bridge cancellation from chat.post.ts lines 382-402. Auth: serverSupabaseUser() from #supabase/server for auth, serverSupabaseServiceRole() for DB writes (same as /api/chat pattern). Import ILLUSION_NAMES from server/utils/prompts (line 28 in index.ts — Record<IllusionKey, string>). Import getDefaultModel from server/utils/llm (line 22 in server/utils/llm/index.ts). Import IllusionKey, IllusionLayer from server/utils/llm/task-types. Read body with readBody(event). The check_in_schedule table has trigger_illusion_key column for evidence bridge check-ins."
     },
     {
@@ -80,7 +80,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": "File: composables/useVoiceChat.ts. The startConversation() function is at line 396. Insert the fast-start branch INSIDE the try block (after error.value = null and isLoading.value = true, before the existing if (enableStreamingTTS) at line 401). Key variables already available as closure: illusionKey (line 61), illusionLayer (line 62, default 'intellectual'), sessionType (line 63, default 'core'), messages (ref line 80), conversationId (ref line 81), isLoading (ref line 82), voiceSession (line 90). voiceSession.playAIResponse(text) returns a Promise — it internally calls /api/voice/synthesize, plays audio, and handles word-by-word highlighting. Use $fetch for API calls (auto-available in Nuxt composables). The fallback is simply: if the fast-start branch doesn't return true, the existing code below it runs. The bootstrapWithRetry function should be defined above startConversation within the useVoiceChat composable scope. If bootstrap fails all retries, conversationId stays null — sendMessage() already handles null conversationId by falling through to /api/chat which creates the conversation (lines 418-433 for non-streaming, lines 126-146 for streaming)."
     },
     {
