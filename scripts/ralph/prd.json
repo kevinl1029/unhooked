@@ -104,7 +104,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/session/precompute-opening.ts (new file). Import buildSessionContext, formatContextForPrompt from server/utils/personalization/context-builder (buildSessionContext at line 167, formatContextForPrompt at line 295). Import buildCrossLayerContext, formatCrossLayerContext from server/utils/personalization/cross-layer-context (buildCrossLayerContext at line 83, formatCrossLayerContext at line 135). Import buildBridgeContext from server/utils/session/bridge (line 12). Import buildSystemPrompt from server/utils/prompts (index.ts). Import getModelRouter, getDefaultModel from server/utils/llm (index.ts lines 7 and 22). Import IllusionKey, IllusionLayer from server/utils/llm/task-types. The generation prompt should instruct the LLM to output ONLY the opening message text (no preamble, no labels). The retry loop runs at most 2 iterations (attempt 0 and 1), with 500ms delay before the retry. Use the same UserContext interface that /api/chat uses for intake data. The SupabaseClient type is from @supabase/supabase-js."
     },
     {

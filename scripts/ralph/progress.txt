@@ -73,3 +73,24 @@ Started: Thu Feb 19 23:52:42 EST 2026
   - Non-core sessions (check_in, ceremony, reinforcement) skip the fast-start branch entirely via the sessionType === 'core' guard
 ---
 
+## Thu Feb 20 00:05:47 EST 2026 - US-005
+- Created server/utils/session/precompute-opening.ts with precomputeOpeningText() function
+- Function accepts { supabase, userId, illusionKey, nextLayer } params
+- Fetches user intake, builds session context, cross-layer context, and bridge context
+- Builds system prompt with all personalization context using buildSystemPrompt()
+- Calls LLM via getModelRouter().chat() with generation prompt asking for 2-4 sentence opening message
+- Stores result in user_progress.precomputed_opening_text and precomputed_opening_at
+- Implements retry logic: 2 attempts max, 500ms delay before retry
+- Empty LLM responses treated as failures
+- All outcomes logged with [precompute-opening] tag
+- Build succeeded with no type errors
+- **Learnings for future iterations:**
+  - buildSessionContext returns PersonalizationContext (complex object) for core sessions, needs formatContextForPrompt() to convert to string
+  - buildCrossLayerContext returns CrossLayerContext object, needs formatCrossLayerContext() to convert to string
+  - buildBridgeContext takes CrossLayerContext and returns a pre-formatted string (no formatter needed)
+  - The UserContext type from base-system.ts differs from IntakeUserContext in context-builder.ts — chat.post.ts uses UserContext for buildSystemPrompt
+  - User intake query pattern: select specific fields (product_types, usage_frequency, years_using, previous_attempts, triggers), .eq('user_id', userId), .single()
+  - Fire-and-forget pattern for background jobs: call async function, use .then() for success logging, .catch() for error logging, never await
+  - The generation prompt should explicitly instruct "Output ONLY the opening message text" to avoid preamble/labels
+  - Retry loop pattern: while (attempt < maxAttempts) { try/catch, increment attempt, conditional delay before retry }
+---
