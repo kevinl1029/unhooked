@@ -94,3 +94,23 @@ Started: Thu Feb 19 23:52:42 EST 2026
   - The generation prompt should explicitly instruct "Output ONLY the opening message text" to avoid preamble/labels
   - Retry loop pattern: while (attempt < maxAttempts) { try/catch, increment attempt, conditional delay before retry }
 ---
+## Thu Feb 20 00:07:12 EST 2026 - US-006
+- Added import for precomputeOpeningText in server/api/progress/complete-session.post.ts
+- Added fire-and-forget call to precomputeOpeningText() after evidence bridge scheduling (lines 329-340)
+- Pre-computation triggered only for L1/L2 completions (within layer progression block)
+- For L1 (intellectual): calls with nextLayer='emotional'
+- For L2 (emotional): calls with nextLayer='identity'
+- For L3 (identity): no pre-computation (next session is a different illusion's L1 with static text)
+- Fire-and-forget pattern: .then() for success log, .catch() for error log, never blocks response
+- Build succeeded with no type errors
+- Files changed: server/api/progress/complete-session.post.ts
+- **Learnings for future iterations:**
+  - The fire-and-forget pattern is the standard for background jobs in complete-session.post.ts
+  - Pattern: call async function, chain .then() for success logging, .catch() for error logging, never await
+  - The layer progression block (lines 115-337) handles evidence-based coaching with illusionLayer
+  - The legacy block (lines 339+) handles old behavior without illusionLayer — avoid adding new logic there
+  - effectiveIllusionKey is available in the layer progression block (derived from illusionKey or order)
+  - user.sub is the userId for passing to background jobs
+  - supabase is the service role client already initialized in the handler
+  - Pre-computation only runs in L1/L2 path (lines 309-335), not in L3 path (lines 147-306)
+---

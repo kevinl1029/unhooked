@@ -122,7 +122,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/progress/complete-session.post.ts. The layer progression block is at lines 115-337. The fire-and-forget pattern is already established by scheduleCheckIns() (lines 238-252) and scheduleEvidenceBridgeCheckIn() (lines 312-326) — follow the same .then().catch() non-blocking pattern. Add the pre-computation call near the evidence bridge scheduling (lines 312-326) since both are triggered after L1/L2 completion. Available variables: userId from user.sub, effectiveIllusionKey, illusionLayer (from the request body). The supabase client is already available in the handler. Only trigger within the layer progression block (when illusionLayer is provided), NOT in the legacy block (lines 413-428)."
     }
   ]
