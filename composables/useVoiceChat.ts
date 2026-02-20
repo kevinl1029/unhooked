@@ -392,12 +392,112 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     return success
   }
 
+  // Bootstrap session with retries (for fast-start path)
+  const bootstrapWithRetry = async (openingText: string): Promise<{ conversationId: string } | null> => {
+    const maxAttempts = 3
+    const delays = [1000, 2000, 4000] // 1s, 2s, 4s exponential backoff
+    const maxWindowMs = 15000
+    const startTime = Date.now()
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Check if we've exceeded the max window
+      if (Date.now() - startTime > maxWindowMs) {
+        console.log('[useVoiceChat] Bootstrap exceeded max window (15s), giving up')
+        return null
+      }
+
+      try {
+        const result = await $fetch('/api/session/bootstrap', {
+          method: 'POST',
+          body: {
+            illusionKey,
+            illusionLayer,
+            sessionType,
+            openingText
+          }
+        })
+
+        console.log('[useVoiceChat] Bootstrap success', { conversationId: result.conversationId, attempt: attempt + 1 })
+        return result
+      } catch (e: any) {
+        console.error('[useVoiceChat] Bootstrap attempt failed', { attempt: attempt + 1, error: e?.data?.message || e?.message })
+
+        // If this is not the last attempt and we're within the time window, wait and retry
+        if (attempt < maxAttempts - 1 && Date.now() - startTime + delays[attempt] <= maxWindowMs) {
+          await new Promise(resolve => setTimeout(resolve, delays[attempt]))
+        }
+      }
+    }
+
+    console.log('[useVoiceChat] Bootstrap failed after all attempts')
+    return null
+  }
+
   // Start a new conversation with AI speaking first
   const startConversation = async (): Promise<boolean> => {
     error.value = null
     isLoading.value = true
 
     try {
+      // Fast-start path: for core sessions with illusionKey, try to use pre-known opening text
+      if (sessionType === 'core' && illusionKey) {
+        try {
+          const openingTextResult = await $fetch('/api/session/opening-text', {
+            method: 'GET',
+            query: {
+              illusionKey,
+              illusionLayer,
+              sessionType
+            }
+          })
+
+          if (openingTextResult.text) {
+            console.log('[useVoiceChat] Fast-start path: opening text available', {
+              source: openingTextResult.source,
+              illusionKey,
+              illusionLayer
+            })
+
+            // Start audio playback and bootstrap in parallel
+            const audioPromise = voiceSession.playAIResponse(openingTextResult.text)
+            const bootstrapPromise = bootstrapWithRetry(openingTextResult.text)
+
+            try {
+              // Wait for audio to complete
+              await audioPromise
+
+              // Add assistant message to local state
+              messages.value.push({ role: 'assistant', content: openingTextResult.text })
+
+              // Wait for bootstrap to complete (non-blocking for conversation flow)
+              const bootstrapResult = await bootstrapPromise
+              if (bootstrapResult?.conversationId) {
+                conversationId.value = bootstrapResult.conversationId
+              }
+
+              isLoading.value = false
+              return true
+            } catch (audioError: any) {
+              console.log('[useVoiceChat] Fast-start audio playback failed, falling back to regular flow', {
+                error: audioError?.message
+              })
+              // Fall through to existing code below
+            }
+          } else {
+            console.log('[useVoiceChat] Fast-start path: opening text not available, falling back to regular flow', {
+              illusionKey,
+              illusionLayer
+            })
+            // Fall through to existing code below
+          }
+        } catch (e: any) {
+          console.log('[useVoiceChat] Fast-start path failed, falling back to regular flow', {
+            error: e?.data?.message || e?.message
+          })
+          // Fall through to existing code below
+        }
+      }
+
       if (enableStreamingTTS) {
         const success = await runStreamingWithResilience('text', {
           content: '',
