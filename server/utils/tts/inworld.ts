@@ -75,7 +75,7 @@ export function createInworldProvider(
       audioEncoding: 'MP3',
       sampleRateHertz: 44100,
       bitRate: 128000,
-      speakingRate: 0.8 // Slower for better clarity (range: 0.5-1.5)
+      speakingRate: 1.0 // Default speed (range: 0.5-1.5)
     }
   })
 
