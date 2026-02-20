@@ -1,9 +1,9 @@
 # Instant Conversations Spec
 
-**Version:** 1.4
+**Version:** 2.0
 **Created:** 2026-02-17
-**Last Updated:** 2026-02-19
-**Status:** Implementation Ready
+**Last Updated:** 2026-02-20
+**Status:** PRD Draft (v2)
 **Document Type:** Product Specification (PRD) + Technical Design
 
 ---
@@ -12,38 +12,45 @@
 
 ### Problem
 
-When a user starts a voice coaching session in Unhooked, the coach's voice takes 3–8 seconds to begin playing. During this time, the user sits in silence — waiting for a conversation that's supposed to feel immediate and human.
+#### Original Problem (v1 — solved)
 
-The root cause is an unnecessary LLM call. The current flow sends an empty message array to the chat endpoint, which authenticates, builds a system prompt, calls the LLM to generate the opening message, waits for a complete sentence, then sends it through TTS. The LLM accounts for 60–80% of the delay, with TTS making up most of the rest.
+When a user starts a voice coaching session in Unhooked, the coach's voice takes 3–8 seconds to begin playing. The root cause was an unnecessary LLM call at session start. v1 solved this by pre-computing opening text and sending it directly to TTS, eliminating the LLM from the critical path.
 
-For L1 (intellectual layer) sessions, this is especially wasteful: the 5 opening messages are static strings already defined in `ILLUSION_OPENING_MESSAGES`. The LLM is being asked to regenerate text that is deterministic and known in advance. For L2/L3 (emotional/identity layer) sessions, the openings are personalized using prior session context — but the data needed to compose them is already available server-side and could be prepared before the user enters the session.
+#### Current Problem (v2)
 
-This affects every user, every session. For a voice-first app designed to feel like a real conversation with a coach, multiple seconds of silence at the start is significant friction. It undermines the core promise of the product — especially on first impressions, but equally on the 5th or 15th session. The latency has also been increasing across sessions over time, making the problem progressively worse.
+The v1 implementation eliminated the LLM bottleneck but revealed that **TTS itself is the new bottleneck**. Real-time TTS synthesis — even with pre-computed text — takes several seconds, well above the estimated 200–500ms budget in the v1 spec. The <1 second time-to-first-audio goal is not being met.
+
+The v1 latency budget assumed TTS would cost ~200–500ms. In practice, TTS providers (InWorld, Groq, ElevenLabs) consistently take multiple seconds to synthesize opening messages (2–4 sentences, ~15–25 seconds of audio). This is a provider-side reality: generating high-quality speech with word-level timing data at this length takes meaningful time, regardless of provider.
+
+The v1 spec explicitly deferred pre-generated audio as a non-goal, reasoning that opening messages were still in flux and TTS was "fast enough." That reasoning no longer holds. The messages have stabilized for L1, the pre-computation pipeline for L2/L3 is proven, and TTS is now the dominant source of startup latency.
+
+**The remaining solution is to eliminate TTS from the critical path entirely** — by pre-generating and storing audio ahead of time, so that at session start, there is nothing to generate. Text and audio are both ready and waiting.
 
 ### Goals
 
 **Primary goal:**
-- Dramatically reduce time-to-first-audio for all core session types (L1, L2, L3) by eliminating the LLM call at session start
+- Achieve near-instant time-to-first-audio (target: <500ms) for all core session types by eliminating both LLM and TTS from the critical path at session start
 
 **Secondary goals:**
-- Maintain conversational continuity — the conversation record and subsequent LLM context must not be compromised by the fast-start path
-- Graceful degradation — if the fast path fails for any reason, the system falls back to the current full LLM+TTS flow transparently, with no visible difference to the user
+- Maintain conversational continuity — the conversation record and subsequent LLM context must not be compromised by the fast-start path (unchanged from v1)
+- Graceful degradation — multi-tier fallback: pre-stored audio → real-time TTS with pre-computed text (v1 path) → full LLM+TTS (original path). The user never sees a degraded state (unchanged philosophy from v1, extended with an additional tier)
+- Word-by-word text highlighting must continue to work with pre-stored audio (mechanism deferred to technical design)
 
 ### Non-Goals
 
 - **Mid-conversation turn latency** — optimizing the speed of subsequent turns within a session is a separate problem with different solutions and trade-offs
 - **Check-in sessions** — check-ins do not begin with a coach-initiated chat message, so cold-start latency is not applicable
-- **Pre-generated audio files** — while pre-generating audio would achieve near-zero latency, the opening messages are still in flux and the maintenance cost of regenerating audio files on every copy change is not justified at this stage
-- **Per-user audio storage** — storing pre-rendered audio per user per session introduces storage costs that scale linearly with the user base and adds cache invalidation complexity
-- **Offline/cached audio** — supporting users on slow or offline connections is out of scope
+- **Offline/cached audio** — caching audio on the client device for offline use is out of scope
+- **Multiple voice variants per opening** — storing audio in different voices or configurations per opening message is out of scope; one audio file per opening text
 
 ### Success Metrics
 
 | Metric | Target | How Measured |
 |--------|--------|--------------|
-| Time-to-first-audio (all core sessions) | Best-effort < 1 second | Measured from `startConversation()` call to first audio playback in Chrome DevTools |
+| Time-to-first-audio (all core sessions) | Best-effort < 500ms | Measured from `startConversation()` call to first audio playback in Chrome DevTools |
 | Fallback transparency | 100% — user never sees a degraded state label or error | Manual QA: trigger fallback scenarios and verify no UI difference |
 | Conversation record integrity | Opening text is saved as first assistant message before user's first response | Verify in Supabase that `conversationId` is set and opening message is persisted before first user turn |
+| Audio pre-generation coverage | 100% of L1 static openings have pre-stored audio; L2/L3 audio generated alongside text pre-computation | Verify in Supabase Storage that audio files exist for all static openings and are generated by the pre-computation job |
 
 ---
 
@@ -51,7 +58,20 @@ This affects every user, every session. For a voice-first app designed to feel l
 
 ### Summary
 
-Eliminate the LLM call at session start for all core sessions. Instead, have the opening text ready *before* the user starts the session and send it directly to TTS, bypassing the LLM entirely. For L1 sessions, the text is already known — it's a static string looked up by illusion key. For L2/L3 sessions, the text is pre-computed by an LLM background job that runs after the previous session completes, so it's stored and waiting. In both cases, when the user starts the session, the server sends the prepared text straight to TTS and streams the audio back. In parallel, a lightweight bootstrap endpoint creates the conversation record and saves the opening as the first assistant message. By the time the user finishes listening to the opening (~15–25 seconds of audio), the conversation is fully initialized and ready for their first response.
+v1 eliminated the LLM from the critical path by pre-computing opening text. v2 completes the pipeline by **also eliminating TTS from the critical path** — pre-generating and storing audio alongside the text, so that at session start, there is nothing to generate at all.
+
+For **L1 sessions**, the opening text is static and known in advance. Audio is pre-generated from these static strings and stored in Supabase Storage. This is a one-time operation (re-run only when copy changes). When the user starts a session, the client fetches the pre-stored audio file and plays it immediately.
+
+For **L2/L3 sessions**, the existing pre-computation background job (which already generates personalized opening text after the prior session completes) is extended to also call TTS and store the resulting audio in Supabase Storage. When the user starts the next session, both text and audio are waiting.
+
+In both cases, the client fetches text metadata and an audio URL from a single endpoint, downloads the audio binary from Supabase Storage, and begins playback — with no LLM call, no TTS call, and no server-side generation of any kind. The bootstrap endpoint (unchanged from v1) creates the conversation record in parallel.
+
+**Fallback chain (3 tiers):**
+1. **Pre-stored audio available** → fetch and play immediately (~100–300ms to first audio)
+2. **Pre-computed text but no audio** (audio generation failed, audio missing/corrupt) → call TTS in real-time with the pre-computed text (v1 fast-start path, several seconds)
+3. **No pre-computed text** → full LLM+TTS flow (original path, 3–8 seconds)
+
+The user never sees a different UI across any tier — only speed varies.
 
 ### User Scenarios
 
@@ -62,10 +82,12 @@ Eliminate the LLM call at session start for all core sessions. Instead, have the
 **Flow:**
 1. Session page loads; mic permission is already granted or user grants it
 2. User taps to start the conversation
-3. Within ~1 second, the coach's voice begins playing the opening message
-4. Text highlights word-by-word as the coach speaks (same as current behavior)
-5. In the background, the conversation record is created and the opening text is saved as the first assistant message
-6. When the opening finishes, the user responds normally — the conversation continues via the existing LLM+TTS pipeline with full context
+3. Client fetches opening metadata (text + audio URL) from the opening endpoint
+4. Client downloads the pre-stored audio file from Supabase Storage
+5. Within ~500ms, the coach's voice begins playing the opening message
+6. Text highlights word-by-word as the coach speaks
+7. In the background, the conversation record is created and the opening text is saved as the first assistant message
+8. When the opening finishes, the user responds normally — the conversation continues via the existing LLM+TTS pipeline with full context
 
 **Outcome:** The session feels like it starts the instant the user is ready. No perceptible delay.
 
@@ -74,35 +96,49 @@ Eliminate the LLM call at session start for all core sessions. Instead, have the
 **User:** Any user progressing to the emotional or identity layer of an illusion
 **Trigger:** User navigates to a session and taps to start
 **Flow:**
-1. Session page loads; opening text was pre-computed in the background after their prior session completed
+1. Session page loads; opening text and audio were pre-generated in the background after their prior session completed
 2. User taps to start the conversation
-3. Within ~1 second, the coach's voice begins playing a personalized opening that references their prior session context
-4. Everything else proceeds as in the L1 scenario
+3. Client fetches opening metadata (text + audio URL), downloads pre-stored audio
+4. Within ~500ms, the coach's voice begins playing a personalized opening that references their prior session context
+5. Everything else proceeds as in the L1 scenario
 
 **Outcome:** Same instant-feeling start, but with personalized opening content derived from their prior sessions.
 
-#### Variant Scenario: User starts L2 before pre-computation finishes
+#### Variant Scenario: Pre-stored audio missing but text available (Tier 2 fallback)
+
+**User:** Any user, any core session type
+**Trigger:** Audio generation failed during pre-computation, audio file is missing or corrupt in storage, or audio download fails at session start — but the pre-computed text is available
+**Flow:**
+1. User taps to start the conversation
+2. Client fetches opening metadata — text is available, but audio URL is null or audio download fails
+3. Client falls back to calling TTS in real-time with the pre-computed text (v1 fast-start path)
+4. The coach's voice begins after several seconds (TTS generation time)
+5. Session proceeds normally
+
+**Outcome:** The session starts via the v1 fast-start path. Slower than the pre-stored audio path, but faster than the full LLM+TTS flow. The user is unaware of the fallback.
+
+#### Variant Scenario: User starts L2 before pre-computation finishes (Tier 3 fallback)
 
 <!-- UX-REFINED: Added race condition scenario for immediate session navigation -->
 
 **User:** A user who completes L1 and immediately navigates to L2
-**Trigger:** The background LLM job to pre-compute the L2 opening text has not completed yet
+**Trigger:** The background job to pre-compute the L2 opening text and audio has not completed yet
 **Flow:**
 1. User completes L1 session, background pre-computation job is triggered
 2. User immediately navigates to L2 (before background job finishes)
-3. System checks for pre-computed text — it's not available yet
-4. System transparently falls back to the current full LLM+TTS flow
+3. System checks for pre-computed content — neither text nor audio is available yet
+4. System transparently falls back to the full LLM+TTS flow
 5. The user experiences the existing 3–8 second delay but the session works normally
 
-**Outcome:** The session starts via the current flow. The user doesn't notice anything different — they just don't get the speed benefit this time.
+**Outcome:** The session starts via the original flow. The user doesn't notice anything different — they just don't get the speed benefit this time.
 
-#### Variant Scenario: Fast path fails (fallback)
+#### Variant Scenario: Fast path fails completely (Tier 3 fallback)
 
 **User:** Any user, any core session type
-**Trigger:** Pre-computed text is unavailable (background job failed, data missing), TTS-direct path errors, or bootstrap endpoint failure
+**Trigger:** Pre-computed text is unavailable (background job failed, data missing) and no pre-stored audio exists
 **Flow:**
-1. The system detects the fast path cannot be used
-2. It transparently falls back to the current full flow: LLM generates the opening, TTS streams the audio
+1. The system detects the fast path cannot be used (no text, no audio)
+2. It transparently falls back to the full LLM+TTS flow
 3. The user experiences the existing 3–8 second delay but the session is not broken
 4. No error message, no degraded-state indicator — the user is unaware of the fallback
 
@@ -126,57 +162,74 @@ Eliminate the LLM call at session start for all core sessions. Instead, have the
 
 ### UX Overview
 
-<!-- UX-REFINED: Clarified that no UX changes are needed, with explicit reference to existing loading state -->
-
 No UX changes. The session start experience — screens, flows, interactions, word highlighting, permission overlay — remains identical. The only difference is the coach starts talking faster.
 
-During the brief wait before audio begins (< 1 second target), the existing waveform animation and session initialization state from the voice interface is shown. No new loading UI is needed for the fast-start flow.
+During the brief wait before audio begins (< 500ms target), the existing waveform animation and session initialization state from the voice interface is shown. No new loading UI is needed.
 
 ### Key Requirements
 
-#### Core Fast-Start Behavior
+#### v1 Requirements (Implemented)
 
-- REQ-1: For L1 core sessions, the opening text must be sent directly to TTS without an LLM call, using the static `ILLUSION_OPENING_MESSAGES` text for the given illusion key (one-to-one mapping: each illusion key maps to exactly one static opening string)
-- REQ-2: For L2/L3 core sessions, the opening text must be pre-computed by an LLM background job and stored for retrieval at session start. The pre-computation must be triggered by a session completion event (when the prior session in the sequence completes). The background job must use the same prompt construction as the current flow (`buildSystemPrompt()` with personalization context, bridge context, and layer instructions) to generate the opening message. If the pre-computation job fails, it must retry once; if the retry also fails, no pre-computed text is stored and the session falls back to the current flow (REQ-6)
-- REQ-3: At session start for all core sessions, a lightweight bootstrap endpoint must create the conversation record and save the opening text as the first assistant message
-- REQ-4: The `conversationId` must be available before the user sends their first response — no orphaned messages
-- REQ-5: Word-by-word text highlighting must work during the direct-TTS opening playback (same visual behavior as current)
+The following requirements were implemented in v1 and remain in effect. They are listed here for completeness but are not changing in v2.
 
-<!-- REQ-REFINED: Added decision logic requirement -->
+- REQ-1 (v1): For L1 core sessions, the opening text is looked up from static `ILLUSION_OPENING_MESSAGES` without an LLM call *(implemented)*
+- REQ-2 (v1): For L2/L3 core sessions, the opening text is pre-computed by an LLM background job triggered by session completion *(implemented)*
+- REQ-3 (v1): A bootstrap endpoint creates the conversation record and saves the opening as the first assistant message *(implemented)*
+- REQ-4 (v1): The `conversationId` is available before the user sends their first response *(implemented)*
+- REQ-5 (v1): Word-by-word text highlighting works during the opening playback *(implemented)*
+- REQ-8 (v1): The fast-start path preserves conversation continuity for LLM context *(implemented)*
+- REQ-9 (v1): Bootstrap retry with exponential backoff, deferred creation on failure *(implemented)*
+- REQ-10 (v1): Pre-computed text does not expire *(implemented)*
+- REQ-13 (v1): Pre-computed text stored on `user_progress` table *(implemented)*
+- REQ-14 (v1): All endpoints use Supabase auth middleware *(implemented)*
+- REQ-15 (v1): Server-side logging for fast-start path, fallback reasons, pre-computation outcomes *(implemented)*
 
-#### Fast-Start Decision Logic
+#### v2 Requirements: Pre-Stored Audio
 
-- REQ-12: At session start, the system must determine the path using a simple existence check: (1) Is this a core session? (2) For L1: does the illusion key map to a static opening in `ILLUSION_OPENING_MESSAGES`? (3) For L2/L3: does pre-computed opening text exist for this user's current session? If all checks pass → fast path. Otherwise → fallback to current flow
+##### Audio Generation — L1 (Static)
 
-#### Fallback & Error Handling
+- REQ-16: For each L1 illusion opening in `ILLUSION_OPENING_MESSAGES`, audio must be pre-generated using the configured TTS provider and stored in Supabase Storage. This is a one-time operation, re-run only when the static copy changes
+- REQ-17: A script or admin utility must exist to (re)generate L1 static audio for all illusion keys. It must be runnable on-demand (not automated) and must overwrite existing audio files in storage
 
-- REQ-6: If the fast-start path fails for any reason — missing pre-computed text, L1 static text lookup failure (e.g., unmapped illusion key), TTS error, or network failure — the system must transparently fall back to the current full LLM+TTS flow. No error message, no degraded-state indicator
-- REQ-7: L2/L3 sessions and check-ins that cannot use the fast path must continue working via the current flow with no regressions
-- REQ-9: If the bootstrap endpoint fails while opening audio is playing, the system must retry with exponential backoff (up to 3 retries, total retry window not exceeding 15 seconds). If all retries fail, conversation record creation must be deferred to the user's first response, bundling the opening text at that point
-- REQ-11: If a user starts a session before the background pre-computation job has completed, the system must fall back to the current flow transparently
+##### Audio Generation — L2/L3 (Per-User)
 
-#### Conversation Integrity
+- REQ-18: The existing pre-computation background job (which generates L2/L3 opening text) must be extended to also generate audio from the text using the configured TTS provider, and upload the audio to Supabase Storage
+- REQ-19: The audio URL (or storage path) must be stored alongside the pre-computed text in the `user_progress` table, so it can be retrieved at session start
+- REQ-20: If audio generation fails during the pre-computation job but text generation succeeds, the text must still be stored (enabling the Tier 2 fallback of real-time TTS with pre-computed text). Audio generation failure must not prevent text from being saved
 
-- REQ-8: The fast-start path must not compromise conversation continuity — the LLM must have full context (including the opening message) when processing the user's first response
+##### Audio Retrieval & Playback
 
-<!-- REQ-REFINED: Refined pre-computed text lifecycle -->
+- REQ-21: The opening endpoint must return both the opening text and the audio URL (or storage path) when pre-stored audio is available. If audio is not available but text is, it must return the text with a null audio reference (enabling Tier 2 fallback)
+- REQ-22: At session start, the client must attempt to download and play the pre-stored audio file. If the download fails or the audio is unplayable, the client must fall back to real-time TTS with the pre-computed text (Tier 2), then to the full LLM+TTS flow (Tier 3) if text is also unavailable
 
-#### Pre-Computed Text Lifecycle
+##### Word-by-Word Highlighting with Pre-Stored Audio
 
-- REQ-10: Pre-computed L2/L3 opening text does not expire — once generated, it remains valid until consumed
-- REQ-13: Pre-computed opening text must be stored as a nullable column on the `user_progress` table (`precomputed_opening_text` and `precomputed_opening_at` timestamp). The text is never explicitly deleted — it is only overwritten when the next pre-computation job runs (triggered by the session's completion). It is NOT cleared at session bootstrap or at session completion. This ensures that if a user abandons a session and restarts, the fast path is still available. If the next pre-computation job fails, the stale text remains but is harmless (REQ-12's existence check will use it or the fallback will handle it naturally)
+- REQ-23: Word-by-word text highlighting must work with pre-stored audio, maintaining the same visual behavior as the current real-time TTS path. The mechanism for achieving this (stored word timings, re-derived timings, etc.) is deferred to technical design
 
-<!-- REQ-REFINED: Added security requirement -->
+##### Fallback & Error Handling (Updated)
+
+- REQ-6 (v2, updated): The fallback chain is now three tiers: (1) Pre-stored audio → play immediately; (2) Pre-computed text but no audio → real-time TTS (v1 fast-start); (3) No pre-computed content → full LLM+TTS. Each tier degrades transparently with no user-visible difference except speed
+- REQ-7 (v1, unchanged): Sessions that cannot use the fast path must continue working via the existing flow with no regressions
+- REQ-11 (v1, unchanged): If a user starts a session before the background pre-computation job has completed, the system must fall back transparently
+
+##### Fast-Start Decision Logic (Updated)
+
+- REQ-12 (v2, updated): At session start, the system must determine the path: (1) Is this a core session? (2) Is pre-stored audio available? If yes → Tier 1 (play audio). (3) Is pre-computed text available? If yes → Tier 2 (real-time TTS). (4) Otherwise → Tier 3 (full LLM+TTS flow)
+
+##### Storage & Lifecycle
+
+- REQ-24: Audio files must be stored in a Supabase Storage bucket with a predictable path structure. L1 static audio uses a fixed path per illusion key. L2/L3 per-user audio uses a path scoped to the user ID
+- REQ-25: Pre-stored audio does not expire. For L2/L3, the audio is overwritten when the next pre-computation job runs (same lifecycle as pre-computed text per REQ-13). For L1, audio persists until explicitly regenerated via the admin utility (REQ-17)
+- REQ-26: Audio files must not be publicly accessible. Access must require authentication consistent with the existing auth model
+
+##### Observability (Extended)
+
+- REQ-15 (v2, extended): In addition to the v1 logging, the system must log: which fallback tier was used (Tier 1/2/3), audio download success/failure, audio generation success/failure during pre-computation, and L1 audio generation script outcomes
 
 #### Security
 
-- REQ-14: All new endpoints (bootstrap, TTS-direct) must use the existing Supabase auth middleware. The pre-computation background job must be scoped to the authenticated user's data — a user's pre-computed text can only be read or written for their own sessions
-
-<!-- REQ-REFINED: Added observability requirement -->
-
-#### Observability
-
-- REQ-15: The system must log (server-side) when the fast-start path is used vs. when fallback occurs, including the reason for fallback (no pre-computed text, TTS error, bootstrap failure, pre-computation not yet complete). Pre-computation job success and failure (including retry outcomes) must also be logged
+- REQ-14 (v1, unchanged): All endpoints use existing Supabase auth middleware. Pre-computation jobs are scoped to the authenticated user's data
+- REQ-26 (see above): Audio files in Supabase Storage must not be publicly accessible
 
 ---
 
@@ -184,50 +237,89 @@ During the brief wait before audio begins (< 1 second target), the existing wave
 
 ### Out of Scope
 
-- **Pre-generated audio files** — not justified while opening messages are still being iterated on; the maintenance cost of regenerating audio on every copy change outweighs the latency benefit over direct TTS
-- **Per-user audio storage** — storage costs scale linearly with users and add cache invalidation complexity
 - **Mid-turn latency optimization** — different problem, different solutions
 - **Check-in sessions** — do not begin with a coach-initiated message
 - **UX changes** — this is a behind-the-scenes speed improvement only
+- **Multiple voice variants** — one audio file per opening text; no per-voice or per-config variants
+- **Offline/cached audio** — client-side caching of audio files for offline use
+- **Audio compression optimization** — using different codecs or bitrates to minimize file size beyond the TTS provider's default output
 
 ### Deferred / Future Enhancements
 
-- **Reinforcement sessions** — reinforcement session openings are dynamically generated from moment-specific or general support prompts. The feasibility and cost of applying similar optimization should be evaluated separately once core session optimization is proven
-- **Pre-generated audio** — if opening messages stabilize and the maintenance cost becomes acceptable, pre-generating audio files would reduce latency to near-zero for L1 sessions
+- **Reinforcement sessions** — reinforcement session openings are dynamically generated from moment-specific or general support prompts. The feasibility of pre-storing audio should be evaluated separately once core session optimization is proven
 - **Mid-conversation latency** — as context windows grow within a session, turn latency increases; this is a separate optimization opportunity
 - **Cross-session latency trend** — overall session latency has been increasing over time, which may indicate growing system prompts or provider performance changes; this warrants separate investigation
 
 ### Dependencies
 
-- Existing voice infrastructure (STT/TTS pipeline, `useVoiceChat`, `SessionView.vue`) must support a "direct TTS" path that bypasses the LLM
-- L2/L3 pre-computation depends on prior session data being reliably available (bridge context, conviction assessment, cross-layer themes)
-- The bootstrap endpoint must work with the existing Supabase auth middleware
+- v1 instant conversations implementation (text pre-computation, fast-start path, bootstrap endpoint) must be deployed and functional
+- Supabase Storage must be available and configured for the project
+- TTS provider (InWorld, Groq, etc.) must be callable from server-side background jobs (same as current `/api/voice/synthesize`)
+- L2/L3 pre-computation depends on prior session data being reliably available (bridge context, conviction assessment, cross-layer themes) — unchanged from v1
 
 ### Constraints
 
 - No hard timeline — this is a quality improvement to be prioritized when ready
-- Solution must not require per-user storage of audio assets
-- Opening messages (especially L1) are still in active iteration — the solution must not create friction for updating them
-
-<!-- UX-REFINED: Resolved pre-computation timing and TTS consistency questions; remaining questions are for technical design -->
+- Per-user audio storage costs must remain manageable. Each opening is ~2–4 sentences (~15–25 seconds of audio). At MP3 128kbps, this is ~240–400KB per file. For L2/L3, only one audio file per user exists at a time (overwritten on next pre-computation). Storage scales linearly with active user count but the per-user footprint is small
+- L1 audio regeneration when copy changes must be simple (a script, not an automated pipeline)
+- Voice/provider configuration changes require audio regeneration — if the TTS voice is changed globally, all pre-stored audio becomes stale and must be regenerated
 
 ### Open Questions
 
-1. **Reinforcement session feasibility:** How dynamic are reinforcement session openings? Could a similar skip-LLM or pre-compute approach work, and at what cost/complexity? *(Deferred evaluation)*
+1. **Reinforcement session feasibility:** How dynamic are reinforcement session openings? Could a similar pre-store approach work? *(Deferred evaluation)*
+2. **Voice change invalidation:** If the TTS voice or provider is changed, should all pre-stored audio be automatically regenerated, or should it be a manual process? *(Deferred to technical design)*
+3. **Word timing storage format:** What format should word-level timing metadata be stored in alongside the audio? JSON sidecar file? DB column? Embedded in the audio response metadata? *(Deferred to technical design)*
 
 ### Resolved Questions
 
-1. **L2/L3 pre-computation timing:** The background LLM job runs after the prior session completes. If the user starts the next session before the job finishes, the system falls back to the current flow transparently. *(Resolved during UX refinement)*
-2. **Pre-computed text expiry:** Pre-computed text does not expire. The session data it's based on doesn't change after generation. *(Resolved during UX refinement)*
-3. **TTS consistency:** Not a concern. The text content is what matters; any voice/provider configuration changes apply to the entire session equally. *(Resolved during UX refinement)*
-4. **Bootstrap endpoint failure:** Retry silently (2–3 retries with backoff). If all retries fail, defer conversation record creation to the user's first response. *(Resolved during UX refinement)*
-5. **Pre-computed text storage:** Stored as nullable columns on the `user_progress` table (`precomputed_opening_text` and `precomputed_opening_at`). The data is naturally scoped to a user's progress — no new table or joins needed. *(Resolved during requirements refinement)*
+*v1 resolved questions (still valid):*
+
+1. **L2/L3 pre-computation timing:** The background LLM job runs after the prior session completes. If the user starts the next session before the job finishes, the system falls back transparently. *(Resolved during v1 UX refinement)*
+2. **Pre-computed text expiry:** Pre-computed text does not expire. *(Resolved during v1 UX refinement)*
+3. **Bootstrap endpoint failure:** Retry silently with backoff; defer creation on total failure. *(Resolved during v1 UX refinement)*
+4. **Pre-computed text storage:** Stored on `user_progress` table. *(Resolved during v1 requirements refinement)*
+
+*v2 resolved questions:*
+
+5. **TTS consistency with pre-stored audio:** Unlike v1 (where TTS consistency wasn't a concern because audio was generated fresh each time), pre-stored audio locks in the voice/provider at generation time. If the voice changes, audio must be regenerated. This is acceptable because voice changes are infrequent and a regeneration script handles it (REQ-17). *(Resolved during v2 problem analysis)*
+6. **Storage location for audio:** Supabase Storage — consistent infrastructure, authentication model aligns with existing Supabase auth, avoids introducing a new storage provider. *(Resolved: user decision)*
+7. **L1 audio storage approach:** Same Supabase Storage bucket as L2/L3 (not static files in repo or CDN). Consistent approach, easier auth model, single storage mechanism. *(Resolved: user decision)*
 
 ---
 
-<!-- TECH-DESIGN: Complete technical architecture, API contracts, data model, component design, and implementation approach -->
+## Technical Design — v2 (Pre-Stored Audio)
 
-## Technical Design
+*Pending technical design phase. The v2 technical design will cover:*
+
+- *Supabase Storage bucket setup and path conventions*
+- *Audio file format, encoding, and size considerations*
+- *Word timing metadata storage format and retrieval mechanism*
+- *Changes to the opening endpoint (text + audio URL)*
+- *Changes to the pre-computation job (text + audio generation)*
+- *L1 static audio generation script*
+- *Client-side changes to `useVoiceChat.ts` (fetch audio from storage instead of calling TTS)*
+- *Updated latency budget*
+- *Updated API contracts*
+- *New user stories and acceptance criteria*
+- *Updated test specification*
+
+### Expected Latency Budget (v2)
+
+| Step | Estimated Latency | Notes |
+|------|-------------------|-------|
+| GET /api/session/opening (text + audio URL) | ~50-100ms | Same as v1, extended to return audio URL |
+| Fetch audio from Supabase Storage | ~50-200ms | Binary download, CDN-cacheable |
+| Browser audio decode + play | ~10-50ms | No server-side generation |
+| POST /api/session/bootstrap | ~100-200ms | Unchanged from v1, runs in parallel |
+| **Total time-to-first-audio** | **~100-300ms** | Comfortably under the <500ms target |
+
+---
+
+## Technical Design — v1 (Implemented)
+
+> **Note:** The following technical design documents the v1 implementation (text pre-computation + real-time TTS), which is fully implemented and deployed. It is preserved here for reference. The v2 implementation will build on top of this foundation.
+
+<!-- TECH-DESIGN: Complete technical architecture, API contracts, data model, component design, and implementation approach -->
 
 ### Architecture Overview
 
@@ -718,7 +810,7 @@ All logs use `console.log` / `console.error` with prefixed tags, matching existi
 
 <!-- TECH-DESIGN: User stories with acceptance criteria -->
 
-## User Stories
+## User Stories — v1 (Implemented)
 
 ### Phase 1: Foundation
 
@@ -918,7 +1010,7 @@ All logs use `console.log` / `console.error` with prefixed tags, matching existi
 
 ---
 
-## Test Specification
+## Test Specification — v1 (Implemented)
 
 <!-- TECH-DESIGN: Complete testing strategy -->
 
@@ -1029,7 +1121,7 @@ Tests for pre-computation trigger:
 
 ---
 
-## Implementation Plan
+## Implementation Plan — v1 (Implemented)
 
 <!-- TECH-DESIGN: Phased implementation ordering -->
 
@@ -1076,3 +1168,4 @@ US-1 (Migration)
 | 1.2 | 2026-02-19 | UX refinement: Added edge case scenarios (race condition for immediate session navigation, bootstrap endpoint failure during audio playback). Added REQ-9 through REQ-11. Resolved open questions on pre-computation timing, text expiry, TTS consistency, and bootstrap failure handling. Confirmed no UI changes needed — existing waveform/loading state applies. |
 | 1.3 | 2026-02-19 | Requirements refinement: Refined REQ-2 (pre-computation trigger, prompt construction, job retry), REQ-6 (explicit L1 lookup failure coverage), REQ-9 (bounded retry: 3 retries, exponential backoff, 15s max), REQ-10 (persists until session completion, not deleted at bootstrap). Added REQ-12 (fast-start decision logic), REQ-13 (storage on user_progress table with lifecycle), REQ-14 (auth/security), REQ-15 (server-side logging). Resolved Open Question #1 (storage location). Reorganized requirements into categorized sections. |
 | 1.4 | 2026-02-19 | Technical design: Client-side orchestration architecture with 3-endpoint design (opening-text, bootstrap, existing synthesize). Pre-computation job triggered from complete-session. 6 user stories (US-1 through US-6) with acceptance criteria. Complete test specification (unit + E2E). Implementation dependency graph and phased plan. Status → Implementation Ready. |
+| **2.0** | **2026-02-20** | **New implementation cycle: Pre-stored audio.** v1 eliminated the LLM bottleneck but TTS remains several seconds — well above the <1s target. v2 eliminates TTS from the critical path by pre-generating and storing audio alongside text. Revised problem statement, goals (target <500ms), and success metrics. Moved "pre-generated audio" from non-goal to core approach. Added 3-tier fallback chain (pre-stored audio → real-time TTS → full LLM+TTS). Added REQ-16 through REQ-26 for audio generation, storage, retrieval, playback, and lifecycle. Supabase Storage for all audio (L1 static + L2/L3 per-user). Word timing mechanism deferred to technical design. v1 technical design, user stories, test spec, and implementation plan preserved as implemented reference. v2 technical design pending. |
