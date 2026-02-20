@@ -669,6 +669,8 @@ export type Database = {
           illusions_completed: number[] | null
           last_reminded_at: string | null
           last_session_at: string | null
+          precomputed_opening_at: string | null
+          precomputed_opening_text: string | null
           program_status: string | null
           started_at: string | null
           timezone: string | null
@@ -691,6 +693,8 @@ export type Database = {
           illusions_completed?: number[] | null
           last_reminded_at?: string | null
           last_session_at?: string | null
+          precomputed_opening_at?: string | null
+          precomputed_opening_text?: string | null
           program_status?: string | null
           started_at?: string | null
           timezone?: string | null
@@ -713,6 +717,8 @@ export type Database = {
           illusions_completed?: number[] | null
           last_reminded_at?: string | null
           last_session_at?: string | null
+          precomputed_opening_at?: string | null
+          precomputed_opening_text?: string | null
           program_status?: string | null
           started_at?: string | null
           timezone?: string | null
