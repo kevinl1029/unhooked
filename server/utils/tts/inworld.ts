@@ -71,9 +71,10 @@ export function createInworldProvider(
     voiceId: voice,
     modelId: model,
     timestampType: 'WORD',
+    applyTextNormalization: 'OFF',
     audioConfig: {
       audioEncoding: 'MP3',
-      sampleRateHertz: 44100,
+      sampleRateHertz: 48000,
       bitRate: 128000,
       speakingRate: 1.0 // Default speed (range: 0.5-1.5)
     }
