@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
-    "db:types": "supabase gen types typescript --project-id fibrewouxjousqgcnsrf > types/database.types.ts"
+    "db:types": "supabase gen types typescript --project-id fibrewouxjousqgcnsrf > types/database.types.ts",
+    "deploy:staging": "URL=$(vercel ls 2>&1 | grep -oE 'https://[^ ]+\\.vercel\\.app' | head -1) && vercel alias $(vercel redeploy $URL) staging.getunhooked.app",
+    "deploy:prod": "URL=$(vercel ls 2>&1 | grep -oE 'https://[^ ]+\\.vercel\\.app' | head -1) && vercel alias $(vercel redeploy $URL --prod) getunhooked.app"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
