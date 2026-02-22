@@ -23,3 +23,25 @@ Started: Sat Feb 21 23:32:49 EST 2026
   - The branch `feature/instant-conversations` had the spec but not the implementation code for v2
   - Pre-existing type errors in the project don't block this work
 ---
+
+## 2026-02-21 - US-002
+- What was implemented: Created admin audio generation endpoint `server/api/admin/generate-opening-audio.post.ts`
+  - Validates X-Admin-Secret header against ADMIN_API_SECRET env var (401 if missing/invalid)
+  - Accepts optional illusionKey in body; generates for all 5 keys if omitted
+  - Returns 400 for invalid illusionKey
+  - For each key: synthesizes TTS, uploads to `opening-audio/l1/{key}.{ext}` (upsert: true)
+  - Loads existing manifest from Storage, merges new results, uploads updated manifest
+  - Failed keys keep their existing manifest entries (merge preserves them)
+  - Uses serverSupabaseServiceRole() for all Storage operations
+  - Logs with [admin-audio] tag
+  - Added `adminApiSecret: process.env.ADMIN_API_SECRET` to nuxt.config.ts runtimeConfig
+- Files changed: `server/api/admin/generate-opening-audio.post.ts` (new), `nuxt.config.ts`
+- **Learnings for future iterations:**
+  - `ILLUSION_OPENING_MESSAGES` is imported from `~/server/utils/prompts` — exported from `server/utils/prompts/index.ts`
+  - `getTTSProviderFromConfig()` is in `~/server/utils/tts` — returns TTSProvider with `.synthesize({ text })` method
+  - `TTSResult` has `audioBuffer: ArrayBuffer`, `contentType`, `wordTimings`, `estimatedDurationMs`, `timingSource`
+  - `IllusionKey` type is imported from `~/server/utils/llm/task-types`
+  - `serverSupabaseServiceRole` is imported from `#supabase/server`
+  - Pre-existing unit test failures in `check-in-sender.test.ts` (4 tests) — not related to this feature
+  - Nuxt auto-type route resolution errors in `useCeremony.ts` are pre-existing framework limitations, not new errors
+---

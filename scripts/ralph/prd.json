@@ -41,7 +41,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/admin/generate-opening-audio.post.ts. Detailed server logic is in the spec at docs/specs/instant-conversations-spec.md under 'POST /api/admin/generate-opening-audio' section (lines 580-635). ILLUSION_OPENING_MESSAGES is imported from server/utils/session/ — search for ILLUSION_OPENING_MESSAGES in the codebase to find the exact import path. getTTSProviderFromConfig() is in server/utils/tts/. The manifest format is documented at lines 476-489. The manifest merge strategy: read existing manifest from Storage, spread new results over it, so failed keys keep their existing entries. ADMIN_API_SECRET must be added to runtimeConfig in nuxt.config.ts (check existing env var patterns there)."
     },
     {
