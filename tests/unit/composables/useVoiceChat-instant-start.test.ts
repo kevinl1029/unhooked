@@ -43,6 +43,7 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
   let playFromUrl: ReturnType<typeof vi.fn>
   let playAIResponse: ReturnType<typeof vi.fn>
   let playStreamingResponse: ReturnType<typeof vi.fn>
+  let stopAudio: ReturnType<typeof vi.fn>
   let transcriptRef: ReturnType<typeof ref<string>>
 
   const setupVoiceSession = () => {
@@ -69,7 +70,7 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
       playAIResponse,
       pauseAudio: vi.fn(),
       resumeAudio: vi.fn(),
-      stopAudio: vi.fn(),
+      stopAudio,
       getAudioLevel: vi.fn(() => 0),
       checkPermission: vi.fn().mockResolvedValue('granted'),
       requestPermission: vi.fn().mockResolvedValue(true),
@@ -110,6 +111,7 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
         assistantContentLength: 'Streaming response text'.length,
       }
     })
+    stopAudio = vi.fn()
 
     setupVoiceSession()
 
@@ -153,6 +155,7 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
       openingWithAudio.timingSource,
     )
     expect(playAIResponse).not.toHaveBeenCalled()
+    expect(stopAudio).not.toHaveBeenCalled()
     expect(chat.messages.value).toEqual([
       { role: 'assistant', content: openingWithAudio.text },
     ])
@@ -174,6 +177,30 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
 
     expect(result).toBe(true)
     expect(playFromUrl).toHaveBeenCalled()
+    expect(stopAudio).toHaveBeenCalledTimes(1)
+    expect(playAIResponse).toHaveBeenCalledWith(openingWithAudio.text)
+  })
+
+  it('Tier 1 timeout ignores late success and still uses Tier 2 path', async () => {
+    vi.useFakeTimers()
+
+    let resolveTier1: ((value: boolean) => void) | null = null
+    playFromUrl.mockReturnValue(new Promise<boolean>((resolve) => {
+      resolveTier1 = resolve
+    }))
+
+    const chat = makeCoreChat()
+    const conversationPromise = chat.startConversation()
+    await vi.advanceTimersByTimeAsync(3001)
+
+    // Simulate late Tier 1 success after timeout fallback has already happened.
+    resolveTier1?.(true)
+    await Promise.resolve()
+
+    const result = await conversationPromise
+
+    expect(result).toBe(true)
+    expect(stopAudio).toHaveBeenCalledTimes(1)
     expect(playAIResponse).toHaveBeenCalledWith(openingWithAudio.text)
   })
 
@@ -185,6 +212,7 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
 
     expect(result).toBe(true)
     expect(playFromUrl).toHaveBeenCalled()
+    expect(stopAudio).toHaveBeenCalledTimes(1)
     expect(playAIResponse).toHaveBeenCalledWith(openingWithAudio.text)
   })
 
@@ -200,6 +228,7 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
 
     expect(result).toBe(true)
     expect(playFromUrl).not.toHaveBeenCalled()
+    expect(stopAudio).not.toHaveBeenCalled()
     expect(playAIResponse).toHaveBeenCalledWith(openingWithTextOnly.text)
   })
 
