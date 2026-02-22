@@ -69,6 +69,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
         userContext,
         isNewConversation: true,
         personalizationContext,
+        crossLayerContext,
         bridgeContext,
         illusionLayer: nextLayer
       })

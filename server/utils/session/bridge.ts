@@ -10,16 +10,32 @@ import type { CrossLayerContext } from '../personalization/cross-layer-context'
  * This instructs the AI to acknowledge the user's previous session naturally
  */
 export function buildBridgeContext(crossLayerContext: CrossLayerContext): string {
-  if (crossLayerContext.previousLayerInsights.length === 0) {
+  const hasAnyPriorContext =
+    crossLayerContext.previousLayerInsights.length > 0
+    || crossLayerContext.realWorldObservations.length > 0
+    || !!crossLayerContext.previousLayerObservationAssignment
+    || crossLayerContext.convictionAtPreviousLayers.length > 0
+    || crossLayerContext.breakthroughs.length > 0
+    || crossLayerContext.resistancePoints.length > 0
+
+  if (!hasAnyPriorContext) {
     return ''
   }
 
-  const lastInsight = crossLayerContext.previousLayerInsights[crossLayerContext.previousLayerInsights.length - 1]
+  const lastInsight = crossLayerContext.previousLayerInsights[crossLayerContext.previousLayerInsights.length - 1] || null
+  const lastObservation = crossLayerContext.realWorldObservations[0] || null
 
   let bridgeText = `
 The user is continuing from a previous session on this illusion.
-Last time, they expressed: "${lastInsight.quote}"
 `
+
+  if (lastInsight) {
+    bridgeText += `Last time, they expressed this insight: "${lastInsight.quote}"\n`
+  } else if (lastObservation) {
+    bridgeText += `Since the last session, they reported this real-world observation: "${lastObservation}"\n`
+  } else if (crossLayerContext.previousLayerObservationAssignment) {
+    bridgeText += `Their previous session assignment was: "${crossLayerContext.previousLayerObservationAssignment}"\n`
+  }
 
   if (crossLayerContext.breakthroughs.length > 0) {
     bridgeText += `They had a breakthrough: "${crossLayerContext.breakthroughs[0]}"\n`
@@ -34,9 +50,13 @@ Last time, they expressed: "${lastInsight.quote}"
     bridgeText += `Their conviction after last session was ${latest.conviction}/10.\n`
   }
 
+  if (crossLayerContext.previousLayerObservationAssignment) {
+    bridgeText += `Use their prior assignment as context when framing the opening question.\n`
+  }
+
   bridgeText += `
-Acknowledge their progress naturally in your opening. Reference what they said or realized in your own words.
-Don't say "last time you said..." — instead, weave their insight into your opening naturally.
+Acknowledge their progress naturally in your opening. Reference the prior insight/observation in your own words.
+Don't say "last time you said..." — weave it in naturally as continuity.
 `
 
   return bridgeText

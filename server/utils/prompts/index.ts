@@ -19,6 +19,7 @@ export interface BuildSystemPromptOptions {
   isNewConversation?: boolean
   // Phase 4C additions
   personalizationContext?: string  // From context-builder.ts
+  crossLayerContext?: string       // From cross-layer-context.ts
   bridgeContext?: string           // From bridge.ts
   abandonedSessionContext?: string // For abandoned session moments
   // Evidence-based coaching additions
@@ -129,6 +130,11 @@ export function buildSystemPrompt(
     prompt += options.personalizationContext
   }
 
+  // Add previous-session context for returning users (L2/L3 precompute)
+  if (options.crossLayerContext) {
+    prompt += options.crossLayerContext
+  }
+
   // Add illusion-specific prompt
   const illusionPrompt = ILLUSION_PROMPTS[options.illusionKey]
   if (illusionPrompt) {
@@ -159,6 +165,7 @@ export function buildSystemPrompt(
   if (
     options.isNewConversation
     && options.illusionLayer === 'intellectual'
+    && !options.crossLayerContext
     && !options.bridgeContext
     && !options.abandonedSessionContext
   ) {
