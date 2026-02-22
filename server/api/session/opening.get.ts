@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ILLUSION_OPENING_MESSAGES } from '~/server/utils/prompts'
 import type { IllusionKey, IllusionLayer, SessionType } from '~/server/utils/llm/task-types'
 import type { WordTiming } from '~/server/utils/tts/types'
+import { buildOpeningPayloadHash } from '~/server/utils/session/opening-payload-hash'
 
 interface ManifestEntry {
   audioPath: string
@@ -17,6 +18,10 @@ interface OpeningWordTimingsJson {
   timings: WordTiming[]
   timingSource: 'actual' | 'estimated'
   contentType: string
+  payloadHash?: string
+  provider?: string
+  voice?: string
+  providerVersion?: string | null
 }
 
 // Module-level manifest cache with 5-min TTL
@@ -138,7 +143,7 @@ export default defineEventHandler(async (event) => {
   if (illusionLayer === 'emotional' || illusionLayer === 'identity') {
     const { data, error } = await supabase
       .from('user_progress')
-      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings')
+      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings, precomputed_opening_payload_hash')
       .eq('user_id', authUserId)
       .single()
 
@@ -155,6 +160,7 @@ export default defineEventHandler(async (event) => {
     const text: string | null = data?.precomputed_opening_text ?? null
     const audioPath: string | null = data?.precomputed_opening_audio_path ?? null
     const wordTimingsJson: OpeningWordTimingsJson | null = data?.precomputed_opening_word_timings ?? null
+    const payloadHash: string | null = data?.precomputed_opening_payload_hash ?? null
 
     if (!text) {
       console.log('[instant-start] Opening not available', {
@@ -165,7 +171,46 @@ export default defineEventHandler(async (event) => {
       return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
     }
 
-    if (audioPath && wordTimingsJson) {
+    if (audioPath || wordTimingsJson || payloadHash) {
+      let guardFailureReason: string | null = null
+      if (!audioPath) {
+        guardFailureReason = 'missing_audio_path'
+      } else if (!wordTimingsJson) {
+        guardFailureReason = 'missing_word_timings'
+      } else if (!payloadHash) {
+        guardFailureReason = 'missing_payload_hash'
+      } else if (!wordTimingsJson.payloadHash) {
+        guardFailureReason = 'missing_word_timings_payload_hash'
+      } else if (wordTimingsJson.payloadHash !== payloadHash) {
+        guardFailureReason = 'payload_hash_mismatch'
+      } else if (!wordTimingsJson.provider || !wordTimingsJson.voice) {
+        guardFailureReason = 'missing_tts_metadata'
+      } else {
+        const expectedHash = buildOpeningPayloadHash({
+          text,
+          illusionKey,
+          illusionLayer,
+          provider: wordTimingsJson.provider,
+          voice: wordTimingsJson.voice,
+          providerVersion: wordTimingsJson.providerVersion,
+        })
+        if (expectedHash !== payloadHash) {
+          guardFailureReason = 'payload_hash_recompute_mismatch'
+        } else if (!audioPath.includes(payloadHash)) {
+          guardFailureReason = 'audio_path_payload_hash_mismatch'
+        }
+      }
+
+      if (guardFailureReason) {
+        console.warn('[instant-start] consistency_guard_failed', {
+          illusionKey,
+          illusionLayer,
+          reason: guardFailureReason,
+          lookupUserId: authUserId,
+        })
+        return { text, source: 'precomputed', audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
+      }
+
       // Generate signed URL for pre-stored audio
       const { data: signedData, error: signedError } = await supabase.storage
         .from('opening-audio')
@@ -183,9 +228,9 @@ export default defineEventHandler(async (event) => {
           text,
           source: 'precomputed',
           audioUrl: signedData.signedUrl,
-          wordTimings: wordTimingsJson.timings,
-          contentType: wordTimingsJson.contentType,
-          timingSource: wordTimingsJson.timingSource,
+          wordTimings: wordTimingsJson!.timings,
+          contentType: wordTimingsJson!.contentType,
+          timingSource: wordTimingsJson!.timingSource,
         }
       }
     }

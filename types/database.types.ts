@@ -681,6 +681,7 @@ export type Database = {
           layer_progress: Json | null
           precomputed_opening_audio_path: string | null
           precomputed_opening_at: string | null
+          precomputed_opening_payload_hash: string | null
           precomputed_opening_text: string | null
           precomputed_opening_word_timings: Json | null
           program_status: string | null
@@ -708,6 +709,7 @@ export type Database = {
           layer_progress?: Json | null
           precomputed_opening_audio_path?: string | null
           precomputed_opening_at?: string | null
+          precomputed_opening_payload_hash?: string | null
           precomputed_opening_text?: string | null
           precomputed_opening_word_timings?: Json | null
           program_status?: string | null
@@ -735,6 +737,7 @@ export type Database = {
           layer_progress?: Json | null
           precomputed_opening_audio_path?: string | null
           precomputed_opening_at?: string | null
+          precomputed_opening_payload_hash?: string | null
           precomputed_opening_text?: string | null
           precomputed_opening_word_timings?: Json | null
           program_status?: string | null
