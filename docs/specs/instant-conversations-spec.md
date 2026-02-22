@@ -1,8 +1,8 @@
 # Instant Conversations Spec
 
-**Version:** 2.4
+**Version:** 2.6
 **Created:** 2026-02-17
-**Last Updated:** 2026-02-21
+**Last Updated:** 2026-02-22
 **Status:** Ready for Development
 **Document Type:** Product Specification (PRD) + Technical Design
 
@@ -208,7 +208,7 @@ The following requirements were implemented in v1 and remain in effect. They are
 - REQ-21: The opening endpoint must return the opening text and a time-limited signed URL for the pre-stored audio file when available. If audio is not available but text is, it must return the text with a null audio URL (enabling Tier 2 fallback). The signed URL must have a short expiry (e.g., 5 minutes) since it is used immediately at session start
 
 <!-- REQ-REFINED: Specified signed URL as the audio access mechanism -->
-- REQ-22: At session start, the client must attempt to download and play the pre-stored audio file with a 3-second download timeout. If the download times out, fails, or the audio is unplayable (e.g., decode error), the client must fall back to real-time TTS with the pre-computed text (Tier 2), then to the full LLM+TTS flow (Tier 3) if text is also unavailable
+- REQ-22: At session start, the client must attempt to download and play the pre-stored audio file with a 3-second download timeout. If the download times out, fails, or the audio is unplayable (e.g., decode error), the client must fall back to real-time TTS with the pre-computed text (Tier 2), then to the full LLM+TTS flow (Tier 3) if text is also unavailable. Before Tier 2 starts, the client must cancel/invalidate the Tier 1 playback attempt so delayed Tier 1 events cannot start late and overlap fallback audio
 
 <!-- REQ-REFINED: Added 3-second download timeout and clarified 'unplayable' -->
 
@@ -254,6 +254,10 @@ The following requirements were implemented in v1 and remain in effect. They are
 <!-- REQ-REFINED: Added explicit rollout fallback requirement -->
 
 - REQ-30: When v2 code is deployed but no pre-stored audio exists yet (L1 generation script has not been run, no L2/L3 audio has been pre-generated), the system must transparently fall to Tier 2 (real-time TTS with pre-computed text) or Tier 3 (full LLM+TTS) per the fallback chain (REQ-6). Deployment of v2 code must be safe and functional without pre-stored audio being present
+
+##### Text/Audio Consistency
+
+- REQ-31: Tier 1 playback must only be used when the returned text and audio metadata are verified as a matching pair from the same pre-computation result. If consistency cannot be proven (mismatch, partial update, or missing linkage metadata), the endpoint must return `audioUrl: null` and null audio metadata while still returning text for Tier 2 fallback
 
 ##### Observability (Extended)
 
@@ -543,8 +547,8 @@ Implements REQ-12 decision logic. Returns opening text, pre-stored audio URL, an
    - If no manifest or no entry → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
 3. If `illusionLayer === 'emotional'` or `'identity'`:
    - Read `precomputed_opening_text`, `precomputed_opening_audio_path`, `precomputed_opening_word_timings` from `user_progress`
-   - If audio_path exists → generate signed URL (5-min expiry), extract wordTimings/contentType/timingSource from JSONB column
-   - If no audio_path → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
+   - If text/audio linkage is valid and audio_path exists → generate signed URL (5-min expiry), extract wordTimings/contentType/timingSource from JSONB column
+   - If linkage is invalid, missing, or audio_path is null → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
 
 **L1 Manifest Caching:**
 
@@ -800,6 +804,10 @@ const startConversation = async (): Promise<boolean> => {
             }
           }
 
+          // Cancel/invalidates Tier 1 attempt before Tier 2 fallback.
+          // Prevents delayed Tier 1 onplay from starting late after timeout.
+          voiceSession.stopAudio()
+
           // === Tier 2: Real-time TTS with pre-computed text ===
           try {
             const audioSuccess = await voiceSession.playAIResponse(opening.text)
@@ -962,6 +970,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 | Bootstrap fails (all 3 retries) | Deferred creation on first `sendMessage()` | — | REQ-9 |
 | Pre-computation: audio generation fails | Text saved, audioUrl null at session start → Tier 2 | — | REQ-20 |
 | Pre-computation: audio upload fails | Same as generation failure | — | REQ-20 |
+| Pre-computation: text/audio metadata mismatch | Suppress Tier 1 (audioUrl null), use Tier 2 with returned text | 1 → 2 | REQ-31 |
 | Pre-computation: both text & audio fail | Nothing stored → Tier 3 | — | REQ-6 |
 | L1 manifest not found (admin script not run) | audioUrl null → Tier 2 (text still returned) | → 2 | REQ-30 |
 | v2 deployed but no audio generated yet | Graceful fallback to Tier 2/3 | — | REQ-30 |
@@ -1003,6 +1012,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 |-----|-------|------|
 | `[useVoiceChat]` | Tier 1: pre-stored audio played | `{ illusionKey, illusionLayer, source, downloadMs }` |
 | `[useVoiceChat]` | Tier 1 failed, falling to Tier 2 | `{ error, downloadMs }` |
+| `[useVoiceChat]` | Tier 1 canceled before fallback | `{ reason, illusionKey, illusionLayer }` |
 | `[useVoiceChat]` | Tier 2: real-time TTS played | `{ illusionKey, illusionLayer, source }` |
 | `[useVoiceChat]` | Tier 2 failed, falling to Tier 3 | `{ error }` |
 
@@ -1167,6 +1177,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 7. Given the L1 manifest was loaded within the last 5 minutes, when another request arrives, then the cached manifest is used (no Storage read)
 8. Given the old endpoint URL `/api/session/opening-text` is called, then it returns 404 (endpoint has been renamed)
 9. Given the manifest has an entry for the key but signed URL generation fails (Storage error), when I call the endpoint, then I receive `{ text, source, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }` — graceful Tier 2 fallback
+10. Given L2/L3 text exists but the stored audio metadata does not match that text, when I call the endpoint, then I receive `{ text, source: "precomputed", audioUrl: null, wordTimings: null, contentType: null, timingSource: null }` — Tier 1 suppressed for consistency safety
 
 <!-- READINESS-REVIEWED: Added AC#9 (createSignedUrl failure → graceful Tier 2 fallback) -->
 
@@ -1175,6 +1186,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - L1 manifest loaded from Storage with 5-min TTL cache (module-level variable)
 - Signed URLs generated via `supabase.storage.from('opening-audio').createSignedUrl(path, 300)`
 - For L2/L3: select now includes `precomputed_opening_audio_path` and `precomputed_opening_word_timings`
+- For L2/L3: apply a consistency guard so signed URL generation only happens when text/audio linkage validates (REQ-31)
 - Delete old `server/api/session/opening-text.get.ts`
 
 **Dependencies:** US-v2-1 (reads new columns)
@@ -1184,6 +1196,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - Unit test: L1 without manifest → returns text only
 - Unit test: L2/L3 with audio path → returns audio URL + timings
 - Unit test: L2/L3 without audio path → returns text only
+- Unit test: L2/L3 text/audio mismatch → returns text only (audio suppressed)
 - Unit test: manifest caching (second call doesn't re-fetch from Storage)
 - Unit test: signed URL expiry is 300 seconds
 - All existing opening-text tests migrated to new endpoint name
@@ -1246,10 +1259,13 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 8. Given the fast path is used, when bootstrap completes in the background, then `conversationId` is set (unchanged from v1)
 9. Given a non-core session, when starting, then the fast path is not attempted (unchanged from v1)
 10. Given the endpoint URL, when the client calls it, then it uses `/api/session/opening` (not the old `/api/session/opening-text`)
+11. Given Tier 1 times out or fails, when Tier 2 starts, then the Tier 1 playback attempt is canceled/invalidated so delayed Tier 1 `onplay` cannot start late
+12. Given the endpoint suppresses Tier 1 because of text/audio mismatch, when starting a session, then Tier 2 starts immediately with the returned text and no stale Tier 1 audio plays
 
 **Technical Notes:**
 - File: `composables/useVoiceChat.ts`
 - 3-second download timeout via `Promise.race` wrapping `playFromUrl()`
+- Cancel Tier 1 playback attempt (`stopAudio`) before Tier 2 fallback to prevent delayed overlap
 - Bootstrap runs in background (same as v1) — only called once regardless of tier
 - Message push and `isLoading = false` happen before any audio attempt (same as v1)
 - On total audio failure: pop message, set `isLoading = true`, fall through to existing flow
@@ -1260,14 +1276,18 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 **Test Requirements:**
 - Unit test: Tier 1 path (audioUrl present, playFromUrl succeeds)
 - Unit test: Tier 1 → Tier 2 fallback (download timeout)
+- Unit test: Tier 1 timeout + late Tier 1 resolution still uses Tier 2 (Tier 1 canceled)
 - Unit test: Tier 1 → Tier 2 fallback (playFromUrl returns false)
 - Unit test: Tier 2 path (no audioUrl, text present)
+- Unit test: Tier 2 path when endpoint suppresses mismatched Tier 1 audio
 - Unit test: Tier 2 → Tier 3 fallback (playAIResponse fails)
 - Unit test: Tier 3 path (no text)
 - Unit test: endpoint URL is `/api/session/opening`
 - Unit test: download latency logged for Tier 1
 - E2E test: Tier 1 happy path (mock opening with audioUrl)
 - E2E test: Tier 2 fallback (mock opening without audioUrl)
+- E2E test: mismatch fallback (mock opening with text and null audio from consistency guard)
+- E2E test: delayed Tier 1 start (>3s) does not start late after Tier 2 fallback
 - E2E test: Tier 3 fallback (mock opening returning null text)
 
 **Estimated Complexity:** L — Core feature logic with 3-tier fallback, timeout, and multiple error paths
@@ -1384,6 +1404,7 @@ Updated and extended for 3-tier logic:
 |-----------|-------|-----------|
 | Tier 1: pre-stored audio plays | Mock opening with audioUrl, mock playFromUrl success | `playFromUrl` called, returns true |
 | Tier 1 → Tier 2: download timeout | Mock opening with audioUrl, mock playFromUrl hanging >3s | `playAIResponse` called as fallback |
+| Tier 1 timeout with late resolution | Mock playFromUrl resolves after timeout window | Tier 1 is canceled; Tier 2 remains the active path |
 | Tier 1 → Tier 2: playFromUrl fails | Mock opening with audioUrl, mock playFromUrl returning false | `playAIResponse` called |
 | Tier 2: no audio URL | Mock opening with text but null audioUrl | `playAIResponse` called directly |
 | Tier 2 → Tier 3: TTS fails | Mock opening with text, mock playAIResponse failing | Falls through to streaming flow |
@@ -1404,6 +1425,7 @@ Updated and extended for 3-tier logic:
 | **Tier 1: pre-stored audio plays** | Mock `opening` returning text + audioUrl + timings. Mock audio URL returning audio binary. Mock `bootstrap` returning conversationId. Navigate to session. | Audio plays (no synthesize call). Word highlighting active. `conversationId` set. |
 | **Tier 2: text available, no audio** | Mock `opening` returning text + null audioUrl. Mock `synthesize` returning audio. Mock `bootstrap`. Navigate to session. | Synthesize called. Audio plays. Session works normally. |
 | **Tier 1 → Tier 2 fallback: audio URL fails** | Mock `opening` returning text + audioUrl (pointing to 500 error). Mock `synthesize` returning audio. Navigate to session. | First request to audio URL fails. Synthesize called as fallback. Session works. |
+| **Tier 1 timeout cancellation** | Mock Tier 1 audio `play()` with `onplay` delayed >3s. Mock Tier 2 synthesize success. Navigate to session. | Tier 2 starts after timeout; delayed Tier 1 audio does not start late. |
 | **Tier 3: neither available** | Mock `opening` returning `{ text: null }`. Mock `/api/chat` with streaming response. Navigate to session. | Falls back to full flow. Session starts normally (slower). |
 | **Non-core session skips fast path** | Navigate to check-in session. | `opening` endpoint not called. Current flow used. |
 
@@ -2332,6 +2354,8 @@ US-1 (Migration)
 | 2.2 | 2026-02-21 | Requirements refinement pass on v2 PRD. Audited all 12 requirements dimensions against the UX contract. Updated REQ-17 (single illusion key targeting for L1 script), REQ-18 (explicit deletion of previous audio file from storage before uploading new one), REQ-20 (extended to cover audio upload failure alongside generation failure), REQ-21 (specified signed URLs as audio access mechanism), REQ-22 (added 3-second download timeout and clarified 'unplayable'), REQ-25 (clarified that audio lifecycle means deleting the actual file in storage, not just the DB reference), REQ-15 (added audio download latency tracking). Added REQ-28 (v2 migration for `precomputed_opening_audio_path` column), REQ-29 (manual audio regeneration on voice/provider change), REQ-30 (rollout safety — graceful fallback when no audio exists). Resolved Open Question #2 (voice change → manual regen). |
 | 2.3 | 2026-02-21 | Technical design: v2 complete architecture. Supabase Storage bucket (`opening-audio`, private). 3-tier fast-start client flow with `playFromUrl()` composable method and 3-second download timeout. Admin audio generation endpoint (`POST /api/admin/generate-opening-audio` with `X-Admin-Secret`). L1 `manifest.json` for static audio metadata with server-side 5-min TTL cache. Extended pre-computation job for L2/L3 audio (text-first storage for REQ-20). Opening endpoint renamed (`/api/session/opening`) with extended response (audioUrl, wordTimings, contentType, timingSource). Word timings: JSONB column on `user_progress` (L2/L3), manifest.json in Storage (L1). Audio stored in native provider format (no transcoding). 7 user stories (US-v2-1 through US-v2-7) with acceptance criteria. Complete test specification (unit + E2E). Implementation dependency graph and phased plan. Resolved Open Question #3 (word timing storage format). Status → Implementation Ready. |
 | 2.4 | 2026-02-21 | Readiness review. Fixed `playFromUrl()` Promise resolution semantics — resolves on `onplay` (playback started) instead of `onended` (playback finished), so the 3-second download timeout in `startConversation()` works correctly. Added US-v2-2 AC#9 (manifest always merges with existing entries on partial failure, preserving old audio for failed keys) and AC#10 (invalid illusionKey returns 400). Added US-v2-4 AC#9 (graceful Tier 2 fallback when createSignedUrl fails). Updated US-v2-5 AC#5 to match resolve-on-start semantics. Updated unit test tables for all affected stories. Status → Ready for Development. |
+| 2.5 | 2026-02-22 | Timeout hardening update. Clarified REQ-22 and US-v2-6 to require canceling/invalidating Tier 1 before Tier 2 fallback, preventing delayed Tier 1 playback events from starting late and overlapping fallback audio. Added client log event for Tier 1 cancellation and expanded unit/E2E test coverage for delayed Tier 1 timeout scenarios. |
+| 2.6 | 2026-02-22 | Consistency hardening update. Added REQ-31 requiring Tier 1 only when text/audio are a verified matching pair. Updated opening endpoint decision logic and fallback matrix to suppress Tier 1 when linkage is invalid or missing, while preserving Tier 2 text fallback. Expanded US-v2-4 and US-v2-6 acceptance criteria and tests to cover mismatch-safe behavior. |
 
 ---
 
