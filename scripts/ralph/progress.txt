@@ -2,6 +2,20 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-013
+- What was implemented: Per-user opening audio cleanup on account purge (REQ-27)
+  - Created `server/utils/storage/delete-user-opening-audio.ts`: standalone utility `deleteUserOpeningAudio(supabase, userId)` that lists files at `opening-audio/l2l3/{userId}/` and removes them, wrapped in try/catch so failure never blocks account deletion
+  - Created `server/api/user/delete.delete.ts`: account deletion endpoint that authenticates the user, calls `deleteUserOpeningAudio`, then deletes the auth user via `supabase.auth.admin.deleteUser(userId)`
+  - L1 static audio at `opening-audio/l1/` is NOT touched (not user-specific)
+  - Logs with `[account-purge]` tag on success, list failure, remove failure, or unexpected error
+- Files changed: `server/utils/storage/delete-user-opening-audio.ts` (new), `server/api/user/delete.delete.ts` (new)
+- **Learnings for future iterations:**
+  - No existing account purge logic exists in the codebase — created both the utility and endpoint from scratch
+  - The `list() + remove()` pattern follows `save-final-recording.post.ts` ceremony preview cleanup: `list(prefix)` returns file objects, map to `${prefix}/${f.name}` for remove paths
+  - `supabase.auth.admin.deleteUser(userId)` is available via `serverSupabaseServiceRole()` — uses the service role client which has admin privileges
+  - `deleteUserOpeningAudio` is a plain async utility (no H3 globals) — importable with `~/server/utils/storage/delete-user-opening-audio`
+---
+
 ## 2026-02-22 - US-011
 - What was implemented: Created `tests/unit/composables/useVoiceChat-instant-start.test.ts` with 11 tests
   - Tier 1: pre-stored audio plays when opening has audioUrl and playFromUrl succeeds

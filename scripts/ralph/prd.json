@@ -258,7 +258,7 @@
         "Tests pass"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/e2e/instant-conversations-v2.spec.ts. Test case table at spec lines 1398-1410. Mock strategy: use page.route() to intercept /api/session/opening, /api/voice/synthesize, /api/session/bootstrap, audio URL, and /api/chat. For the audio binary mock, return a minimal valid WAV or MP3 file (a few bytes with valid header). Import { test, expect } from './fixtures' per CLAUDE.md E2E conventions. Follow existing E2E patterns in tests/e2e/ for auth fixtures and route mocking. Run with: npm run test:e2e."
     },
     {
@@ -274,7 +274,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Integrate with existing account purge logic. Search codebase for account deletion/purge handler (may be in server/api/ or server/utils/). Follow the same Storage list+remove pattern used in save-final-recording.post.ts for ceremony preview cleanup (mentioned in spec at line 1291). The Storage path is opening-audio/l2l3/{userId}/ — list files in this prefix, then remove all found file paths. Wrap in try/catch with console.error logging on failure. If no account purge logic exists yet, create a utility function that can be called from the appropriate handler."
     }
   ]
