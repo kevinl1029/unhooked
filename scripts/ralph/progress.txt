@@ -58,3 +58,24 @@ Started: Sat Feb 21 21:26:59 EST 2026
   - Import tests use `~/server/utils/telemetry` path alias (matches existing test patterns)
   - 4 pre-existing failures in `check-in-sender.test.ts` — not caused by this story
 ---
+
+## 2026-02-21 - US-004
+- Instrumented `server/api/chat.post.ts` with `ChatTelemetryCollector` for streaming+TTS requests
+- Added import: `import { ChatTelemetryCollector } from '../utils/telemetry'`
+- Created telemetry collector conditionally after `useStreamingTTS` resolved (null for non-TTS paths)
+- Added `telemetry?.markStreamStart()` right after `streamStartTime = Date.now()`
+- Added `telemetry?.markFirstToken()` after `tokenCount += 1` in `onToken` callback
+- Added `telemetry?.markFirstSentence()` when `sentences.length > 0` in sentence detection block
+- Added `telemetry?.markFirstAudio()` inside `if (firstChunkTime === null && chunk.audioBase64)` block
+- Added `telemetry?.markComplete({...})` after TTS finalize block in `onComplete`
+- Modified assistant message INSERT to `.select('id').single()` to capture message ID
+- Added `telemetry?.setMessageId(insertedMsg?.id || null)` and `telemetry?.writeTo(supabase)` after INSERT
+- Added `telemetry?.markError(error)` and `telemetry?.writeTo(supabase)` at start of `onError` callback
+- Build passes (npm run build); all telemetry unit tests pass; 4 pre-existing failures unchanged
+- **Learnings for future iterations:**
+  - `telemetry` is declared outside `ReadableStream` constructor but inside `if (stream)` block — accessible via closure
+  - `config` (from `useRuntimeConfig()`) is already available at ~line 492 in the streaming block
+  - All telemetry calls use optional chaining (`telemetry?.method()`) since telemetry is null for non-TTS paths
+  - `markComplete` goes after TTS finalize block (outside the `if (sentenceDetector && ttsProcessor)` conditional)
+  - The assistant INSERT modification needed `let insertedMsg` declared before the conditional block
+---

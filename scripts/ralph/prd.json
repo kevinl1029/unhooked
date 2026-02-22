@@ -98,7 +98,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/chat.post.ts. This story modifies an existing 909-line file at specific instrumentation points. Key line references (verified against current code): line 511 (useStreamingTTS resolved), line 547 (streamStartTime = Date.now()), line 551 (onToken callback start), line 572 (sentenceDetector.addToken), lines 536-537 (firstChunkTime logic inside TTS chunk callback), line 583 (onComplete start), lines 652-660 (assistant message INSERT — must be modified to .select('id').single() to capture message ID), line 747 (onError start). The config variable is already available at line 492 (const config = useRuntimeConfig()). The isNewConversation variable is at line 190. All telemetry calls use optional chaining (telemetry?.method()) since telemetry is null for non-TTS paths. The assistant message INSERT modification (adding .select('id').single()) is critical — the current code does not capture the inserted message's ID. The ttsProcessor variable is available in the streaming scope. Full instrumentation details are in the spec at docs/specs/chat-telemetry-spec.md under 'Instrumentation in chat.post.ts' (lines 540-623)."
     }
   ]
