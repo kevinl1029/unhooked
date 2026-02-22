@@ -143,7 +143,7 @@ export default defineEventHandler(async (event) => {
   if (illusionLayer === 'emotional' || illusionLayer === 'identity') {
     const { data, error } = await supabase
       .from('user_progress')
-      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings, precomputed_opening_payload_hash')
+      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings, precomputed_opening_payload_hash, precomputed_opening_status, precomputed_opening_target_illusion_key, precomputed_opening_target_layer')
       .eq('user_id', authUserId)
       .single()
 
@@ -161,6 +161,31 @@ export default defineEventHandler(async (event) => {
     const audioPath: string | null = data?.precomputed_opening_audio_path ?? null
     const wordTimingsJson: OpeningWordTimingsJson | null = data?.precomputed_opening_word_timings ?? null
     const payloadHash: string | null = data?.precomputed_opening_payload_hash ?? null
+    const precomputeStatus: string | null = data?.precomputed_opening_status ?? null
+    const targetIllusionKey: string | null = data?.precomputed_opening_target_illusion_key ?? null
+    const targetLayer: string | null = data?.precomputed_opening_target_layer ?? null
+
+    if (precomputeStatus !== 'ready') {
+      console.log('[instant-start] Opening not available', {
+        illusionKey,
+        illusionLayer,
+        reason: precomputeStatus ? `precompute_status_${precomputeStatus}` : 'precompute_status_missing',
+        lookupUserId: authUserId,
+      })
+      return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
+    }
+
+    if (targetIllusionKey !== illusionKey || targetLayer !== illusionLayer) {
+      console.log('[instant-start] Opening not available', {
+        illusionKey,
+        illusionLayer,
+        reason: 'precompute_target_mismatch',
+        targetIllusionKey,
+        targetLayer,
+        lookupUserId: authUserId,
+      })
+      return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
+    }
 
     if (!text) {
       console.log('[instant-start] Opening not available', {
