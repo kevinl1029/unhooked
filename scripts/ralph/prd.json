@@ -170,7 +170,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "File: composables/useVoiceSession.ts. Full implementation code at spec lines 657-733. Key difference from playAIResponse(): (1) no TTS API call — browser fetches audio directly from signed URL, (2) resolves on onplay not onended — needed for 3-second download timeout race in startConversation(). The WordTiming type should already exist (used by playAIResponse). Reuses existing audioElement, wordTimings, playbackStartTime, startWordTracking(), stopWordTracking() from the composable. The timing scaling logic in onloadedmetadata mirrors the existing pattern in playAIResponse."
     },
     {

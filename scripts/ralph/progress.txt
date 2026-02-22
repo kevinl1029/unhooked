@@ -2,6 +2,24 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-008
+- What was implemented: Added `playFromUrl()` method to `composables/useVoiceSession.ts`
+  - Signature: `playFromUrl(url, text, timings, timingSource): Promise<boolean>`
+  - Creates HTMLAudioElement directly from signed URL (no TTS call, no base64)
+  - Sets `currentTranscript`, `currentWordIndex = -1`, `isProcessing = false`, `wordTimings = [...timings]`
+  - Cleans up previous audioElement (pause + revokeObjectURL) before creating new one
+  - `onloadedmetadata`: scales estimated timings to actual audio duration if `timingSource !== 'actual'` (same logic as playAIResponse)
+  - `onplay`: sets `isAISpeaking = true`, `playbackStartTime`, calls `startWordTracking()`, resolves Promise with `true`
+  - `onended`: cleanup only (isAISpeaking = false, last wordIndex, stopWordTracking) — does not gate Promise
+  - `onerror` / `play().catch()`: logs error, resolves `false`, sets `isAISpeaking = false`
+  - Exported `playFromUrl` in the composable's return object
+- Files changed: `composables/useVoiceSession.ts`
+- **Learnings for future iterations:**
+  - Key behavioral difference: `playFromUrl` resolves on `onplay` (start of playback), not `onended` — critical for the 3-second download timeout race in `startConversation()`
+  - The cleanup pattern (`audioElement.pause()` + `URL.revokeObjectURL(audioElement.src)`) works even for signed URLs (revokeObjectURL is a no-op for non-blob URLs, so it's safe to call)
+  - The `startWordTracking()` / `stopWordTracking()` functions are already scoped to the composable and can be reused directly
+---
+
 ## 2026-02-22 - US-007
 - What was implemented: Created `tests/unit/server/api/session/opening.test.ts` with 17 tests
   - Authentication: 401 for unauthenticated request
