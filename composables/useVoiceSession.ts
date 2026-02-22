@@ -180,6 +180,88 @@ export const useVoiceSession = () => {
   }
 
   /**
+   * Play audio from a pre-stored URL with stored word timings.
+   * No TTS API call — browser fetches audio directly from the signed URL.
+   * Resolves true when playback starts (not ends), so the 3-second download
+   * timeout in startConversation() can race against this Promise.
+   */
+  const playFromUrl = async (
+    url: string,
+    text: string,
+    timings: WordTiming[],
+    timingSource: 'actual' | 'estimated'
+  ): Promise<boolean> => {
+    error.value = null
+    isProcessing.value = false  // No TTS processing needed
+    isAudioReady.value = false
+    currentTranscript.value = text
+    currentWordIndex.value = -1
+    wordTimings = [...timings]
+
+    // Clean up previous audio
+    if (audioElement) {
+      audioElement.pause()
+      URL.revokeObjectURL(audioElement.src)
+    }
+
+    // Create audio element with signed URL directly (no base64, no TTS call)
+    audioElement = new Audio(url)
+
+    return new Promise((resolve) => {
+      audioElement!.onloadedmetadata = () => {
+        // Scale estimated timings to actual audio duration (same as playAIResponse)
+        if (timingSource !== 'actual') {
+          const actualDurationMs = audioElement!.duration * 1000
+          if (wordTimings.length > 0 && actualDurationMs > 0) {
+            const estimatedDurationMs = wordTimings[wordTimings.length - 1].endMs
+            if (estimatedDurationMs > 0) {
+              const scaleFactor = actualDurationMs / estimatedDurationMs
+              wordTimings = wordTimings.map(t => ({
+                word: t.word,
+                startMs: Math.round(t.startMs * scaleFactor),
+                endMs: Math.round(t.endMs * scaleFactor)
+              }))
+            }
+          }
+        }
+        isAudioReady.value = true
+      }
+
+      audioElement!.onplay = () => {
+        isAISpeaking.value = true
+        playbackStartTime = Date.now()
+        startWordTracking()
+        // Resolve immediately when playback starts — the 3-second download
+        // timeout in startConversation() races against this resolution.
+        // Playback continues in the background; cleanup happens in onended.
+        resolve(true)
+      }
+
+      audioElement!.onended = () => {
+        // Cleanup only — does not gate the Promise (already resolved on onplay)
+        isAISpeaking.value = false
+        currentWordIndex.value = wordTimings.length - 1
+        stopWordTracking()
+      }
+
+      audioElement!.onerror = (e) => {
+        console.error('[useVoiceSession] Pre-stored audio playback error:', e)
+        error.value = 'Failed to play pre-stored audio'
+        isAISpeaking.value = false
+        stopWordTracking()
+        resolve(false)
+      }
+
+      audioElement!.play().catch((e) => {
+        console.error('[useVoiceSession] Pre-stored audio play() failed:', e)
+        error.value = 'Failed to start pre-stored audio playback'
+        isAISpeaking.value = false
+        resolve(false)
+      })
+    })
+  }
+
+  /**
    * Play streaming TTS response from SSE stream
    * This is used when streamTTS=true and provider supports it (Groq)
    * Falls back to batch TTS if server doesn't support streaming TTS
@@ -562,6 +644,7 @@ export const useVoiceSession = () => {
 
     // Methods
     playAIResponse,
+    playFromUrl,
     playStreamingResponse,
     pauseAudio,
     resumeAudio,
