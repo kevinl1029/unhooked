@@ -43,6 +43,12 @@ const describePlaybackException = (err: unknown) => {
   return { name: null, message: String(err) }
 }
 
+const revokeBlobUrlIfNeeded = (url: string) => {
+  if (url.startsWith('blob:')) {
+    URL.revokeObjectURL(url)
+  }
+}
+
 export const useVoiceSession = () => {
   // State
   const isAISpeaking = ref(false)
@@ -60,6 +66,7 @@ export const useVoiceSession = () => {
   let wordTimings: WordTiming[] = []
   let playbackStartTime = 0
   let wordTimingInterval: ReturnType<typeof setInterval> | null = null
+  let playbackToken = 0
 
   // Audio recorder
   const recorder = useAudioRecorder()
@@ -130,10 +137,11 @@ export const useVoiceSession = () => {
       // Clean up previous audio
       if (audioElement) {
         audioElement.pause()
-        URL.revokeObjectURL(audioElement.src)
+        revokeBlobUrlIfNeeded(audioElement.src)
       }
 
       audioElement = new Audio(audioUrl)
+      playbackToken += 1
 
       return new Promise((resolve) => {
         audioElement!.onloadedmetadata = () => {
@@ -167,7 +175,7 @@ export const useVoiceSession = () => {
           isAISpeaking.value = false
           currentWordIndex.value = wordTimings.length - 1 // Show last word
           stopWordTracking()
-          URL.revokeObjectURL(audioUrl)
+          revokeBlobUrlIfNeeded(audioUrl)
           resolve(true)
         }
 
@@ -180,7 +188,7 @@ export const useVoiceSession = () => {
           error.value = 'Failed to play audio'
           isAISpeaking.value = false
           stopWordTracking()
-          URL.revokeObjectURL(audioUrl)
+          revokeBlobUrlIfNeeded(audioUrl)
           resolve(false)
         }
 
@@ -226,15 +234,27 @@ export const useVoiceSession = () => {
     // Clean up previous audio
     if (audioElement) {
       audioElement.pause()
-      URL.revokeObjectURL(audioElement.src)
+      revokeBlobUrlIfNeeded(audioElement.src)
     }
 
     // Create audio element with signed URL directly (no base64, no TTS call)
     audioElement = new Audio(url)
     const loggableUrl = describeAudioUrl(url)
+    const token = ++playbackToken
 
     return new Promise((resolve) => {
+      let settled = false
+      const resolveOnce = (success: boolean) => {
+        if (settled) return
+        settled = true
+        resolve(success)
+      }
+
       audioElement!.onloadedmetadata = () => {
+        if (token !== playbackToken) {
+          resolveOnce(false)
+          return
+        }
         // Scale estimated timings to actual audio duration (same as playAIResponse)
         if (timingSource !== 'actual') {
           const actualDurationMs = audioElement!.duration * 1000
@@ -254,16 +274,25 @@ export const useVoiceSession = () => {
       }
 
       audioElement!.onplay = () => {
+        if (token !== playbackToken) {
+          audioElement?.pause()
+          resolveOnce(false)
+          return
+        }
         isAISpeaking.value = true
         playbackStartTime = Date.now()
         startWordTracking()
         // Resolve immediately when playback starts — the 3-second download
         // timeout in startConversation() races against this resolution.
         // Playback continues in the background; cleanup happens in onended.
-        resolve(true)
+        resolveOnce(true)
       }
 
       audioElement!.onended = () => {
+        if (token !== playbackToken) {
+          resolveOnce(false)
+          return
+        }
         // Cleanup only — does not gate the Promise (already resolved on onplay)
         isAISpeaking.value = false
         currentWordIndex.value = wordTimings.length - 1
@@ -271,6 +300,10 @@ export const useVoiceSession = () => {
       }
 
       audioElement!.onerror = (e) => {
+        if (token !== playbackToken) {
+          resolveOnce(false)
+          return
+        }
         console.error('[useVoiceSession] Pre-stored audio playback error', {
           eventType: e?.type || null,
           networkState: audioElement?.networkState ?? null,
@@ -280,10 +313,14 @@ export const useVoiceSession = () => {
         error.value = 'Failed to play pre-stored audio'
         isAISpeaking.value = false
         stopWordTracking()
-        resolve(false)
+        resolveOnce(false)
       }
 
       audioElement!.play().catch((e) => {
+        if (token !== playbackToken) {
+          resolveOnce(false)
+          return
+        }
         const described = describePlaybackException(e)
         console.error('[useVoiceSession] Pre-stored audio play() failed', {
           errorName: described.name,
@@ -292,7 +329,7 @@ export const useVoiceSession = () => {
         })
         error.value = 'Failed to start pre-stored audio playback'
         isAISpeaking.value = false
-        resolve(false)
+        resolveOnce(false)
       })
     })
   }
@@ -497,6 +534,8 @@ export const useVoiceSession = () => {
 
   // Stop audio completely
   const stopAudio = () => {
+    playbackToken += 1
+
     // Stop batch mode audio
     if (audioElement) {
       audioElement.pause()
@@ -639,7 +678,7 @@ export const useVoiceSession = () => {
     recorder.cleanup()
     streamingTTS.reset()
     if (audioElement) {
-      URL.revokeObjectURL(audioElement.src)
+      revokeBlobUrlIfNeeded(audioElement.src)
       audioElement = null
     }
     wordTimings = []

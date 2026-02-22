@@ -449,7 +449,9 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
             isLoading.value = false
 
             // === Tier 1: Pre-stored audio ===
+            let attemptedTier1Audio = false
             if (opening.audioUrl && opening.wordTimings && opening.contentType) {
+              attemptedTier1Audio = true
               const tier1StartedAt = Date.now()
               try {
                 const audioSuccess = await Promise.race([
@@ -494,6 +496,16 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
               }
             } else {
               fallbackReason = 'tier1_missing_audio_payload'
+            }
+
+            if (attemptedTier1Audio && fallbackReason) {
+              // Ensure a timed-out/failed pre-stored attempt cannot start late and overlap Tier 2.
+              voiceSession.stopAudio()
+              console.log('[useVoiceChat] Tier 1 canceled before fallback', {
+                reason: fallbackReason,
+                illusionKey,
+                illusionLayer
+              })
             }
 
             // === Tier 2: Real-time TTS with pre-computed text ===

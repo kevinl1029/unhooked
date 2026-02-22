@@ -134,6 +134,74 @@ async function addFirstFailAudioMock(page: Page): Promise<void> {
 }
 
 /**
+ * Mock HTMLAudioElement where the first play() resolves but onplay is delayed
+ * beyond the 3s Tier-1 timeout. pause() clears pending timers so canceled Tier 1
+ * cannot start late after Tier 2 fallback begins.
+ */
+async function addSlowFirstAudioMock(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    let callCount = 0
+    ;(window as any).__playedAudioUrls = []
+    ;(window as any).__onplayAudioUrls = []
+
+    function MockAudio(this: any, src?: string) {
+      this.src = src || ''
+      this.duration = 3.0
+      this.currentTime = 0
+      this.paused = true
+      this.onloadedmetadata = null
+      this.onplay = null
+      this.onended = null
+      this.onerror = null
+      this.__timers = []
+    }
+
+    MockAudio.prototype.pause = function (this: any) {
+      this.paused = true
+      for (const timer of this.__timers) clearTimeout(timer)
+      this.__timers = []
+    }
+
+    MockAudio.prototype.play = function (this: any) {
+      const self = this
+      callCount++
+      this.paused = false
+      ;(window as any).__playedAudioUrls.push(self.src)
+
+      const queue = (delay: number, cb: () => void) => {
+        const timer = setTimeout(() => {
+          if (self.paused) return
+          cb()
+        }, delay)
+        self.__timers.push(timer)
+      }
+
+      if (callCount === 1) {
+        // Tier 1: intentionally too slow for the 3s timeout window.
+        queue(20, () => self.onloadedmetadata?.(new Event('loadedmetadata')))
+        queue(3500, () => {
+          ;(window as any).__onplayAudioUrls.push(self.src)
+          self.onplay?.(new Event('play'))
+        })
+        queue(3700, () => self.onended?.(new Event('ended')))
+        return Promise.resolve()
+      }
+
+      // Tier 2: fast success path
+      queue(20, () => self.onloadedmetadata?.(new Event('loadedmetadata')))
+      queue(50, () => {
+        ;(window as any).__onplayAudioUrls.push(self.src)
+        self.onplay?.(new Event('play'))
+      })
+      queue(180, () => self.onended?.(new Event('ended')))
+      return Promise.resolve()
+    }
+
+    ;(window as any).Audio = MockAudio
+  })
+}
+
+/**
  * Mock HTMLAudioElement where EVERY play() call rejects with NotAllowedError.
  * This simulates autoplay policy blocks for both Tier 1 and Tier 2.
  */
@@ -405,6 +473,48 @@ test.describe('Instant Conversations v2 — 3-tier fast-start', () => {
 
     // Tier 2 must have been attempted after Tier 1 failed
     expect(synthesizeTracker.called).toBe(true)
+  })
+
+  test('Tier 1 timeout is canceled before Tier 2 so delayed Tier 1 audio never starts late', async ({
+    page,
+  }) => {
+    const openingText = 'You are back in the conversation quickly.'
+
+    await addSlowFirstAudioMock(page)
+    await addMicrophoneMocks(page)
+    await mockUserInProgress(page, { currentIllusion: 1, illusionsCompleted: [] })
+    await mockConversationsAPI(page, [])
+
+    await mockOpeningAPI(page, {
+      text: openingText,
+      source: 'precomputed',
+      audioUrl: MOCK_SIGNED_AUDIO_URL,
+      wordTimings: SAMPLE_WORD_TIMINGS,
+      contentType: 'audio/wav',
+      timingSource: 'actual',
+    })
+
+    await page.route('**/mock-presigned-audio.wav', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'audio/wav',
+        body: Buffer.from(createValidWav(700), 'base64'),
+      })
+    })
+
+    await mockBootstrapAPI(page)
+
+    const synthesizeTracker = { called: false }
+    await mockSynthesizeAPI(page, synthesizeTracker)
+
+    await page.goto('/session/stress_relief')
+    await page.waitForTimeout(4200)
+
+    expect(synthesizeTracker.called).toBe(true)
+
+    const onplayUrls = await page.evaluate(() => (window as any).__onplayAudioUrls as string[])
+    expect(onplayUrls.some(url => url.includes('/mock-presigned-audio.wav'))).toBe(false)
+    expect(onplayUrls.some(url => url.startsWith('blob:'))).toBe(true)
   })
 
   test('Tier 3: uses full LLM streaming when opening has no text', async ({ page }) => {
