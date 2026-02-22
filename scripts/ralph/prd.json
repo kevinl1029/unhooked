@@ -215,7 +215,7 @@
         "Tests pass"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/unit/composables/useVoiceSession-playFromUrl.test.ts. Test case table at spec lines 1363-1377. Mock strategy at line 1377. For HTMLAudioElement mocking: create a mock class or use vi.fn() for constructor. Simulate events by calling the assigned event handlers (e.g., after calling playFromUrl, trigger audioElement.onplay()). For timing scaling test: set mock duration to a value different from estimated total, verify timings are proportionally scaled. Follow existing composable test patterns in tests/unit/composables/. Run with: npm run test:unit."
     },
     {

@@ -2,6 +2,26 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-010
+- What was implemented: Created `tests/unit/composables/useVoiceSession-playFromUrl.test.ts` with 7 tests
+  - Resolves true and sets isAISpeaking when audio starts playing (onplay fires)
+  - Sets currentTranscript to the provided text
+  - Scales estimated word timings to match actual audio duration (scale factor derived from last endMs vs actual duration)
+  - Does not scale actual word timings (timingSource: 'actual')
+  - Resolves false and keeps isAISpeaking false on audio error
+  - Resolves false when play() rejects
+  - Pauses previous audio element when called again (cleanup verified via pause() mock)
+- Files changed: `tests/unit/composables/useVoiceSession-playFromUrl.test.ts` (new)
+- **Learnings for future iterations:**
+  - `useVoiceSession` is directly importable; mock its two dependencies (`useAudioRecorder`, `useStreamingTTS`) via `vi.mock()` factory functions — no H3 logic extraction needed since it's a plain composable
+  - Mock `Audio` constructor via `vi.stubGlobal('Audio', MockAudio)` where MockAudio is a `vi.fn().mockImplementation(...)` that pushes each instance to a shared array — access `audioInstances[last]` to trigger event handlers post-call
+  - To test `play()` rejection for a single test: use `MockAudio.mockImplementationOnce(...)` to override the next constructor call with a rejecting `play` mock — this is cleaner than trying to reconfigure after the fact
+  - `effectiveWordTimings` (computed on the composable return) exposes the internal `wordTimings` array, enabling verification of timing scaling without needing to expose private state
+  - `vi.useFakeTimers()` prevents `setInterval` (word tracking) from running in tests without affecting Promise resolution — microtasks still resolve normally
+  - The `onUnmounted` Vue warning (`no active component instance`) is harmless — stub it with `vi.stubGlobal('onUnmounted', vi.fn())` to suppress
+  - `URL.revokeObjectURL` with a non-blob URL is a no-op in happy-dom — no need to stub it for signed URL strings
+---
+
 ## 2026-02-22 - US-009
 - What was implemented: 3-tier fast-start logic in `composables/useVoiceChat.ts` + bootstrap endpoint
   - Created `server/api/session/bootstrap.post.ts`: creates conversation record + first assistant message in Supabase, cancels pending evidence bridge check-ins (non-blocking), returns `{ conversationId }`
