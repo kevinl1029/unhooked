@@ -63,3 +63,22 @@ Started: Sat Feb 21 23:32:49 EST 2026
   - Mock Storage: create an object `{ from: vi.fn().mockReturnValue({ upload: vi.fn(), download: vi.fn() }) }`
   - Mock TTS manifest blob: return `{ text: () => Promise.resolve(JSON.stringify(data)) }` for the download response
 ---
+
+## 2026-02-22 - US-004
+- What was implemented: Created `server/utils/session/precompute-opening.ts` with v1 + v2 audio generation
+  - v1 logic: LLM generates personalized opening text for L2/L3, stores in `user_progress.precomputed_opening_text`
+  - v2 extension: After text is stored, synthesizes TTS audio via `getTTSProviderFromConfig().synthesize()`
+  - Deletes previous audio from Storage before uploading new one (REQ-18)
+  - Uploads new audio to `opening-audio/l2l3/{userId}/opening.{ext}` with `upsert: true`
+  - Extension from `audio/mpeg` → `.mp3`, else → `.wav`
+  - Stores `precomputed_opening_audio_path` and `precomputed_opening_word_timings` in `user_progress`
+  - On audio failure: text is already saved, clears stale audio refs (best-effort with `Promise.resolve(...).catch(() => {})`)
+  - Logs with `[precompute-opening]` tag
+  - Modified `server/api/progress/complete-session.post.ts` to import and call `precomputeOpeningText` after L1/L2 completion
+- Files changed: `server/utils/session/precompute-opening.ts` (new), `server/api/progress/complete-session.post.ts`
+- **Learnings for future iterations:**
+  - `precompute-opening.ts` v1 exists on the `feature/instant-conversations` branch — use `git show feature/instant-conversations:path/to/file` to get pre-built implementations
+  - `router.chat()` requires `{ messages: Message[], model: ModelType }` (not an array directly) — use `getDefaultModel()` for the model
+  - `PostgrestFilterBuilder.catch()` is not typed in supabase-js — use `Promise.resolve(supabase.from(...).update(...).eq(...)).catch(() => {})` for best-effort cleanup
+  - The `complete-session.post.ts` triggers pre-computation non-blockingly for L1 → L2 (`nextLayer = 'emotional'`) and L2 → L3 (`nextLayer = 'identity'`)
+---

@@ -84,7 +84,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/utils/session/precompute-opening.ts. Full updated implementation is in the spec at lines 862-946. Key pattern: wrap all audio logic in try/catch AFTER the existing text storage code. The catch block must clear stale audio refs (set both audio fields to null) using .catch(() => {}) for best-effort cleanup. The supabase client is already passed to the function. Use getTTSProviderFromConfig() from server/utils/tts/. Storage operations use supabase.storage.from('opening-audio'). The userId variable is already available in the function scope."
     },
     {
