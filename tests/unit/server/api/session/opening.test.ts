@@ -153,7 +153,7 @@ async function handleOpeningRequest({
   if (illusionLayer === 'emotional' || illusionLayer === 'identity') {
     const queryResult = supabase
       .from('user_progress')
-      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings, precomputed_opening_payload_hash')
+      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings, precomputed_opening_payload_hash, precomputed_opening_status, precomputed_opening_target_illusion_key, precomputed_opening_target_layer')
       .eq('user_id', authUserId)
       .single() as Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
 
@@ -167,6 +167,17 @@ async function handleOpeningRequest({
     const audioPath: string | null = (data?.precomputed_opening_audio_path as string | undefined) ?? null
     const wordTimingsJson: OpeningWordTimingsJson | null = (data?.precomputed_opening_word_timings as OpeningWordTimingsJson | undefined) ?? null
     const payloadHash: string | null = (data?.precomputed_opening_payload_hash as string | undefined) ?? null
+    const precomputeStatus: string | null = (data?.precomputed_opening_status as string | undefined) ?? null
+    const targetIllusionKey: string | null = (data?.precomputed_opening_target_illusion_key as string | undefined) ?? null
+    const targetLayer: string | null = (data?.precomputed_opening_target_layer as string | undefined) ?? null
+
+    if (precomputeStatus !== 'ready') {
+      return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
+    }
+
+    if (targetIllusionKey !== illusionKey || targetLayer !== illusionLayer) {
+      return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
+    }
 
     if (!text) {
       return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
@@ -275,6 +286,9 @@ function createLinkedPrecomputedRow({
   const audioPath = `opening-audio/l2l3/user-123/${payloadHash}.${audioExt}`
 
   return {
+    precomputed_opening_status: 'ready',
+    precomputed_opening_target_illusion_key: illusionKey,
+    precomputed_opening_target_layer: illusionLayer,
     precomputed_opening_text: text,
     precomputed_opening_audio_path: audioPath,
     precomputed_opening_word_timings: {
@@ -634,6 +648,9 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
     it('returns precomputed text + null audio for L2 without audio_path', async () => {
       const storageApi = createStorageApi()
       const userProgressRow = {
+        precomputed_opening_status: 'ready',
+        precomputed_opening_target_illusion_key: 'stress_relief',
+        precomputed_opening_target_layer: 'emotional',
         precomputed_opening_text: 'Welcome back.',
         precomputed_opening_audio_path: null,
         precomputed_opening_word_timings: null,
@@ -658,6 +675,9 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
     it('returns all null for L2 with no precomputed text', async () => {
       const storageApi = createStorageApi()
       const userProgressRow = {
+        precomputed_opening_status: 'ready',
+        precomputed_opening_target_illusion_key: 'stress_relief',
+        precomputed_opening_target_layer: 'emotional',
         precomputed_opening_text: null,
         precomputed_opening_audio_path: null,
         precomputed_opening_word_timings: null,
@@ -779,6 +799,105 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
       expect(result.text).toBe('Welcome back.')
       expect(result.source).toBe('precomputed')
       expect(result.audioUrl).toBeNull()
+      expect(storageApi.createSignedUrl).not.toHaveBeenCalled()
+    })
+
+    it('returns all null when precompute slot is pending', async () => {
+      const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
+      const linked = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
+      const userProgressRow = {
+        ...linked,
+        precomputed_opening_status: 'pending',
+      }
+      const supabase = createSupabase(storageApi, userProgressRow)
+
+      const result = await handleOpeningRequest({
+        user: TEST_USER,
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+        sessionType: 'core',
+        supabase,
+        cacheState,
+      })
+
+      expect(result).toEqual({
+        text: null,
+        source: null,
+        audioUrl: null,
+        wordTimings: null,
+        contentType: null,
+        timingSource: null,
+      })
+      expect(storageApi.createSignedUrl).not.toHaveBeenCalled()
+    })
+
+    it('returns all null when precompute slot is failed', async () => {
+      const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
+      const linked = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
+      const userProgressRow = {
+        ...linked,
+        precomputed_opening_status: 'failed',
+      }
+      const supabase = createSupabase(storageApi, userProgressRow)
+
+      const result = await handleOpeningRequest({
+        user: TEST_USER,
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+        sessionType: 'core',
+        supabase,
+        cacheState,
+      })
+
+      expect(result).toEqual({
+        text: null,
+        source: null,
+        audioUrl: null,
+        wordTimings: null,
+        contentType: null,
+        timingSource: null,
+      })
+      expect(storageApi.createSignedUrl).not.toHaveBeenCalled()
+    })
+
+    it('returns all null when precompute slot target does not match request', async () => {
+      const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
+      const linked = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
+      const userProgressRow = {
+        ...linked,
+        precomputed_opening_target_layer: 'identity',
+      }
+      const supabase = createSupabase(storageApi, userProgressRow)
+
+      const result = await handleOpeningRequest({
+        user: TEST_USER,
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+        sessionType: 'core',
+        supabase,
+        cacheState,
+      })
+
+      expect(result).toEqual({
+        text: null,
+        source: null,
+        audioUrl: null,
+        wordTimings: null,
+        contentType: null,
+        timingSource: null,
+      })
       expect(storageApi.createSignedUrl).not.toHaveBeenCalled()
     })
 

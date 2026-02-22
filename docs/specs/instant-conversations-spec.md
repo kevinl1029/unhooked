@@ -242,6 +242,7 @@ The following requirements were implemented in v1 and remain in effect. They are
 <!-- REQ-REFINED: Added v2 migration requirement for audio path storage -->
 
 - REQ-28: A database migration must add a nullable `precomputed_opening_audio_path` column (TEXT) to the `user_progress` table for storing the Supabase Storage path of the pre-generated L2/L3 audio file. This follows the same pattern as the v1 migration (REQ-13) which added `precomputed_opening_text`. Existing rows must not be affected (column defaults to NULL)
+- REQ-36: A database migration must add precompute slot-state fields on `user_progress` for stale-safety gating: `precomputed_opening_status` (`pending` | `ready` | `failed`), `precomputed_opening_target_illusion_key`, and `precomputed_opening_target_layer`. Defaults must preserve rollout safety for existing rows (treat as unavailable unless explicitly marked `ready`)
 
 ##### Voice/Provider Change Handling
 
@@ -258,6 +259,13 @@ The following requirements were implemented in v1 and remain in effect. They are
 ##### Text/Audio Consistency
 
 - REQ-31: Tier 1 playback must only be used when the returned text and audio metadata are verified as a matching pair from the same pre-computation result. If consistency cannot be proven (mismatch, partial update, or missing linkage metadata), the endpoint must return `audioUrl: null` and null audio metadata while still returning text for Tier 2 fallback
+
+##### Pre-Compute State & Stale-Safety
+
+- REQ-32: On L1/L2 completion (when scheduling next-layer pre-computation), the system must invalidate any existing precomputed payload for that next-layer slot before enqueueing async generation. Invalidation must be persisted in the same `user_progress` write that advances session progress by setting slot state to `pending` and clearing precomputed payload fields (`text`, `audio_path`, `word_timings`, `payload_hash`)
+- REQ-33: The opening endpoint must return precomputed L2/L3 content only when the slot is explicitly `ready` for the requested `{illusionKey, illusionLayer}` target. If state is `pending`, `failed`, target mismatch, or missing state, the endpoint must return `text: null` and all audio fields null, forcing Tier 3 fallback and preventing stale text replay
+- REQ-34: L2/L3 pre-computation must use resilient provider routing for opening text generation: retry transient failures on primary, then fail over to secondary provider before marking the slot as failed. Reuse the existing chat primary/secondary provider configuration for consistency
+- REQ-35: Pre-computation status transitions (`pending` → `ready` or `failed`) and chosen provider route (`primary`/`secondary`) must be logged explicitly. Session completion logs must not report pre-computation success when all attempts fail
 
 ##### Observability (Extended)
 
@@ -546,9 +554,10 @@ Implements REQ-12 decision logic. Returns opening text, pre-stored audio URL, an
    - If manifest has entry for this key → generate signed URL (5-min expiry), return audioUrl + wordTimings + contentType + timingSource
    - If no manifest or no entry → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
 3. If `illusionLayer === 'emotional'` or `'identity'`:
-   - Read `precomputed_opening_text`, `precomputed_opening_audio_path`, `precomputed_opening_word_timings` from `user_progress`
-   - If text/audio linkage is valid and audio_path exists → generate signed URL (5-min expiry), extract wordTimings/contentType/timingSource from JSONB column
-   - If linkage is invalid, missing, or audio_path is null → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
+   - Read slot state + target fields + precomputed payload (`precomputed_opening_text`, `precomputed_opening_audio_path`, `precomputed_opening_word_timings`, linkage hash) from `user_progress`
+   - If slot state is not `ready` OR target does not match requested `{illusionKey, illusionLayer}` → return all nulls (Tier 3)
+   - If slot is `ready` and text/audio linkage is valid and audio_path exists → generate signed URL (5-min expiry), extract wordTimings/contentType/timingSource from JSONB column
+   - If slot is `ready` but linkage is invalid, missing, or audio_path is null → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
 
 **L1 Manifest Caching:**
 
@@ -972,6 +981,9 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 | Pre-computation: audio upload fails | Same as generation failure | — | REQ-20 |
 | Pre-computation: text/audio metadata mismatch | Suppress Tier 1 (audioUrl null), use Tier 2 with returned text | 1 → 2 | REQ-31 |
 | Pre-computation: both text & audio fail | Nothing stored → Tier 3 | — | REQ-6 |
+| Pre-computation slot is `pending` for requested layer | Do not return precomputed text/audio; use Tier 3 | → 3 | REQ-32, REQ-33 |
+| Pre-computation slot is `failed` for requested layer | Do not return precomputed text/audio; use Tier 3 | → 3 | REQ-33 |
+| Pre-computation target does not match requested layer | Do not return precomputed text/audio; use Tier 3 | → 3 | REQ-33 |
 | L1 manifest not found (admin script not run) | audioUrl null → Tier 2 (text still returned) | → 2 | REQ-30 |
 | v2 deployed but no audio generated yet | Graceful fallback to Tier 2/3 | — | REQ-30 |
 
@@ -999,8 +1011,11 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 |-----|-------|-------|------|
 | `[instant-start]` | Opening resolved | `log` | `{ illusionKey, illusionLayer, source, hasText, hasAudio }` |
 | `[instant-start]` | Opening not available | `log` | `{ illusionKey, illusionLayer, reason }` |
+| `[precompute-opening]` | Slot invalidated | `log` | `{ userId, illusionKey, nextLayer, status: 'pending' }` |
 | `[precompute-opening]` | Audio generated and stored | `log` | `{ userId, illusionKey, nextLayer, audioPath, contentType, durationMs }` |
+| `[precompute-opening]` | Provider route selected | `log` | `{ userId, illusionKey, nextLayer, route: 'primary' | 'secondary', attempt }` |
 | `[precompute-opening]` | Audio generation failed (text saved) | `error` | `{ userId, illusionKey, nextLayer, error }` |
+| `[precompute-opening]` | Slot marked failed | `error` | `{ userId, illusionKey, nextLayer, status: 'failed', error }` |
 | `[admin-audio]` | L1 audio generation started | `log` | `{ keys, provider }` |
 | `[admin-audio]` | L1 audio generated | `log` | `{ illusionKey, audioPath, contentType, durationMs }` |
 | `[admin-audio]` | L1 audio generation failed | `error` | `{ illusionKey, error }` |
@@ -1029,6 +1044,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 | File | Purpose |
 |------|---------|
 | `supabase/migrations/20260222_instant_conversations_v2.sql` | Add audio columns to `user_progress`, create `opening-audio` bucket |
+| `supabase/migrations/20260222_instant_conversations_precompute_state.sql` | Add precompute slot-state and target columns for stale-safety gating |
 | `server/api/session/opening.get.ts` | Renamed opening endpoint with audio URL + word timings (replaces `opening-text.get.ts`) |
 | `server/api/admin/generate-opening-audio.post.ts` | Admin endpoint for L1 static audio generation |
 
@@ -1062,12 +1078,13 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 **Acceptance Criteria:**
 
 1. Given the migration runs, when I inspect the `user_progress` table, then columns `precomputed_opening_audio_path` (TEXT, nullable) and `precomputed_opening_word_timings` (JSONB, nullable) exist
-2. Given existing `user_progress` rows exist, when the migration runs, then existing rows are not affected (both columns default to NULL)
-3. Given the migration runs, when I inspect Supabase Storage, then the `opening-audio` bucket exists and is private (not public)
-4. Given the migration has run, when I regenerate database types with `npm run db:types`, then `types/database.types.ts` includes the new columns
+2. Given the migration runs, when I inspect the `user_progress` table, then precompute slot-state columns exist: `precomputed_opening_status`, `precomputed_opening_target_illusion_key`, and `precomputed_opening_target_layer`
+3. Given existing `user_progress` rows exist, when the migration runs, then existing rows are not affected (new columns default to NULL-safe values)
+4. Given the migration runs, when I inspect Supabase Storage, then the `opening-audio` bucket exists and is private (not public)
+5. Given the migration has run, when I regenerate database types with `npm run db:types`, then `types/database.types.ts` includes the new columns
 
 **Technical Notes:**
-- File: `supabase/migrations/20260222_instant_conversations_v2.sql`
+- Files: `supabase/migrations/20260222_instant_conversations_v2.sql`, follow-up migration for slot-state columns
 - Uses `ADD COLUMN IF NOT EXISTS` and `ON CONFLICT DO NOTHING` for idempotency
 - Deploy migration to Supabase before deploying code
 
@@ -1077,7 +1094,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - Manual: run migration against local Supabase, verify columns exist and bucket is created
 - Manual: verify `db:types` regeneration includes new columns
 
-**Estimated Complexity:** S — Two `ALTER TABLE` statements + bucket creation
+**Estimated Complexity:** S — `ALTER TABLE` additions + bucket creation
 
 ---
 
@@ -1137,14 +1154,20 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 6. Given audio upload fails but text generation succeeded, when I check `user_progress`, then text is stored but audio fields are null (REQ-20)
 7. Given audio generation fails, when I check server logs, then the failure is logged with `[precompute-opening]` tag
 8. Given both text and audio succeed, when I check the pre-computation ordering, then text is stored in the database BEFORE audio generation begins (text-first for REQ-20 compliance)
+9. Given L1/L2 completion schedules next-layer pre-computation, when progress is updated, then the precompute slot is invalidated to `pending` and prior precomputed payload fields are cleared in the same DB update (REQ-32)
+10. Given pre-computation is `pending` or `failed` for the requested target, when opening is requested, then no precomputed text/audio is returned (Tier 3 fallback) (REQ-33)
+11. Given transient LLM failures on primary provider (e.g., 503/429/5xx), when pre-computation retries are exhausted on primary, then the job attempts secondary provider before marking slot `failed` (REQ-34)
+12. Given all provider attempts fail, when pre-computation exits, then slot status is `failed` and completion logs do not report a success outcome (REQ-35)
 
 **Technical Notes:**
 - File: `server/utils/session/precompute-opening.ts`
-- Text stored first (existing update call), then audio generation attempted
+- Slot invalidated to `pending` in `complete-session` before async precompute starts
+- Text/audio publish only transitions slot to `ready` after successful generation flow
 - Uses `getTTSProviderFromConfig().synthesize()` directly (no HTTP call)
 - Storage operations use the `supabase` client already passed to the function
 - On audio failure: set `precomputed_opening_audio_path` and `precomputed_opening_word_timings` to null (cleanup stale refs)
 - Extension determined by content type: `audio/mpeg` → `.mp3`, else → `.wav`
+- Opening text generation route uses chat primary/secondary provider configuration with transient-aware failover
 
 **Dependencies:** US-v2-1 (bucket and columns must exist)
 
@@ -1155,6 +1178,9 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - Unit test: text saved even when audio upload fails (REQ-20)
 - Unit test: audio metadata stored correctly in JSONB column
 - Unit test: stale audio refs cleared on failure
+- Unit test: slot invalidated to `pending` before async precompute
+- Unit test: primary transient failures trigger secondary provider failover
+- Unit test: all attempts exhausted marks slot `failed` and never logs success
 
 **Estimated Complexity:** M — TTS call + Storage upload/delete + error handling with text-first ordering
 
@@ -1178,6 +1204,8 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 8. Given the old endpoint URL `/api/session/opening-text` is called, then it returns 404 (endpoint has been renamed)
 9. Given the manifest has an entry for the key but signed URL generation fails (Storage error), when I call the endpoint, then I receive `{ text, source, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }` — graceful Tier 2 fallback
 10. Given L2/L3 text exists but the stored audio metadata does not match that text, when I call the endpoint, then I receive `{ text, source: "precomputed", audioUrl: null, wordTimings: null, contentType: null, timingSource: null }` — Tier 1 suppressed for consistency safety
+11. Given L2/L3 precompute slot state is `pending` or `failed`, when I call the endpoint, then I receive all null fields (Tier 3 fallback) and stale precomputed text is not returned
+12. Given L2/L3 precompute slot target does not match requested `{illusionKey, illusionLayer}`, when I call the endpoint, then I receive all null fields (Tier 3 fallback)
 
 <!-- READINESS-REVIEWED: Added AC#9 (createSignedUrl failure → graceful Tier 2 fallback) -->
 
@@ -1186,6 +1214,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - L1 manifest loaded from Storage with 5-min TTL cache (module-level variable)
 - Signed URLs generated via `supabase.storage.from('opening-audio').createSignedUrl(path, 300)`
 - For L2/L3: select now includes `precomputed_opening_audio_path` and `precomputed_opening_word_timings`
+- For L2/L3: select includes slot state/target fields and rejects any non-`ready` or mismatched target rows
 - For L2/L3: apply a consistency guard so signed URL generation only happens when text/audio linkage validates (REQ-31)
 - Delete old `server/api/session/opening-text.get.ts`
 
@@ -1197,6 +1226,9 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - Unit test: L2/L3 with audio path → returns audio URL + timings
 - Unit test: L2/L3 without audio path → returns text only
 - Unit test: L2/L3 text/audio mismatch → returns text only (audio suppressed)
+- Unit test: L2/L3 slot `pending` → returns all null
+- Unit test: L2/L3 slot `failed` → returns all null
+- Unit test: L2/L3 slot target mismatch → returns all null
 - Unit test: manifest caching (second call doesn't re-fetch from Storage)
 - Unit test: signed URL expiry is 300 seconds
 - All existing opening-text tests migrated to new endpoint name
@@ -1261,6 +1293,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 10. Given the endpoint URL, when the client calls it, then it uses `/api/session/opening` (not the old `/api/session/opening-text`)
 11. Given Tier 1 times out or fails, when Tier 2 starts, then the Tier 1 playback attempt is canceled/invalidated so delayed Tier 1 `onplay` cannot start late
 12. Given the endpoint suppresses Tier 1 because of text/audio mismatch, when starting a session, then Tier 2 starts immediately with the returned text and no stale Tier 1 audio plays
+13. Given the endpoint returns all null fields because precompute slot is `pending`, `failed`, or target-mismatched, when starting a session, then the client skips Tier 2 and starts Tier 3 immediately
 
 **Technical Notes:**
 - File: `composables/useVoiceChat.ts`
@@ -1282,6 +1315,7 @@ export async function precomputeOpeningText(params: PrecomputeParams): Promise<v
 - Unit test: Tier 2 path when endpoint suppresses mismatched Tier 1 audio
 - Unit test: Tier 2 → Tier 3 fallback (playAIResponse fails)
 - Unit test: Tier 3 path (no text)
+- Unit test: pending/failed/target-mismatch opening payload goes directly to Tier 3
 - Unit test: endpoint URL is `/api/session/opening`
 - Unit test: download latency logged for Tier 1
 - E2E test: Tier 1 happy path (mock opening with audioUrl)
@@ -1568,7 +1602,7 @@ COMMENT ON COLUMN public.user_progress.precomputed_opening_at IS
   'Timestamp when precomputed_opening_text was generated';
 ```
 
-**Lifecycle:** The text is never explicitly deleted. It is overwritten when the next pre-computation job runs. If the pre-computation job fails, stale text remains but is harmless — REQ-12's existence check will use it, and the content is still valid for the session it was computed for.
+**Lifecycle (v1 reference):** This historical behavior allowed stale text to remain when pre-computation failed. As of v2.7 requirements (REQ-32/REQ-33), stale next-layer text must be invalidated (`pending`/`failed` state gating) and must not be returned by the opening endpoint.
 
 **No new indexes needed.** The `user_progress` table has a `UNIQUE(user_id)` constraint, and the opening text endpoint reads by `user_id` — already optimally indexed.
 
@@ -2137,14 +2171,14 @@ All logs use `console.log` / `console.error` with prefixed tags, matching existi
 2. Given a user's L2 session completes, when the pre-computation job runs, then it generates an L3 opening message
 3. Given the job succeeds, when I check `user_progress`, then `precomputed_opening_text` contains the generated text and `precomputed_opening_at` is set to the current timestamp
 4. Given the first attempt fails, when the job retries after 500ms, then if the retry succeeds the text is stored normally
-5. Given both attempts fail, when I check `user_progress`, then `precomputed_opening_text` is unchanged (may be null or contain stale text from a previous run)
+5. Given both attempts fail, when I check `user_progress`, then the precompute slot is marked `failed` and stale precomputed text is not returned at next session start
 6. Given both attempts fail, when I check server logs, then both failures are logged with `[precompute-opening]` tag including attempt number and error
 7. Given the generated opening text is empty, when the job processes it, then it treats it as a failure and retries
 
 **Technical Notes:**
 - File: `server/utils/session/precompute-opening.ts`
 - Uses `buildSystemPrompt()`, `buildSessionContext()`, `buildCrossLayerContext()`, `buildBridgeContext()` — same functions as `/api/chat`
-- Uses `getModelRouter().chat()` with `getDefaultModel()` (primary chat model)
+- Uses `getModelRouter().chat()` with resilient provider routing (chat primary, then secondary on transient failures)
 - Generation prompt asks for opening message only (2-4 sentences, warm, acknowledges progress, ends with open question)
 - Retry: 1 retry with 500ms delay
 
@@ -2356,6 +2390,7 @@ US-1 (Migration)
 | 2.4 | 2026-02-21 | Readiness review. Fixed `playFromUrl()` Promise resolution semantics — resolves on `onplay` (playback started) instead of `onended` (playback finished), so the 3-second download timeout in `startConversation()` works correctly. Added US-v2-2 AC#9 (manifest always merges with existing entries on partial failure, preserving old audio for failed keys) and AC#10 (invalid illusionKey returns 400). Added US-v2-4 AC#9 (graceful Tier 2 fallback when createSignedUrl fails). Updated US-v2-5 AC#5 to match resolve-on-start semantics. Updated unit test tables for all affected stories. Status → Ready for Development. |
 | 2.5 | 2026-02-22 | Timeout hardening update. Clarified REQ-22 and US-v2-6 to require canceling/invalidating Tier 1 before Tier 2 fallback, preventing delayed Tier 1 playback events from starting late and overlapping fallback audio. Added client log event for Tier 1 cancellation and expanded unit/E2E test coverage for delayed Tier 1 timeout scenarios. |
 | 2.6 | 2026-02-22 | Consistency hardening update. Added REQ-31 requiring Tier 1 only when text/audio are a verified matching pair. Updated opening endpoint decision logic and fallback matrix to suppress Tier 1 when linkage is invalid or missing, while preserving Tier 2 text fallback. Expanded US-v2-4 and US-v2-6 acceptance criteria and tests to cover mismatch-safe behavior. |
+| 2.7 | 2026-02-22 | Stale-precompute safety update. Added REQ-32 through REQ-36 introducing slot-state invalidation (`pending`/`ready`/`failed`), target-layer gating, and explicit stale suppression for L2/L3 openings. Updated opening endpoint decision logic, fallback matrix, US-v2-1/3/4/6 acceptance criteria, and test requirements so `pending`/`failed`/target-mismatch states force Tier 3 instead of replaying stale Tier 2 text. Added requirement to reuse chat primary/secondary provider config for precompute LLM failover and clarified observability to prevent false success logs. |
 
 ---
 
