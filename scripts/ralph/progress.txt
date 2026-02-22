@@ -40,3 +40,21 @@ Started: Sat Feb 21 21:26:59 EST 2026
   - Spec implementation code is at lines 384-537 of docs/specs/chat-telemetry-spec.md
   - The `writeTo` method signature is `writeTo(supabase: any): void` — returns void, not Promise
 ---
+
+## 2026-02-21 - US-003
+- Created `tests/unit/telemetry/chat-telemetry-collector.test.ts` with 26 test cases
+- Full success lifecycle test: all marks → correct ms values relative to stream start
+- Error path test: only early marks → late timing fields remain undefined (not null)
+- Idempotency tests for markFirstToken, markFirstSentence, markFirstAudio
+- Timing math tests: duration_ms from requestStartedAt, ttft/ttfs/ttfa from streamStartTime
+- writeTo fire-and-forget test: returns undefined (void)
+- Supabase INSERT failure → console.error called with requestId
+- Supabase INSERT success → no console.error
+- All 10 classifyTelemetryError classification tests pass
+- All 26 tests pass; pre-existing failures in check-in-sender.test.ts are unrelated
+- **Learnings for future iterations:**
+  - `ChatTelemetryCollector` uses `Partial<ChatTelemetryRow>` — unset timing fields are `undefined`, not `null`. Tests must use `toBeUndefined()` for fields never written, not `toBeNull()`
+  - `vi.runAllTimersAsync()` needed after `writeTo` to flush the `.then().catch()` promise chain
+  - Import tests use `~/server/utils/telemetry` path alias (matches existing test patterns)
+  - 4 pre-existing failures in `check-in-sender.test.ts` — not caused by this story
+---

@@ -74,7 +74,7 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/unit/telemetry/chat-telemetry-collector.test.ts. Create the tests/unit/telemetry/ directory. Import ChatTelemetryCollector, classifyTelemetryError from server/utils/telemetry (use relative import ../../.. or path alias). Mock strategy: const mockInsert = vi.fn(); const mockFrom = vi.fn(() => ({ insert: mockInsert })); const mockSupabase = { from: mockFrom }. For success: mockInsert.mockResolvedValue({ error: null }). For failure: mockInsert.mockResolvedValue({ error: { message: 'connection refused' } }). Use vi.useFakeTimers() and vi.advanceTimersByTime(N) between mark calls for deterministic ms values. Use vi.spyOn(console, 'error') to verify error logging. The full test specification with all 26 test cases is in the spec at docs/specs/chat-telemetry-spec.md under 'Test Specification' (lines 802-864). Existing test setup is in tests/setup.ts. Run with: npm run test:unit."
     },
     {
