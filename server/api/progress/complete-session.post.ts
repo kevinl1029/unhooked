@@ -1,6 +1,7 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 import { scheduleCheckIns, scheduleEvidenceBridgeCheckIn } from '~/server/utils/scheduling/check-in-scheduler'
 import { ILLUSION_KEYS, illusionKeyToNumber, type IllusionKey, type IllusionLayer } from '~/server/utils/llm/task-types'
+import { precomputeOpeningText } from '~/server/utils/session/precompute-opening'
 import {
   OBSERVATION_TEMPLATES as STRESS_TEMPLATES
 } from '~/server/utils/prompts/illusions/illusion-1-stress'
@@ -323,6 +324,21 @@ export default defineEventHandler(async (event) => {
         }
       }).catch((err) => {
         console.error('[complete-session] Failed to schedule evidence bridge check-in:', err)
+      })
+
+      // Pre-compute opening text for next layer (L1→L2, L2→L3)
+      // Non-blocking: Don't fail session completion if pre-computation fails
+      const nextLayerForPrecompute = illusionLayer === 'intellectual' ? 'emotional' : 'identity'
+      console.log(`[complete-session] Triggering pre-computation for user ${user.sub}, ${effectiveIllusionKey} → ${nextLayerForPrecompute}`)
+      precomputeOpeningText({
+        supabase,
+        userId: user.sub,
+        illusionKey: effectiveIllusionKey,
+        nextLayer: nextLayerForPrecompute
+      }).then(() => {
+        console.log(`[complete-session] Pre-computation succeeded for user ${user.sub}, ${effectiveIllusionKey} → ${nextLayerForPrecompute}`)
+      }).catch((err) => {
+        console.error('[complete-session] Pre-computation failed:', err)
       })
 
       // L1/L2 response
