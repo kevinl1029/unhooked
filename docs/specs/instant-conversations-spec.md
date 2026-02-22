@@ -1,8 +1,8 @@
 # Instant Conversations Spec
 
-**Version:** 2.4
+**Version:** 2.5
 **Created:** 2026-02-17
-**Last Updated:** 2026-02-21
+**Last Updated:** 2026-02-22
 **Status:** Ready for Development
 **Document Type:** Product Specification (PRD) + Technical Design
 
