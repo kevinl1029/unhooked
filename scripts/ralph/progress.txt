@@ -1,3 +1,25 @@
 # Ralph Progress Log
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
+
+## Codebase Patterns
+- The spec file for instant conversations v2 is at `docs/specs/instant-conversations-spec.md` (was on feature/instant-conversations branch, checked out to ralph branch)
+- Typecheck uses `npx vue-tsc --noEmit -p .nuxt/tsconfig.json` (requires .nuxt to be generated first via `nuxt prepare`)
+- Existing codebase has pre-existing type errors (not related to this feature) — "typecheck passes" means no new errors introduced
+- SQL migrations follow pattern in supabase/migrations/: use `ADD COLUMN IF NOT EXISTS`, always include COMMENTs, use `ON CONFLICT DO NOTHING` for idempotent inserts
+
+---
+
+## 2026-02-22 - US-001
+- What was implemented: Created database migration `supabase/migrations/20260222_instant_conversations_v2.sql`
+  - Adds `precomputed_opening_audio_path TEXT DEFAULT NULL` to `user_progress`
+  - Adds `precomputed_opening_word_timings JSONB DEFAULT NULL` to `user_progress`
+  - Both have COMMENT ON COLUMN documentation
+  - Creates `opening-audio` Storage bucket (private, not public) with ON CONFLICT DO NOTHING
+  - Also checked out `docs/specs/instant-conversations-spec.md` from feature/instant-conversations branch
+- Files changed: `supabase/migrations/20260222_instant_conversations_v2.sql`, `docs/specs/instant-conversations-spec.md`
+- **Learnings for future iterations:**
+  - The v2 spec is at `docs/specs/instant-conversations-spec.md` — line references in PRD notes match this file (e.g., "lines 426-449" for the migration SQL)
+  - The branch `feature/instant-conversations` had the spec but not the implementation code for v2
+  - Pre-existing type errors in the project don't block this work
+---

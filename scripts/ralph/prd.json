@@ -17,7 +17,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "File: supabase/migrations/20260222_instant_conversations_v2.sql. Full SQL is in the spec at docs/specs/instant-conversations-spec.md under 'Data Model' section (lines 426-449). Follow patterns from existing migrations in supabase/migrations/. The bucket ID and name are both 'opening-audio'. Use 'public: false' for the bucket. This is the foundation story — non-breaking, just adding nullable columns and an empty bucket."
     },
     {
