@@ -1,0 +1,105 @@
+{
+  "project": "Unhooked",
+  "branchName": "ralph/chat-telemetry",
+  "description": "Chat Telemetry — Persist pipeline latency data (TTFT, TTFS, TTFA, TTS total, duration) for streaming+TTS voice sessions to a Supabase table for provider comparison, regression detection, and baseline measurement",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create chat_telemetry table migration",
+      "description": "As a developer, I need a chat_telemetry table in Supabase so that pipeline timing data can be persisted and queried.",
+      "acceptanceCriteria": [
+        "Create migration file at supabase/migrations/20260221_chat_telemetry.sql",
+        "Migration creates public.chat_telemetry table with all 23 columns: id (UUID PK, gen_random_uuid()), created_at (TIMESTAMPTZ NOT NULL), stream_start_time (TIMESTAMPTZ nullable), ttft_ms (INTEGER nullable), ttfs_ms (INTEGER nullable), ttfa_ms (INTEGER nullable), tts_total_ms (INTEGER nullable), duration_ms (INTEGER nullable), llm_provider (TEXT NOT NULL), llm_model (TEXT NOT NULL), tts_provider (TEXT NOT NULL), tts_voice (TEXT NOT NULL), tts_mode (TEXT NOT NULL), session_type (TEXT NOT NULL), user_id (UUID NOT NULL), conversation_id (UUID NOT NULL), message_id (UUID nullable), request_id (TEXT NOT NULL), token_count (INTEGER nullable), sentence_count (INTEGER nullable), is_session_start (BOOLEAN NOT NULL), status (TEXT NOT NULL), error_type (TEXT nullable), resilience_attempt (INTEGER nullable), resilience_route (TEXT nullable)",
+        "No foreign key constraints on user_id, conversation_id, or message_id",
+        "No DEFAULT on created_at (set by application, not DB)",
+        "No CHECK constraints on tts_mode or session_type (free text)",
+        "Includes COMMENT ON TABLE and COMMENT ON COLUMN for created_at, stream_start_time, ttft_ms, ttfs_ms, ttfa_ms, tts_total_ms, duration_ms, and error_type",
+        "Creates 5 indexes: idx_chat_telemetry_created_at, idx_chat_telemetry_tts_provider, idx_chat_telemetry_llm_provider, idx_chat_telemetry_session_type, idx_chat_telemetry_user_id",
+        "Enables RLS on the table with no policies (service_role bypasses RLS)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "File: supabase/migrations/20260221_chat_telemetry.sql. Full SQL is provided in the spec at docs/specs/chat-telemetry-spec.md under 'Migration SQL' section (lines 327-378). Use CREATE TABLE IF NOT EXISTS. Follow the pattern from existing migrations in supabase/migrations/. This is a standalone table — no FK constraints, decoupled from transactional tables for fire-and-forget write safety."
+    },
+    {
+      "id": "US-002",
+      "title": "Build ChatTelemetryCollector utility",
+      "description": "As a developer, I need a reusable telemetry collector class so that timing data can be accumulated cleanly during the streaming lifecycle and written fire-and-forget.",
+      "acceptanceCriteria": [
+        "Create server/utils/telemetry.ts with exported ChatTelemetryCollector class, ChatTelemetryRow interface, and classifyTelemetryError() function",
+        "ChatTelemetryRow interface has all 23 fields matching the DB schema (id optional, all others typed correctly with proper nullability)",
+        "CollectorInit interface accepts: requestId, requestStartedAt (number), userId, conversationId, llmProvider, llmModel, ttsProvider, ttsVoice, ttsMode, sessionType, isSessionStart (boolean), resilienceAttempt (number|null), resilienceRoute (string|null)",
+        "Constructor sets created_at as ISO string from requestStartedAt, stores all init config fields, defaults message_id to null",
+        "markStreamStart() captures streamStartTime as Date.now() and sets stream_start_time as ISO string",
+        "markFirstToken() is idempotent — only the first call records ttft_ms as Date.now() - streamStartTime. No-op if streamStartTime not set",
+        "markFirstSentence() is idempotent — only the first call records ttfs_ms as Date.now() - streamStartTime. No-op if streamStartTime not set",
+        "markFirstAudio() is idempotent — only the first call records ttfa_ms as Date.now() - streamStartTime. No-op if streamStartTime not set",
+        "setMessageId(id) sets message_id on the row (accepts string or null)",
+        "markComplete(metrics) sets status='success', duration_ms from requestStartedAt, token_count, sentence_count, tts_total_ms from streamStartTime, and overrides tts_mode with effective mode from metrics",
+        "markError(error) sets status='error', duration_ms from requestStartedAt, error_type from classifyTelemetryError(error)",
+        "writeTo(supabase) does a fire-and-forget INSERT via supabase.from('chat_telemetry').insert(row).then().catch() — returns void, not a Promise",
+        "writeTo logs console.error with requestId on INSERT failure (both .then error and .catch)",
+        "classifyTelemetryError maps: status 408 or 'timeout' → 'LLM_TIMEOUT', status 429 or 'rate limit' → 'LLM_RATE_LIMIT', status 503 or 5xx → 'LLM_PROVIDER_ERROR', 'tts'/'synthesize' → 'TTS_PROVIDER_ERROR', 'abort'/'cancel' → 'STREAM_INTERRUPTED', default → 'UNKNOWN_ERROR'",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: server/utils/telemetry.ts. Full implementation code is provided in the spec at docs/specs/chat-telemetry-spec.md under 'ChatTelemetryCollector Design' section (lines 384-537). The writeTo method uses .then().catch() pattern (NOT async/await) to be truly fire-and-forget. The classifyTelemetryError function checks error.status and error.message.toLowerCase() with specific pattern matches. Mark methods use boolean guards (firstTokenMarked, firstSentenceMarked, firstAudioMarked) for idempotency."
+    },
+    {
+      "id": "US-003",
+      "title": "Unit tests for ChatTelemetryCollector",
+      "description": "As a developer, I need comprehensive unit tests for the telemetry collector so that I can refactor with confidence and catch regressions.",
+      "acceptanceCriteria": [
+        "Create tests/unit/telemetry/chat-telemetry-collector.test.ts",
+        "Test: full success lifecycle (markStreamStart → markFirstToken → markFirstSentence → markFirstAudio → markComplete → setMessageId → writeTo) produces row with all timing values, correct status, message_id, and ms calculations",
+        "Test: error path (markStreamStart → markFirstToken → markError → writeTo) produces row with status='error', error_type populated, ttfs_ms/ttfa_ms null, ttft_ms populated, message_id null",
+        "Test: markFirstToken called twice → only first call's timestamp used",
+        "Test: markFirstSentence called twice → only first call's timestamp used",
+        "Test: markFirstAudio called twice → only first call's timestamp used",
+        "Test: duration_ms computed from requestStartedAt (not streamStartTime)",
+        "Test: ttft_ms, ttfs_ms, ttfa_ms computed relative to streamStartTime",
+        "Test: created_at is ISO string of requestStartedAt",
+        "Test: stream_start_time is set as ISO string on markStreamStart",
+        "Test: writeTo returns void (fire-and-forget, not a promise)",
+        "Test: Supabase INSERT failure → console.error called with requestId",
+        "Test: Supabase INSERT success → no console.error",
+        "Test: marks called without markStreamStart → timing fields remain null",
+        "Test: markComplete overrides tts_mode with effective mode from metrics",
+        "Test: setMessageId sets message_id; default is null without calling setMessageId",
+        "Test classifyTelemetryError: status 408 → LLM_TIMEOUT, message 'timeout' → LLM_TIMEOUT, status 429 → LLM_RATE_LIMIT, message 'rate limit' → LLM_RATE_LIMIT, status 503 → LLM_PROVIDER_ERROR, status 500 → LLM_PROVIDER_ERROR, message 'tts' → TTS_PROVIDER_ERROR, message 'synthesize' → TTS_PROVIDER_ERROR, message 'abort' → STREAM_INTERRUPTED, unknown → UNKNOWN_ERROR",
+        "Uses vi.useFakeTimers() for deterministic timing (set to 2026-02-21T10:00:00Z, advance between marks)",
+        "Mock Supabase client: mockFrom → mockInsert chain, with success and failure variants",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: tests/unit/telemetry/chat-telemetry-collector.test.ts. Create the tests/unit/telemetry/ directory. Import ChatTelemetryCollector, classifyTelemetryError from server/utils/telemetry (use relative import ../../.. or path alias). Mock strategy: const mockInsert = vi.fn(); const mockFrom = vi.fn(() => ({ insert: mockInsert })); const mockSupabase = { from: mockFrom }. For success: mockInsert.mockResolvedValue({ error: null }). For failure: mockInsert.mockResolvedValue({ error: { message: 'connection refused' } }). Use vi.useFakeTimers() and vi.advanceTimersByTime(N) between mark calls for deterministic ms values. Use vi.spyOn(console, 'error') to verify error logging. The full test specification with all 26 test cases is in the spec at docs/specs/chat-telemetry-spec.md under 'Test Specification' (lines 802-864). Existing test setup is in tests/setup.ts. Run with: npm run test:unit."
+    },
+    {
+      "id": "US-004",
+      "title": "Instrument chat.post.ts with telemetry marks",
+      "description": "As a developer, I need the chat streaming handler to call telemetry mark methods at the right points in the pipeline so that every streaming+TTS request produces a telemetry row.",
+      "acceptanceCriteria": [
+        "Import ChatTelemetryCollector from '../utils/telemetry' at top of server/api/chat.post.ts",
+        "After line 511 (const useStreamingTTS = ...), create collector conditionally: const telemetry = useStreamingTTS ? new ChatTelemetryCollector({...}) : null",
+        "Collector init passes: requestId, requestStartedAt, userId: user.sub, conversationId: convId, llmProvider: model, llmModel: (model === 'groq' ? config.groqModel : config.geminiModel) || model, ttsProvider: (config.ttsProvider as string) || 'unknown', ttsVoice: config.groqTtsVoice || config.openaiTtsVoice || config.elevenlabsVoiceId || config.inworldVoiceId || 'default', ttsMode: ttsStreamingMode, sessionType, isSessionStart: isNewConversation, resilienceAttempt: resilienceAttempt ?? null, resilienceRoute: resilienceRoute ?? null",
+        "At line 547 (streamStartTime = Date.now()), add: telemetry?.markStreamStart()",
+        "In onToken callback (line 551), after tokenCount += 1, add: telemetry?.markFirstToken()",
+        "After sentenceDetector.addToken(token) at line 572, when sentences.length > 0, add: telemetry?.markFirstSentence()",
+        "In TTS chunk callback (line 536-537), inside the firstChunkTime === null block, add: telemetry?.markFirstAudio()",
+        "In onComplete (after TTS finalize around line 630), add: telemetry?.markComplete({ tokenCount, sentenceCount: ttsProcessor?.getSentCount() ?? 0, ttsMode: ttsProcessor?.getEffectiveMode() ?? ttsStreamingMode })",
+        "Modify assistant message INSERT in onComplete (lines 652-660) to .select('id').single() and capture the inserted message ID",
+        "After assistant message INSERT, add: telemetry?.setMessageId(insertedMsg?.id || null) then telemetry?.writeTo(supabase)",
+        "In onError (line 747), add: telemetry?.markError(error) then telemetry?.writeTo(supabase)",
+        "Non-TTS streaming requests (streamTTS=false) do NOT create a collector (telemetry stays null)",
+        "Existing console.log statements in onComplete and onError remain unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "File: server/api/chat.post.ts. This story modifies an existing 909-line file at specific instrumentation points. Key line references (verified against current code): line 511 (useStreamingTTS resolved), line 547 (streamStartTime = Date.now()), line 551 (onToken callback start), line 572 (sentenceDetector.addToken), lines 536-537 (firstChunkTime logic inside TTS chunk callback), line 583 (onComplete start), lines 652-660 (assistant message INSERT — must be modified to .select('id').single() to capture message ID), line 747 (onError start). The config variable is already available at line 492 (const config = useRuntimeConfig()). The isNewConversation variable is at line 190. All telemetry calls use optional chaining (telemetry?.method()) since telemetry is null for non-TTS paths. The assistant message INSERT modification (adding .select('id').single()) is critical — the current code does not capture the inserted message's ID. The ttsProcessor variable is available in the streaming scope. Full instrumentation details are in the spec at docs/specs/chat-telemetry-spec.md under 'Instrumentation in chat.post.ts' (lines 540-623)."
+    }
+  ]
+}

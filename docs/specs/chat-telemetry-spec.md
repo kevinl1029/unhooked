@@ -1,8 +1,8 @@
 # Chat Telemetry Spec
 
-**Version:** 1.3
+**Version:** 1.4
 **Created:** 2026-02-21
-**Status:** Implementation Ready
+**Status:** Ready for Development
 **Document Type:** Product & Technical Specification
 
 ---
@@ -135,6 +135,7 @@ A `chat_telemetry` table exists in Supabase with the following complete schema:
 | `session_type` | `text` | NOT NULL | — | Session type: `'core'`, `'reinforcement'`, `'check_in'`, `'ceremony'` (free text, no CHECK constraint) |
 | `user_id` | `uuid` | NOT NULL | — | User identifier. No foreign key constraint (decoupled from auth.users) |
 | `conversation_id` | `uuid` | NOT NULL | — | Conversation identifier. No foreign key constraint (decoupled from conversations table) |
+| `message_id` | `uuid` | YES | — | Assistant message identifier. NULL when message not persisted or on error. No foreign key constraint |
 | `request_id` | `text` | NOT NULL | — | Matches `requestId` in existing console logs for correlation |
 | `token_count` | `integer` | YES | — | Output token count (number of `onToken` callbacks) |
 | `sentence_count` | `integer` | YES | — | Number of sentences emitted by sentence detector |
@@ -149,6 +150,7 @@ A `chat_telemetry` table exists in Supabase with the following complete schema:
 - `tts_mode` and `session_type` are free text (no CHECK constraints) — new values can be added without migrations
 - `error_message` renamed to `error_type` and stores sanitized error codes only — prevents user content or prompt text from leaking into telemetry
 - `created_at` is set by the application (not `DEFAULT NOW()`) to reflect request start time, not telemetry write time
+- `message_id` is nullable to handle error paths (no assistant message persisted) and empty responses. No FK constraint — same decoupled pattern as `user_id` and `conversation_id`
 
 #### Capture Behavior (REQ-2, REQ-3)
 
@@ -343,6 +345,7 @@ CREATE TABLE IF NOT EXISTS public.chat_telemetry (
   session_type TEXT NOT NULL,
   user_id UUID NOT NULL,
   conversation_id UUID NOT NULL,
+  message_id UUID,
   request_id TEXT NOT NULL,
   token_count INTEGER,
   sentence_count INTEGER,
@@ -396,6 +399,7 @@ export interface ChatTelemetryRow {
   session_type: string
   user_id: string
   conversation_id: string
+  message_id: string | null
   request_id: string
   token_count: number | null
   sentence_count: number | null
@@ -442,6 +446,7 @@ export class ChatTelemetryCollector {
       session_type: init.sessionType,
       user_id: init.userId,
       conversation_id: init.conversationId,
+      message_id: null,
       request_id: init.requestId,
       is_session_start: init.isSessionStart,
       resilience_attempt: init.resilienceAttempt,
@@ -470,6 +475,10 @@ export class ChatTelemetryCollector {
     if (this.firstAudioMarked || !this.streamStartTime) return
     this.firstAudioMarked = true
     this.data.ttfa_ms = Date.now() - this.streamStartTime
+  }
+
+  setMessageId(id: string | null): void {
+    this.data.message_id = id
   }
 
   markComplete(metrics: {
@@ -591,7 +600,7 @@ if (firstChunkTime === null && chunk.audioBase64) {
 }
 ```
 
-**6a. Mark complete and write (in `onComplete`, after TTS finalize, ~line 629):**
+**6a. Mark complete, capture message ID, and write (in `onComplete`, after TTS finalize):**
 
 ```typescript
 telemetry?.markComplete({
@@ -599,6 +608,10 @@ telemetry?.markComplete({
   sentenceCount: ttsProcessor?.getSentCount() ?? 0,
   ttsMode: ttsProcessor?.getEffectiveMode() ?? ttsStreamingMode,
 })
+
+// After assistant message INSERT (existing code, modified to capture ID):
+// const { data: insertedMsg } = await supabase.from('messages').insert({...}).select('id').single()
+telemetry?.setMessageId(insertedMsg?.id || null)
 telemetry?.writeTo(supabase)
 ```
 
@@ -659,7 +672,7 @@ The `classifyTelemetryError()` function maps raw errors to sanitized codes:
 
 **Acceptance Criteria:**
 
-1. Given the migration file `20260221_chat_telemetry.sql` exists, when `supabase db push` is run, then a `chat_telemetry` table is created with all 22 columns matching the spec schema (REQ-1)
+1. Given the migration file `20260221_chat_telemetry.sql` exists, when `supabase db push` is run, then a `chat_telemetry` table is created with all 23 columns matching the spec schema (REQ-1)
 2. Given the table exists, when inspecting indexes, then indexes exist on `created_at`, `tts_provider`, `llm_provider`, `session_type`, and `user_id` (REQ-10)
 3. Given the table exists, when inspecting RLS, then RLS is enabled with no anon-role policies (REQ-11)
 4. Given the table exists, when an INSERT is attempted with the anon key, then it is rejected by RLS
@@ -689,15 +702,19 @@ The `classifyTelemetryError()` function maps raw errors to sanitized codes:
 3. Given the collector has a stream start time, when `markFirstSentence()` is called, then `ttfs_ms` is computed as ms since stream start
 4. Given the collector has a stream start time, when `markFirstAudio()` is called, then `ttfa_ms` is computed as ms since stream start
 5. Given the collector, when `markComplete()` is called with token/sentence counts, then `status='success'`, `duration_ms` is computed from requestStartedAt, and `tts_total_ms` is computed from stream start
-6. Given the collector, when `markError(error)` is called, then `status='error'`, `error_type` is classified from the error, and partial timing values are preserved (NULLs for uncaptured metrics)
-7. Given the collector, when `writeTo(supabase)` is called, then a fire-and-forget INSERT is issued with `.then().catch()` and failures are logged via `console.error` with requestId
-8. Given an error with status 429, when `classifyTelemetryError()` is called, then it returns `'LLM_RATE_LIMIT'`
-9. Given an error with status 408 or message containing 'timeout', when classified, then returns `'LLM_TIMEOUT'`
-10. Given an unknown error, when classified, then returns `'UNKNOWN_ERROR'`
+6. Given `markFirstSentence()` is called twice, when the row is built, then only the first call's timestamp is used
+7. Given `markFirstAudio()` is called twice, when the row is built, then only the first call's timestamp is used
+8. Given the collector, when `markError(error)` is called, then `status='error'`, `error_type` is classified from the error, and partial timing values are preserved (NULLs for uncaptured metrics)
+9. Given the collector, when `setMessageId(id)` is called with a UUID, then `message_id` is set on the row. When called with null, `message_id` remains null
+10. Given the collector, when `writeTo(supabase)` is called, then a fire-and-forget INSERT is issued with `.then().catch()` and failures are logged via `console.error` with requestId
+11. Given an error with status 429, when `classifyTelemetryError()` is called, then it returns `'LLM_RATE_LIMIT'`
+12. Given an error with status 408 or message containing 'timeout', when classified, then returns `'LLM_TIMEOUT'`
+13. Given an unknown error, when classified, then returns `'UNKNOWN_ERROR'`
 
 **Technical Notes:**
 - File: `server/utils/telemetry.ts`
 - Exports: `ChatTelemetryCollector` class, `ChatTelemetryRow` interface, `classifyTelemetryError()` function
+- `setMessageId()` is called after assistant message INSERT but before `writeTo()` — separates timing capture from metadata enrichment
 - Mark methods are idempotent (calling `markFirstToken` twice only records the first call)
 - `writeTo()` builds the full row from accumulated data, skipping `id` (DB-generated)
 - Full implementation provided in the ChatTelemetryCollector Design section above
@@ -720,7 +737,7 @@ The `classifyTelemetryError()` function maps raw errors to sanitized codes:
 3. Given the collector exists, when the first `onToken` callback fires, then `telemetry.markFirstToken()` is called (idempotent — subsequent calls are no-ops)
 4. Given the collector exists, when `sentenceDetector.addToken()` returns a non-empty array for the first time, then `telemetry.markFirstSentence()` is called (idempotent)
 5. Given the collector exists, when the first audio chunk with `audioBase64` is written (existing `firstChunkTime` logic), then `telemetry.markFirstAudio()` is called (idempotent)
-6. Given the collector exists, when `onComplete` fires, then `telemetry.markComplete()` is called with `tokenCount`, `sentenceCount` from ttsProcessor, and effective `ttsMode`, followed by `telemetry.writeTo(supabase)`
+6. Given the collector exists, when `onComplete` fires, then `telemetry.markComplete()` is called with `tokenCount`, `sentenceCount` from ttsProcessor, and effective `ttsMode`. After assistant message INSERT, `telemetry.setMessageId()` is called with the inserted message ID (or null if not persisted), followed by `telemetry.writeTo(supabase)`
 7. Given the collector exists, when `onError` fires, then `telemetry.markError(error)` is called, followed by `telemetry.writeTo(supabase)`
 8. Given a non-TTS streaming request (`streamTTS=false`), when the handler runs, then no telemetry collector is created and no telemetry row is written
 9. Given existing console.log calls in `onComplete` and `onError`, when telemetry is added, then existing log statements remain unchanged
@@ -732,6 +749,7 @@ The `classifyTelemetryError()` function maps raw errors to sanitized codes:
 - `is_session_start` uses existing `isNewConversation` variable (`messages.length === 0`)
 - LLM model string: `model === 'groq' ? config.groqModel : config.geminiModel`
 - TTS voice: fallback chain across provider-specific config keys
+- `message_id`: existing assistant message INSERT modified to `.select('id').single()` to capture the ID
 - Full instrumentation points detailed in the Instrumentation section above
 
 **Dependencies:** Story 2 (collector utility must exist)
@@ -747,8 +765,8 @@ The `classifyTelemetryError()` function maps raw errors to sanitized codes:
 
 **Acceptance Criteria:**
 
-1. Given a collector in the success path, when `markStreamStart` → `markFirstToken` → `markFirstSentence` → `markFirstAudio` → `markComplete` → `writeTo` is called, then the INSERT payload contains all expected fields with correct ms calculations
-2. Given a collector in the error path, when `markStreamStart` → `markFirstToken` → `markError` → `writeTo` is called, then `status='error'`, `error_type` is populated, `ttfs_ms`/`ttfa_ms` are null, and `ttft_ms` is populated
+1. Given a collector in the success path, when `markStreamStart` → `markFirstToken` → `markFirstSentence` → `markFirstAudio` → `markComplete` → `setMessageId` → `writeTo` is called, then the INSERT payload contains all expected fields with correct ms calculations and message_id
+2. Given a collector in the error path, when `markStreamStart` → `markFirstToken` → `markError` → `writeTo` is called, then `status='error'`, `error_type` is populated, `ttfs_ms`/`ttfa_ms` are null, `ttft_ms` is populated, and `message_id` is null
 3. Given `markFirstToken` is called twice, when the row is built, then only the first call's timestamp is used
 4. Given various error objects, when `classifyTelemetryError` is called, then correct error codes are returned (test all 6 codes: `LLM_TIMEOUT`, `LLM_RATE_LIMIT`, `LLM_PROVIDER_ERROR`, `TTS_PROVIDER_ERROR`, `STREAM_INTERRUPTED`, `UNKNOWN_ERROR`)
 5. Given `writeTo` is called, when the Supabase INSERT fails, then `console.error` is called with requestId
@@ -807,6 +825,8 @@ Story 2 (Collector)  ──┘          │
 | `should not log on write success` | Mock Supabase success → no `console.error` |
 | `should handle null streamStartTime gracefully` | Marks called without `markStreamStart` → timing fields remain null |
 | `should update tts_mode with effective mode on markComplete` | `markComplete({ ttsMode: 'sentence-batch' })` overrides config value |
+| `should set message_id via setMessageId` | `setMessageId('uuid')` → row has `message_id = 'uuid'` |
+| `should default message_id to null` | No `setMessageId` call → row has `message_id = null` |
 
 #### classifyTelemetryError Tests
 
@@ -866,7 +886,7 @@ No automated E2E tests for this feature. Rationale:
 
 ### Coverage Goals
 
-- **Highest risk (deep coverage):** `ChatTelemetryCollector` — new code with timing math and error classification. 24 unit test cases.
+- **Highest risk (deep coverage):** `ChatTelemetryCollector` — new code with timing math and error classification. 26 unit test cases.
 - **Medium risk (regression check):** `chat.post.ts` instrumentation — existing E2E tests must still pass. Manual verification post-deployment.
 - **Low risk (one-time verification):** Migration SQL — verified once during `supabase db push`.
 
@@ -926,7 +946,20 @@ No automated E2E tests for this feature. Rationale:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4 | 2026-02-21 | Readiness review: added `message_id` column (nullable UUID) for assistant message correlation, added `setMessageId()` method to collector, added idempotency ACs for `markFirstSentence` and `markFirstAudio` to Story 2, updated Story 3/4 ACs and test spec (26 test cases), column count 22→23 |
 | 1.3 | 2026-02-21 | Technical design: ChatTelemetryCollector utility in `server/utils/telemetry.ts` (extracted from chat.post.ts), call-site timing marks (TTFT/TTFS/TTFA via idempotent mark methods), fire-and-forget `.then().catch()` write pattern, `classifyTelemetryError()` mapping (6 error codes), metadata from runtimeConfig (no LLM/TTS utility API changes), migration SQL (`20260221_chat_telemetry.sql`), 4 user stories with acceptance criteria, test specification (24 unit test cases), deployment order (migration-first) |
 | 1.2 | 2026-02-21 | Requirements refinement: complete column-level schema with types (REQ-1), timing zero-point defined as streamStartTime with pre-stream overhead via stream_start_time column, resilience retry columns added (resilience_attempt, resilience_route) with every-attempt capture policy (REQ-2), error_message renamed to error_type with sanitized values (REQ-7), is_session_start resolved as messages.length===0 (REQ-7), UUID PK with no FK constraints, created_at set to request start time, PII anonymization policy (REQ-13), known limitations documented, reference queries added |
 | 1.1 | 2026-02-21 | UX refinement: resolved failed-request telemetry (capture partial with status/error columns), added console.error on write failure, deferred debug endpoint, added RLS requirement, added no-validation decision, added REQ-11/REQ-12 |
 | 1.0 | 2026-02-21 | Initial PRD draft from discovery interview |
+
+---
+
+## Readiness Summary
+
+- **Review date:** 2026-02-21
+- **Readiness assessment:** Ready for Development
+- **Gaps found:** 2 minor (both resolved)
+  - Story 2 missing idempotency ACs for `markFirstSentence` and `markFirstAudio` → added (ACs #6, #7)
+  - No `message_id` column for assistant message correlation → added nullable UUID with `setMessageId()` method
+- **Deferred items:** REQ-13 anonymization (deferred until account deletion feature is built)
+- **Follow-up actions:** None — spec is sprint-ready
