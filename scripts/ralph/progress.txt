@@ -1,116 +1,42 @@
 # Ralph Progress Log
-Started: Thu Feb 19 23:52:42 EST 2026
+Started: Sat Feb 21 21:26:59 EST 2026
 ---
 
-## Thu Feb 19 23:53:47 EST 2026 - US-001
-- Created database migration supabase/migrations/20260220_instant_conversations.sql
-- Added two new columns to user_progress table: precomputed_opening_text (TEXT) and precomputed_opening_at (TIMESTAMPTZ)
-- Both columns are nullable with NULL default, existing rows unaffected
-- Added COMMENT ON COLUMN statements for documentation
-- Updated types/database.types.ts manually with new fields in Row, Insert, and Update types
-- Fields placed alphabetically: after last_session_at, before program_status
+## Codebase Patterns
+- SQL migrations use `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... IF EXISTS` patterns
+- Migrations live in `supabase/migrations/` with YYYYMMDD prefix
+- No FK constraints on analytics/telemetry tables (fire-and-forget, decoupled)
+- RLS is enabled on all new tables with no anon policies (service_role bypasses)
+- `nuxi typecheck` fails (no tsconfig.json); use `npm run build` to verify TypeScript
+- `server/utils/` has flat and nested structure (llm/, tts/, prompts/, etc.) — place new top-level utils directly in `server/utils/`
+- writeTo uses `.then().catch()` (NOT async/await) for true fire-and-forget telemetry writes
+
+## 2026-02-21 - US-001
+- Created `supabase/migrations/20260221_chat_telemetry.sql` with 25-column chat_telemetry table
+- Table has no FK constraints on user_id, conversation_id, message_id (decoupled analytics)
+- No DEFAULT on created_at — set by application
+- Includes COMMENT ON TABLE + 8 COMMENT ON COLUMN statements
+- 5 indexes: created_at, tts_provider, llm_provider, session_type, user_id
+- RLS enabled, no anon policies
+- Switched from feature/chat-telemetry to ralph/chat-telemetry branch
+- Build passes (npm run build)
 - **Learnings for future iterations:**
-  - The user_progress type definition is at lines 656-730 in types/database.types.ts
-  - Database type updates must be done manually (npm run db:types requires live Supabase connection)
-  - Migration pattern: ALTER TABLE ADD COLUMN IF NOT EXISTS, use COMMENT ON COLUMN for documentation
-  - TypeScript fields must be alphabetically sorted within Row, Insert, and Update sections
-  - The email_unsubscribed_at column (line 666 in Row) was added in a previous Ralph run and follows the same pattern
+  - Branch was `feature/chat-telemetry`; had to create `ralph/chat-telemetry` from it
+  - Migration pattern matches existing files: plain SQL, no rollback section
+  - Spec has full SQL at lines 327-378 of docs/specs/chat-telemetry-spec.md
 ---
 
-## Fri Feb 20 00:01:32 EST 2026 - US-002
-- Created server/api/session/opening-text.get.ts endpoint
-- Implemented three paths: non-core (returns null), L1/intellectual (static text), L2-L3/emotional-identity (precomputed text)
-- Static text path: reads from ILLUSION_OPENING_MESSAGES constant imported from server/utils/prompts
-- Precomputed text path: queries user_progress.precomputed_opening_text via Supabase service role client
-- Returns { text: string | null, source: 'static' | 'precomputed' | null }
-- Validates required query params (illusionKey, illusionLayer, sessionType), returns 400 if missing
-- All outcomes logged with [instant-start] tag and relevant context
+## 2026-02-21 - US-002
+- Created `server/utils/telemetry.ts` with `ChatTelemetryCollector` class, `ChatTelemetryRow` interface, and `classifyTelemetryError()` function
+- ChatTelemetryRow has all 25 fields matching DB schema with proper nullability
+- CollectorInit interface has all 13 init fields
+- Idempotency guards (firstTokenMarked, firstSentenceMarked, firstAudioMarked) prevent double-recording
+- markStreamStart captures both streamStartTime (number) and stream_start_time (ISO string)
+- writeTo uses .then().catch() (not async/await) for true fire-and-forget
+- classifyTelemetryError checks error.status and error.message.toLowerCase() with specific patterns
+- Build passes (npm run build)
 - **Learnings for future iterations:**
-  - ILLUSION_OPENING_MESSAGES is defined at lines 182-202 in server/utils/prompts/index.ts
-  - Type imports: IllusionKey, IllusionLayer, SessionType from server/utils/llm/task-types
-  - Auth pattern: serverSupabaseUser() for auth check (401 if missing), serverSupabaseServiceRole() for DB operations
-  - Query params accessed via getQuery(event) - returns object with string values
-  - user_progress has UNIQUE(user_id) so .single() is safe for queries by user_id
----
-
-## Thu Feb 20 00:02:45 EST 2026 - US-003
-- Created server/api/session/bootstrap.post.ts endpoint
-- Implemented conversation record creation mirroring chat.post.ts pattern (lines 363-380)
-- Saves opening text as first assistant message in messages table
-- Implemented evidence bridge check-in cancellation (fire-and-forget pattern from lines 382-402)
-- Returns { conversationId } on success
-- Auth: serverSupabaseUser() for auth check (401 if missing), serverSupabaseServiceRole() for DB writes
-- Validates required fields: illusionKey, illusionLayer, sessionType, openingText (returns 400 if missing)
-- All outcomes logged with [instant-start] tag
-- Files changed: server/api/session/bootstrap.post.ts (new file)
-- **Learnings for future iterations:**
-  - Bootstrap endpoint pattern: create conversation first, get conversationId, then save first message
-  - Evidence bridge cancellation uses UPDATE check_in_schedule WHERE trigger_illusion_key=X, status IN ('scheduled', 'sent')
-  - Fire-and-forget pattern: promise.then().catch() with error logging, never blocking the main response
-  - readBody(event) for POST body params, getQuery(event) for GET query params
-  - Conversation creation fields: user_id, model (from getDefaultModel()), title (from ILLUSION_NAMES[key]), session_type, illusion_key, illusion_layer
-  - Message creation fields: conversation_id, role='assistant', content=text, input_modality='text'
-  - Build succeeded with no type errors (npm run build validates TypeScript compilation)
----
-## Thu Feb 20 00:03:17 EST 2026 - US-004
-- Implemented fast-start path in composables/useVoiceChat.ts
-- Added bootstrapWithRetry() helper function: retries up to 3 times with exponential backoff (1s, 2s, 4s), max 15s window
-- Fast-start branch executes at top of startConversation() when sessionType === 'core' && illusionKey is truthy
-- Calls GET /api/session/opening-text to fetch pre-known opening text (static for L1, precomputed for L2/L3)
-- If opening text available: plays audio via voiceSession.playAIResponse() and calls bootstrapWithRetry() in parallel
-- After audio completes: adds assistant message to messages array
-- After bootstrap completes: sets conversationId if bootstrap succeeded
-- Falls through to existing streaming/non-streaming logic if opening text unavailable or audio playback fails
-- All outcomes logged with [useVoiceChat] tag for debugging
-- Build succeeded with no type errors
-- **Learnings for future iterations:**
-  - The fast-start path must be inserted INSIDE the try block, after initial state setup, before the enableStreamingTTS check
-  - Use $fetch for API calls in composables (auto-available in Nuxt)
-  - voiceSession.playAIResponse() returns a Promise that resolves after audio completes
-  - Fall-through pattern: wrap fast-start in nested try-catch, let outer code handle failures gracefully
-  - bootstrapWithRetry uses exponential backoff with a max window check to avoid exceeding 15s
-  - The fire-and-forget pattern for bootstrap: audio doesn't block on bootstrap success, but we still wait for it to set conversationId
-  - Non-core sessions (check_in, ceremony, reinforcement) skip the fast-start branch entirely via the sessionType === 'core' guard
----
-
-## Thu Feb 20 00:05:47 EST 2026 - US-005
-- Created server/utils/session/precompute-opening.ts with precomputeOpeningText() function
-- Function accepts { supabase, userId, illusionKey, nextLayer } params
-- Fetches user intake, builds session context, cross-layer context, and bridge context
-- Builds system prompt with all personalization context using buildSystemPrompt()
-- Calls LLM via getModelRouter().chat() with generation prompt asking for 2-4 sentence opening message
-- Stores result in user_progress.precomputed_opening_text and precomputed_opening_at
-- Implements retry logic: 2 attempts max, 500ms delay before retry
-- Empty LLM responses treated as failures
-- All outcomes logged with [precompute-opening] tag
-- Build succeeded with no type errors
-- **Learnings for future iterations:**
-  - buildSessionContext returns PersonalizationContext (complex object) for core sessions, needs formatContextForPrompt() to convert to string
-  - buildCrossLayerContext returns CrossLayerContext object, needs formatCrossLayerContext() to convert to string
-  - buildBridgeContext takes CrossLayerContext and returns a pre-formatted string (no formatter needed)
-  - The UserContext type from base-system.ts differs from IntakeUserContext in context-builder.ts — chat.post.ts uses UserContext for buildSystemPrompt
-  - User intake query pattern: select specific fields (product_types, usage_frequency, years_using, previous_attempts, triggers), .eq('user_id', userId), .single()
-  - Fire-and-forget pattern for background jobs: call async function, use .then() for success logging, .catch() for error logging, never await
-  - The generation prompt should explicitly instruct "Output ONLY the opening message text" to avoid preamble/labels
-  - Retry loop pattern: while (attempt < maxAttempts) { try/catch, increment attempt, conditional delay before retry }
----
-## Thu Feb 20 00:07:12 EST 2026 - US-006
-- Added import for precomputeOpeningText in server/api/progress/complete-session.post.ts
-- Added fire-and-forget call to precomputeOpeningText() after evidence bridge scheduling (lines 329-340)
-- Pre-computation triggered only for L1/L2 completions (within layer progression block)
-- For L1 (intellectual): calls with nextLayer='emotional'
-- For L2 (emotional): calls with nextLayer='identity'
-- For L3 (identity): no pre-computation (next session is a different illusion's L1 with static text)
-- Fire-and-forget pattern: .then() for success log, .catch() for error log, never blocks response
-- Build succeeded with no type errors
-- Files changed: server/api/progress/complete-session.post.ts
-- **Learnings for future iterations:**
-  - The fire-and-forget pattern is the standard for background jobs in complete-session.post.ts
-  - Pattern: call async function, chain .then() for success logging, .catch() for error logging, never await
-  - The layer progression block (lines 115-337) handles evidence-based coaching with illusionLayer
-  - The legacy block (lines 339+) handles old behavior without illusionLayer — avoid adding new logic there
-  - effectiveIllusionKey is available in the layer progression block (derived from illusionKey or order)
-  - user.sub is the userId for passing to background jobs
-  - supabase is the service role client already initialized in the handler
-  - Pre-computation only runs in L1/L2 path (lines 309-335), not in L3 path (lines 147-306)
+  - `nuxi typecheck` fails without tsconfig.json; use `npm run build` instead
+  - Spec implementation code is at lines 384-537 of docs/specs/chat-telemetry-spec.md
+  - The `writeTo` method signature is `writeTo(supabase: any): void` — returns void, not Promise
 ---
