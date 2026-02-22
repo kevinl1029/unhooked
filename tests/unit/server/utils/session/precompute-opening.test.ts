@@ -60,12 +60,14 @@ interface MockSupabaseOpts {
   existingAudioPath?: string | null
   uploadError?: { message: string } | null
   publishError?: { message: string } | null
+  failPublishBySlotMismatch?: boolean
 }
 
 function createMockSupabase(opts: MockSupabaseOpts = {}) {
   const callOrder: string[] = []
   const updateCalls: Record<string, unknown>[] = []
   const storageCalls: Array<{ type: string; args: unknown[] }> = []
+  const updateWhereClauses: Array<Array<{ col: string; val: unknown }>> = []
 
   const supabase = {
     from: (table: string) => {
@@ -93,9 +95,31 @@ function createMockSupabase(opts: MockSupabaseOpts = {}) {
             }),
           }),
           update: (data: Record<string, unknown>) => {
-            callOrder.push('publish-update')
-            updateCalls.push(data)
-            return { eq: () => Promise.resolve({ error: opts.publishError ?? null }) }
+            const whereClauses: Array<{ col: string; val: unknown }> = []
+            const builder: any = {
+              eq: (col: string, val: unknown) => {
+                whereClauses.push({ col, val })
+                return builder
+              },
+              select: () => {
+                callOrder.push('publish-update')
+                updateCalls.push(data)
+                updateWhereClauses.push(whereClauses)
+                if (opts.publishError) return Promise.resolve({ data: null, error: opts.publishError })
+                if (opts.failPublishBySlotMismatch) return Promise.resolve({ data: [], error: null })
+                return Promise.resolve({ data: [{ user_id: TEST_USER_ID }], error: null })
+              },
+              then: (resolve: (value: unknown) => unknown) => {
+                callOrder.push('publish-update')
+                updateCalls.push(data)
+                updateWhereClauses.push(whereClauses)
+                const payload = opts.publishError
+                  ? { error: opts.publishError }
+                  : { error: null }
+                return Promise.resolve(payload).then(resolve)
+              },
+            }
+            return builder
           },
         }
       }
@@ -126,6 +150,7 @@ function createMockSupabase(opts: MockSupabaseOpts = {}) {
     _callOrder: callOrder,
     _updateCalls: updateCalls,
     _storageCalls: storageCalls,
+    _updateWhereClauses: updateWhereClauses,
   }
 
   return supabase
@@ -134,6 +159,10 @@ function createMockSupabase(opts: MockSupabaseOpts = {}) {
 describe('precomputeOpeningText — consistency hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('useRuntimeConfig', () => ({
+      chatPrimaryProvider: 'groq',
+      chatSecondaryProvider: 'gemini',
+    }))
     mockChat.mockResolvedValue(LLM_RESPONSE)
     mockSynthesize.mockResolvedValue(DEFAULT_TTS_RESULT)
   })
@@ -141,7 +170,7 @@ describe('precomputeOpeningText — consistency hardening', () => {
   it('publishes matched text/audio/hash tuple in a single DB update', async () => {
     const supabase = createMockSupabase()
 
-    await precomputeOpeningText({
+    const result = await precomputeOpeningText({
       supabase: supabase as any,
       userId: TEST_USER_ID,
       illusionKey: TEST_ILLUSION_KEY,
@@ -163,6 +192,9 @@ describe('precomputeOpeningText — consistency hardening', () => {
     expect(publish.precomputed_opening_text).toBe(LLM_RESPONSE.content)
     expect(publish.precomputed_opening_payload_hash).toBe(hash)
     expect(publish.precomputed_opening_audio_path).toContain(hash)
+    expect(publish.precomputed_opening_status).toBe('ready')
+    expect(publish.precomputed_opening_target_illusion_key).toBe(TEST_ILLUSION_KEY)
+    expect(publish.precomputed_opening_target_layer).toBe(TEST_NEXT_LAYER)
     expect(publish.precomputed_opening_word_timings).toEqual({
       timings: DEFAULT_TTS_RESULT.wordTimings,
       timingSource: DEFAULT_TTS_RESULT.timingSource,
@@ -172,6 +204,9 @@ describe('precomputeOpeningText — consistency hardening', () => {
       voice: DEFAULT_TTS_RESULT.voice,
       providerVersion: `${DEFAULT_TTS_RESULT.provider}:${DEFAULT_TTS_RESULT.timingSource}`,
     })
+    expect(result.success).toBe(true)
+    expect(result.route).toBe('primary')
+    expect(result.attempts).toBe(1)
   })
 
   it('uploads audio before publish update (atomic publish semantics)', async () => {
@@ -190,13 +225,20 @@ describe('precomputeOpeningText — consistency hardening', () => {
     expect(uploadIdx).toBeGreaterThanOrEqual(0)
     expect(publishIdx).toBeGreaterThanOrEqual(0)
     expect(uploadIdx).toBeLessThan(publishIdx)
+
+    expect(supabase._updateWhereClauses[0]).toEqual(expect.arrayContaining([
+      { col: 'user_id', val: TEST_USER_ID },
+      { col: 'precomputed_opening_status', val: 'pending' },
+      { col: 'precomputed_opening_target_illusion_key', val: TEST_ILLUSION_KEY },
+      { col: 'precomputed_opening_target_layer', val: TEST_NEXT_LAYER },
+    ]))
   })
 
   it('publishes text-only payload with null Tier 1 fields when TTS fails', async () => {
     mockSynthesize.mockRejectedValue(new Error('TTS unavailable'))
     const supabase = createMockSupabase()
 
-    await precomputeOpeningText({
+    const result = await precomputeOpeningText({
       supabase: supabase as any,
       userId: TEST_USER_ID,
       illusionKey: TEST_ILLUSION_KEY,
@@ -209,13 +251,15 @@ describe('precomputeOpeningText — consistency hardening', () => {
       precomputed_opening_audio_path: null,
       precomputed_opening_word_timings: null,
       precomputed_opening_payload_hash: null,
+      precomputed_opening_status: 'ready',
     })
+    expect(result.success).toBe(true)
   })
 
   it('removes newly uploaded file if publish fails', async () => {
     const supabase = createMockSupabase({ publishError: { message: 'write failed' } })
 
-    await precomputeOpeningText({
+    const result = await precomputeOpeningText({
       supabase: supabase as any,
       userId: TEST_USER_ID,
       illusionKey: TEST_ILLUSION_KEY,
@@ -228,13 +272,14 @@ describe('precomputeOpeningText — consistency hardening', () => {
     expect(uploadCall).toBeDefined()
     expect(removeCall).toBeDefined()
     expect(removeCall?.args[0]).toEqual([uploadCall?.args[0]])
+    expect(result.success).toBe(false)
   })
 
   it('cleans up previous audio path after successful publish', async () => {
     const previousPath = `l2l3/${TEST_USER_ID}/old-hash.wav`
     const supabase = createMockSupabase({ existingAudioPath: previousPath })
 
-    await precomputeOpeningText({
+    const result = await precomputeOpeningText({
       supabase: supabase as any,
       userId: TEST_USER_ID,
       illusionKey: TEST_ILLUSION_KEY,
@@ -246,5 +291,46 @@ describe('precomputeOpeningText — consistency hardening', () => {
 
     const removedPaths = removeCalls.map((c) => c.args[0])
     expect(removedPaths).toContainEqual([previousPath])
+    expect(result.success).toBe(true)
+  })
+
+  it('fails over to secondary route after transient primary failures', async () => {
+    mockChat
+      .mockRejectedValueOnce(new Error('503 Service Unavailable'))
+      .mockRejectedValueOnce(new Error('503 Service Unavailable'))
+      .mockResolvedValueOnce(LLM_RESPONSE)
+    const supabase = createMockSupabase()
+
+    const result = await precomputeOpeningText({
+      supabase: supabase as any,
+      userId: TEST_USER_ID,
+      illusionKey: TEST_ILLUSION_KEY,
+      nextLayer: TEST_NEXT_LAYER,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.route).toBe('secondary')
+    expect(result.attempts).toBe(3)
+    expect(mockChat).toHaveBeenCalledTimes(3)
+    expect(mockChat.mock.calls[0][0].model).toBe(mockChat.mock.calls[1][0].model)
+    expect(mockChat.mock.calls[2][0].model).not.toBe(mockChat.mock.calls[0][0].model)
+  })
+
+  it('marks slot failed when all model routes fail', async () => {
+    mockChat.mockRejectedValue(new Error('503 Service Unavailable'))
+    const supabase = createMockSupabase({ failPublishBySlotMismatch: true })
+
+    const result = await precomputeOpeningText({
+      supabase: supabase as any,
+      userId: TEST_USER_ID,
+      illusionKey: TEST_ILLUSION_KEY,
+      nextLayer: TEST_NEXT_LAYER,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.attempts).toBe(3)
+    const lastUpdate = supabase._updateCalls[supabase._updateCalls.length - 1]
+    expect(lastUpdate.precomputed_opening_status).toBe('failed')
+    expect(lastUpdate.precomputed_opening_text).toBeNull()
   })
 })

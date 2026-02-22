@@ -193,6 +193,13 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 500, message: updateError.message })
       }
 
+      console.log('[precompute-opening] Slot invalidated', {
+        userId: user.sub,
+        illusionKey: effectiveIllusionKey,
+        nextLayer,
+        status: 'pending',
+      })
+
       // Mark conversation as completed after successful layer validation + progress update
       const { error: convError } = await supabase
         .from('conversations')
@@ -279,7 +286,15 @@ export default defineEventHandler(async (event) => {
         layer_progress: updatedLayerProgress,
         last_session_at: new Date().toISOString(),
         total_sessions: (currentProgress.total_sessions || 0) + 1,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        precomputed_opening_status: 'pending',
+        precomputed_opening_target_illusion_key: effectiveIllusionKey,
+        precomputed_opening_target_layer: nextLayer,
+        precomputed_opening_text: null,
+        precomputed_opening_at: null,
+        precomputed_opening_audio_path: null,
+        precomputed_opening_word_timings: null,
+        precomputed_opening_payload_hash: null,
       }
 
       const { data: updatedProgress, error: updateError } = await supabase
@@ -335,8 +350,19 @@ export default defineEventHandler(async (event) => {
         userId: user.sub,
         illusionKey: effectiveIllusionKey,
         nextLayer: nextLayerForPrecompute
-      }).then(() => {
-        console.log(`[complete-session] Pre-computation succeeded for user ${user.sub}, ${effectiveIllusionKey} → ${nextLayerForPrecompute}`)
+      }).then((result) => {
+        if (result.success) {
+          console.log(`[complete-session] Pre-computation succeeded for user ${user.sub}, ${effectiveIllusionKey} → ${nextLayerForPrecompute}`)
+          return
+        }
+        console.error('[complete-session] Pre-computation failed after retries', {
+          userId: user.sub,
+          illusionKey: effectiveIllusionKey,
+          nextLayer: nextLayerForPrecompute,
+          route: result.route,
+          attempts: result.attempts,
+          error: result.error,
+        })
       }).catch((err) => {
         console.error('[complete-session] Pre-computation failed:', err)
       })
