@@ -17,7 +17,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": "File: supabase/migrations/20260222_instant_conversations_v2.sql. Full SQL is in the spec at docs/specs/instant-conversations-spec.md under 'Data Model' section (lines 426-449). Follow patterns from existing migrations in supabase/migrations/. The bucket ID and name are both 'opening-audio'. Use 'public: false' for the bucket. This is the foundation story — non-breaking, just adding nullable columns and an empty bucket."
     },
     {
@@ -41,7 +41,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/admin/generate-opening-audio.post.ts. Detailed server logic is in the spec at docs/specs/instant-conversations-spec.md under 'POST /api/admin/generate-opening-audio' section (lines 580-635). ILLUSION_OPENING_MESSAGES is imported from server/utils/session/ — search for ILLUSION_OPENING_MESSAGES in the codebase to find the exact import path. getTTSProviderFromConfig() is in server/utils/tts/. The manifest format is documented at lines 476-489. The manifest merge strategy: read existing manifest from Storage, spread new results over it, so failed keys keep their existing entries. ADMIN_API_SECRET must be added to runtimeConfig in nuxt.config.ts (check existing env var patterns there)."
     },
     {
@@ -63,7 +63,7 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": "File: tests/unit/server/api/admin/generate-opening-audio.test.ts. Test case table is in the spec at lines 1331-1346. Mock strategy: mock getTTSProviderFromConfig() and Supabase Storage. Follow existing test patterns from tests/unit/ directory. The mock TTS provider.synthesize() should return { audioBuffer: Buffer.from('test'), contentType: 'audio/wav', wordTimings: [{ word: 'Hey', startMs: 0, endMs: 150 }], timingSource: 'estimated', estimatedDurationMs: 5000 }. For manifest download mock, return existing manifest JSON or error for 'not found'. Run with: npm run test:unit."
     },
     {
@@ -84,7 +84,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/utils/session/precompute-opening.ts. Full updated implementation is in the spec at lines 862-946. Key pattern: wrap all audio logic in try/catch AFTER the existing text storage code. The catch block must clear stale audio refs (set both audio fields to null) using .catch(() => {}) for best-effort cleanup. The supabase client is already passed to the function. Use getTTSProviderFromConfig() from server/utils/tts/. Storage operations use supabase.storage.from('opening-audio'). The userId variable is already available in the function scope."
     },
     {
@@ -103,7 +103,7 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": "File: tests/unit/server/utils/session/precompute-opening.test.ts. Test case table at spec lines 1348-1361. Extend existing mocks for the pre-computation function. Add mock for getTTSProviderFromConfig() returning { synthesize: vi.fn() } and Storage operations (.from().remove(), .from().upload()). Key verification: the ORDER of Supabase calls (text update BEFORE audio operations). Mock the supabase client chain. Run with: npm run test:unit."
     },
     {
@@ -124,7 +124,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": "File: server/api/session/opening.get.ts (new), deleting server/api/session/opening-text.get.ts. Full implementation details at spec lines 507-578. The manifest caching code is at lines 552-571. Signed URLs via supabase.storage.from('opening-audio').createSignedUrl(path, 300). The new endpoint preserves all v1 query params (illusionKey, illusionLayer, sessionType) and auth pattern. For the select query on user_progress, add precomputed_opening_audio_path and precomputed_opening_word_timings to the select. If createSignedUrl returns an error, gracefully fall back (audioUrl null) — don't throw. READ the existing opening-text.get.ts first to understand the v1 structure, then extend with v2 audio fields."
     },
     {
@@ -148,7 +148,7 @@
         "Tests pass"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": "File: tests/unit/server/api/session/opening.test.ts. Test case table at spec lines 1311-1327. If tests/unit/server/api/session/opening-text.test.ts exists, migrate those tests and extend with v2 tests. Mock strategy at line 1329. Mock Storage download for manifest (return JSON blob or error). Mock createSignedUrl to return { data: { signedUrl: 'https://test.com/signed' }, error: null } or error. For manifest cache testing: call the handler twice within 5 minutes, verify Storage download only called once. Delete old test file if migrating. Run with: npm run test:unit."
     },
     {
@@ -170,7 +170,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": "File: composables/useVoiceSession.ts. Full implementation code at spec lines 657-733. Key difference from playAIResponse(): (1) no TTS API call — browser fetches audio directly from signed URL, (2) resolves on onplay not onended — needed for 3-second download timeout race in startConversation(). The WordTiming type should already exist (used by playAIResponse). Reuses existing audioElement, wordTimings, playbackStartTime, startWordTracking(), stopWordTracking() from the composable. The timing scaling logic in onloadedmetadata mirrors the existing pattern in playAIResponse."
     },
     {
@@ -194,7 +194,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": "File: composables/useVoiceChat.ts. Full updated startConversation() code at spec lines 745-838. The Promise.race for download timeout wraps playFromUrl() and a setTimeout reject at 3000ms. Key state management table at lines 842-850. The existing v1 fast-start code is being restructured into the 3-tier version. Bootstrap is called once before any audio attempt. The opening response from the updated endpoint now includes audioUrl, wordTimings, contentType, timingSource. READ the existing startConversation() code first to understand the current structure, then restructure with the 3-tier logic from the spec."
     },
     {
@@ -215,7 +215,7 @@
         "Tests pass"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": "File: tests/unit/composables/useVoiceSession-playFromUrl.test.ts. Test case table at spec lines 1363-1377. Mock strategy at line 1377. For HTMLAudioElement mocking: create a mock class or use vi.fn() for constructor. Simulate events by calling the assigned event handlers (e.g., after calling playFromUrl, trigger audioElement.onplay()). For timing scaling test: set mock duration to a value different from estimated total, verify timings are proportionally scaled. Follow existing composable test patterns in tests/unit/composables/. Run with: npm run test:unit."
     },
     {
@@ -239,7 +239,7 @@
         "Tests pass"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": "File: tests/unit/composables/useVoiceChat-instant-start.test.ts. Test case table at spec lines 1379-1396. Mock strategy at line 1396. For the timeout test: make playFromUrl return a never-resolving promise, advance timers by 3000ms with vi.advanceTimersByTime(3000), verify fallback to Tier 2 (playAIResponse called). For all tests: mock $fetch to return different opening response shapes for each tier scenario. Follow existing test patterns in the file (if it exists) or in tests/unit/composables/. Run with: npm run test:unit."
     },
     {
@@ -258,7 +258,7 @@
         "Tests pass"
       ],
       "priority": 12,
-      "passes": true,
+      "passes": false,
       "notes": "File: tests/e2e/instant-conversations-v2.spec.ts. Test case table at spec lines 1398-1410. Mock strategy: use page.route() to intercept /api/session/opening, /api/voice/synthesize, /api/session/bootstrap, audio URL, and /api/chat. For the audio binary mock, return a minimal valid WAV or MP3 file (a few bytes with valid header). Import { test, expect } from './fixtures' per CLAUDE.md E2E conventions. Follow existing E2E patterns in tests/e2e/ for auth fixtures and route mocking. Run with: npm run test:e2e."
     },
     {
@@ -274,7 +274,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": true,
+      "passes": false,
       "notes": "Integrate with existing account purge logic. Search codebase for account deletion/purge handler (may be in server/api/ or server/utils/). Follow the same Storage list+remove pattern used in save-final-recording.post.ts for ceremony preview cleanup (mentioned in spec at line 1291). The Storage path is opening-audio/l2l3/{userId}/ — list files in this prefix, then remove all found file paths. Wrap in try/catch with console.error logging on failure. If no account purge logic exists yet, create a utility function that can be called from the appropriate handler."
     }
   ]

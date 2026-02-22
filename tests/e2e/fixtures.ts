@@ -6,7 +6,7 @@ const sessionFile = path.join(process.cwd(), 'playwright/.auth/session.json')
 
 type CustomFixtures = {
   /**
-   * Set to true to skip injecting the Supabase auth token into localStorage.
+   * Set to true to skip injecting the Supabase auth token into browser cookies.
    * Use this for tests that verify unauthenticated behavior.
    *
    * Example:
@@ -16,15 +16,25 @@ type CustomFixtures = {
 }
 
 /**
- * Extended Playwright test that injects the Supabase auth token into
- * localStorage via context.addInitScript on every page navigation.
+ * Encode a session JSON string into the @supabase/ssr cookie value format.
  *
- * This solves the well-known timing race where Supabase's JS client reads
- * localStorage during initialization, but Playwright's storageState
- * restoration hasn't completed yet — causing intermittent auth failures.
+ * @supabase/ssr stores sessions as: "base64-" + base64url(JSON.stringify(session))
+ * where base64url uses the URL-safe alphabet (- and _ instead of + and /) with no padding.
+ */
+function encodeSupabaseCookieValue(sessionJson: string): string {
+  const b64 = Buffer.from(sessionJson, 'utf8').toString('base64')
+  return 'base64-' + b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+/**
+ * Extended Playwright test that injects the Supabase auth session cookie into
+ * the browser context before any page navigation.
  *
- * The addInitScript runs synchronously before ANY page JavaScript, so the
- * token is guaranteed to be present when Supabase initializes.
+ * @nuxtjs/supabase v2 uses @supabase/ssr's createBrowserClient which stores
+ * sessions in COOKIES (not localStorage). The server plugin reads cookies from
+ * HTTP request headers for SSR auth. Using context.addCookies() ensures the
+ * cookie is present in HTTP requests before the server processes them, which
+ * allows the SSR auth middleware to find the user and not redirect to /login.
  *
  * Usage:
  *   import { test, expect } from './fixtures'
@@ -47,12 +57,20 @@ export const test = base.extend<CustomFixtures>({
         )
 
         if (storageKey && session) {
-          await context.addInitScript(
-            ({ key, sessionData }: { key: string; sessionData: unknown }) => {
-              window.localStorage.setItem(key, JSON.stringify(sessionData))
-            },
-            { key: storageKey, sessionData: session }
-          )
+          // Encode session in @supabase/ssr cookie format and inject into browser context.
+          // context.addCookies() sets the cookie BEFORE HTTP requests are made, so the
+          // cookie is present in SSR request headers when the auth middleware checks the user.
+          const cookieValue = encodeSupabaseCookieValue(JSON.stringify(session))
+          await context.addCookies([{
+            name: storageKey,
+            value: cookieValue,
+            domain: 'localhost',
+            path: '/',
+            sameSite: 'Lax',
+            expires: session.expires_at ?? -1,
+            httpOnly: false,
+            secure: false,
+          }])
         }
       } catch {
         // Session file is malformed or unreadable — fall back to storageState only

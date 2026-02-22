@@ -1,9 +1,9 @@
 # Instant Conversations Spec
 
-**Version:** 2.0
+**Version:** 2.4
 **Created:** 2026-02-17
-**Last Updated:** 2026-02-20
-**Status:** PRD Draft (v2)
+**Last Updated:** 2026-02-21
+**Status:** Ready for Development
 **Document Type:** Product Specification (PRD) + Technical Design
 
 ---
@@ -189,18 +189,28 @@ The following requirements were implemented in v1 and remain in effect. They are
 ##### Audio Generation — L1 (Static)
 
 - REQ-16: For each L1 illusion opening in `ILLUSION_OPENING_MESSAGES`, audio must be pre-generated using the configured TTS provider and stored in Supabase Storage. This is a one-time operation, re-run only when the static copy changes
-- REQ-17: A script or admin utility must exist to (re)generate L1 static audio for all illusion keys. It must be runnable on-demand (not automated) and must overwrite existing audio files in storage
+- REQ-17: A script or admin utility must exist to (re)generate L1 static audio. It must accept an optional illusion key argument — if provided, regenerate only that key; if omitted, regenerate all illusion keys. It must be runnable on-demand (not automated) and must overwrite existing audio files in storage
+
+<!-- REQ-REFINED: Added single illusion key targeting support -->
 
 ##### Audio Generation — L2/L3 (Per-User)
 
-- REQ-18: The existing pre-computation background job (which generates L2/L3 opening text) must be extended to also generate audio from the text using the configured TTS provider, and upload the audio to Supabase Storage
+- REQ-18: The existing pre-computation background job (which generates L2/L3 opening text) must be extended to also generate audio from the text using the configured TTS provider, and upload the audio to Supabase Storage. Before uploading the new audio, the job must delete the previous audio file from Supabase Storage (if one exists) to prevent orphaned files
+
+<!-- REQ-REFINED: Added explicit deletion of previous audio file from storage -->
 - REQ-19: The audio URL (or storage path) must be stored alongside the pre-computed text in the `user_progress` table, so it can be retrieved at session start
-- REQ-20: If audio generation fails during the pre-computation job but text generation succeeds, the text must still be stored (enabling the Tier 2 fallback of real-time TTS with pre-computed text). Audio generation failure must not prevent text from being saved
+- REQ-20: If audio generation or audio upload to Supabase Storage fails during the pre-computation job but text generation succeeds, the text must still be stored (enabling the Tier 2 fallback of real-time TTS with pre-computed text). Audio generation or upload failure must not prevent text from being saved. Upload failure is treated identically to generation failure — the audio is discarded, the failure is logged, and the pre-computation job's existing retry loop retries the full generate+upload sequence
+
+<!-- REQ-REFINED: Extended to explicitly cover audio upload failure alongside generation failure -->
 
 ##### Audio Retrieval & Playback
 
-- REQ-21: The opening endpoint must return both the opening text and the audio URL (or storage path) when pre-stored audio is available. If audio is not available but text is, it must return the text with a null audio reference (enabling Tier 2 fallback)
-- REQ-22: At session start, the client must attempt to download and play the pre-stored audio file. If the download fails or the audio is unplayable, the client must fall back to real-time TTS with the pre-computed text (Tier 2), then to the full LLM+TTS flow (Tier 3) if text is also unavailable
+- REQ-21: The opening endpoint must return the opening text and a time-limited signed URL for the pre-stored audio file when available. If audio is not available but text is, it must return the text with a null audio URL (enabling Tier 2 fallback). The signed URL must have a short expiry (e.g., 5 minutes) since it is used immediately at session start
+
+<!-- REQ-REFINED: Specified signed URL as the audio access mechanism -->
+- REQ-22: At session start, the client must attempt to download and play the pre-stored audio file with a 3-second download timeout. If the download times out, fails, or the audio is unplayable (e.g., decode error), the client must fall back to real-time TTS with the pre-computed text (Tier 2), then to the full LLM+TTS flow (Tier 3) if text is also unavailable
+
+<!-- REQ-REFINED: Added 3-second download timeout and clarified 'unplayable' -->
 
 ##### Word-by-Word Highlighting with Pre-Stored Audio
 
@@ -219,12 +229,37 @@ The following requirements were implemented in v1 and remain in effect. They are
 ##### Storage & Lifecycle
 
 - REQ-24: Audio files must be stored in a Supabase Storage bucket with a predictable path structure. L1 static audio uses a fixed path per illusion key. L2/L3 per-user audio uses a path scoped to the user ID
-- REQ-25: Pre-stored audio does not expire. For L2/L3, the audio is overwritten when the next pre-computation job runs (same lifecycle as pre-computed text per REQ-13). For L1, audio persists until explicitly regenerated via the admin utility (REQ-17)
+- REQ-25: Pre-stored audio does not expire. For L2/L3, the previous audio file must be deleted from Supabase Storage and replaced with the newly generated audio when the next pre-computation job runs (REQ-18). The database reference (`precomputed_opening_audio_path`) is updated to point to the new file. For L1, audio persists until explicitly regenerated via the admin utility (REQ-17)
+
+<!-- REQ-REFINED: Clarified that 'overwritten' means the actual audio file in storage is deleted and replaced, not just the DB reference -->
 - REQ-26: Audio files must not be publicly accessible. Access must require authentication consistent with the existing auth model
+- REQ-27: Per-user audio files (L2/L3) must be deleted when a user's account is purged or deleted, consistent with the app's data retention policy. L1 static audio is not user-specific and does not require deletion on account purge
+
+<!-- UX-REFINED: Added REQ-27 for per-user audio deletion on account purge (data privacy) -->
+
+##### Data Model (v2)
+
+<!-- REQ-REFINED: Added v2 migration requirement for audio path storage -->
+
+- REQ-28: A database migration must add a nullable `precomputed_opening_audio_path` column (TEXT) to the `user_progress` table for storing the Supabase Storage path of the pre-generated L2/L3 audio file. This follows the same pattern as the v1 migration (REQ-13) which added `precomputed_opening_text`. Existing rows must not be affected (column defaults to NULL)
+
+##### Voice/Provider Change Handling
+
+<!-- REQ-REFINED: Added requirement for voice/provider change handling (resolved Open Question #2) -->
+
+- REQ-29: When the TTS voice or provider configuration changes, the admin must manually run the L1 audio generation script (REQ-17) to regenerate L1 audio. L2/L3 per-user audio is naturally refreshed on the next pre-computation run (when the user completes their current session). No automated invalidation or staleness detection is required — voice changes are infrequent and manual regeneration is acceptable
+
+##### Rollout Safety
+
+<!-- REQ-REFINED: Added explicit rollout fallback requirement -->
+
+- REQ-30: When v2 code is deployed but no pre-stored audio exists yet (L1 generation script has not been run, no L2/L3 audio has been pre-generated), the system must transparently fall to Tier 2 (real-time TTS with pre-computed text) or Tier 3 (full LLM+TTS) per the fallback chain (REQ-6). Deployment of v2 code must be safe and functional without pre-stored audio being present
 
 ##### Observability (Extended)
 
-- REQ-15 (v2, extended): In addition to the v1 logging, the system must log: which fallback tier was used (Tier 1/2/3), audio download success/failure, audio generation success/failure during pre-computation, and L1 audio generation script outcomes
+- REQ-15 (v2, extended): In addition to the v1 logging, the system must log: which fallback tier was used (Tier 1/2/3), audio download success/failure, audio download latency in milliseconds (for Tier 1 attempts), audio generation success/failure during pre-computation, and L1 audio generation script outcomes
+
+<!-- REQ-REFINED: Added audio download latency tracking for production monitoring -->
 
 #### Security
 
@@ -267,8 +302,8 @@ The following requirements were implemented in v1 and remain in effect. They are
 ### Open Questions
 
 1. **Reinforcement session feasibility:** How dynamic are reinforcement session openings? Could a similar pre-store approach work? *(Deferred evaluation)*
-2. **Voice change invalidation:** If the TTS voice or provider is changed, should all pre-stored audio be automatically regenerated, or should it be a manual process? *(Deferred to technical design)*
-3. **Word timing storage format:** What format should word-level timing metadata be stored in alongside the audio? JSON sidecar file? DB column? Embedded in the audio response metadata? *(Deferred to technical design)*
+2. ~~**Voice change invalidation:** If the TTS voice or provider is changed, should all pre-stored audio be automatically regenerated, or should it be a manual process?~~ *(Resolved — see REQ-29: manual regeneration via admin script for L1; L2/L3 refreshed naturally on next pre-computation run)*
+3. ~~**Word timing storage format:** What format should word-level timing metadata be stored in alongside the audio? JSON sidecar file? DB column? Embedded in the audio response metadata?~~ *(Resolved — see Technical Design v2: L1 uses manifest.json in Storage, L2/L3 uses JSONB column on user\_progress. Both store `{ timings: WordTiming[], timingSource, contentType }`)*
 
 ### Resolved Questions
 
@@ -284,34 +319,1158 @@ The following requirements were implemented in v1 and remain in effect. They are
 5. **TTS consistency with pre-stored audio:** Unlike v1 (where TTS consistency wasn't a concern because audio was generated fresh each time), pre-stored audio locks in the voice/provider at generation time. If the voice changes, audio must be regenerated. This is acceptable because voice changes are infrequent and a regeneration script handles it (REQ-17). *(Resolved during v2 problem analysis)*
 6. **Storage location for audio:** Supabase Storage — consistent infrastructure, authentication model aligns with existing Supabase auth, avoids introducing a new storage provider. *(Resolved: user decision)*
 7. **L1 audio storage approach:** Same Supabase Storage bucket as L2/L3 (not static files in repo or CDN). Consistent approach, easier auth model, single storage mechanism. *(Resolved: user decision)*
+8. **Word timing storage format:** L1 word timings stored in `l1/manifest.json` in Storage (cached server-side with 5-min TTL). L2/L3 word timings stored as JSONB column `precomputed_opening_word_timings` on `user_progress`. Both use the same shape: `{ timings: WordTiming[], timingSource, contentType }`. *(Resolved during v2 technical design)*
 
 ---
 
 ## Technical Design — v2 (Pre-Stored Audio)
 
-*Pending technical design phase. The v2 technical design will cover:*
+<!-- TECH-DESIGN: Complete v2 technical architecture for pre-stored audio pipeline -->
 
-- *Supabase Storage bucket setup and path conventions*
-- *Audio file format, encoding, and size considerations*
-- *Word timing metadata storage format and retrieval mechanism*
-- *Changes to the opening endpoint (text + audio URL)*
-- *Changes to the pre-computation job (text + audio generation)*
-- *L1 static audio generation script*
-- *Client-side changes to `useVoiceChat.ts` (fetch audio from storage instead of calling TTS)*
-- *Updated latency budget*
-- *Updated API contracts*
-- *New user stories and acceptance criteria*
-- *Updated test specification*
+### Architecture Overview
 
-### Expected Latency Budget (v2)
+v2 extends the v1 fast-start architecture by adding an **audio pre-generation pipeline** and an **audio retrieval path**. The client fetches pre-stored audio from Supabase Storage instead of calling TTS in real-time, eliminating TTS from the critical path.
+
+**Session start flow (3-tier):**
+
+```
+USER TAPS "START"
+    │
+    ▼
+GET /api/session/opening
+    ?illusionKey=X&illusionLayer=Y&sessionType=core
+    │
+    ├─ { text, audioUrl, wordTimings, contentType, timingSource, source }
+    │   │
+    │   ├─ audioUrl present (Tier 1: Pre-stored audio)
+    │   │   │
+    │   │   ▼ (parallel)
+    │   │   ┌───────────────────────────────┬──────────────────────────────┐
+    │   │   │ HTMLAudioElement(audioUrl)     │ POST /api/session/bootstrap  │
+    │   │   │ → play pre-stored audio       │ { illusionKey, layer, text } │
+    │   │   │ + word tracking from timings  │ → { conversationId }         │
+    │   │   │ (3s download timeout)         │ (retry 3x on failure)        │
+    │   │   └───────────────────────────────┴──────────────────────────────┘
+    │   │              │                              │
+    │   │              ▼                              ▼
+    │   │        Audio plays                   conversationId set
+    │   │        (~100-300ms to first audio)
+    │   │
+    │   ├─ audioUrl null, text present (Tier 2: Real-time TTS)
+    │   │   │
+    │   │   ▼ (parallel)
+    │   │   ┌───────────────────────────────┬──────────────────────────────┐
+    │   │   │ voiceSession.playAIResponse() │ POST /api/session/bootstrap  │
+    │   │   │ → /api/voice/synthesize       │ (same as above)              │
+    │   │   │ → audio + word highlighting   │                              │
+    │   │   └───────────────────────────────┴──────────────────────────────┘
+    │   │              │
+    │   │              ▼
+    │   │        Audio plays (~250-600ms+)
+    │   │
+    │   └─ text null (Tier 3: Full LLM+TTS)
+    │       └─ Fall through to existing startConversation() flow
+    │          (runStreamingWithResilience → /api/chat → LLM + streaming TTS)
+    │          (~3-8 seconds to first audio)
+    │
+    ├─ { text: null } → Tier 3 (fall through)
+    │
+    ▼
+Session continues via existing /api/chat pipeline
+```
+
+**Audio pre-generation pipeline:**
+
+```
+L1 (Static — Admin-Triggered):
+
+POST /api/admin/generate-opening-audio
+    │
+    ├─ For each illusionKey (or specified key):
+    │   1. Get static text from ILLUSION_OPENING_MESSAGES[key]
+    │   2. Call provider.synthesize({ text })
+    │   3. Upload audio to Storage: opening-audio/l1/{key}.{ext}
+    │   4. Collect metadata (path, contentType, wordTimings, timingSource)
+    │
+    └─ Write manifest: opening-audio/l1/manifest.json
+       { stress_relief: { audioPath, contentType, timings, timingSource }, ... }
+
+L2/L3 (Per-User — Session Completion):
+
+complete-session.post.ts → precomputeOpeningText()
+    │
+    1. Generate text via LLM (existing)
+    2. Store text in user_progress (existing — saved first per REQ-20)
+    3. Call provider.synthesize({ text }) — NEW
+    4. Delete previous audio from Storage (if path exists) — NEW
+    5. Upload new audio to Storage: opening-audio/l2l3/{userId}/opening.{ext} — NEW
+    6. Update user_progress with audio_path + word_timings — NEW
+    │
+    └─ If steps 3-6 fail: text is already saved → Tier 2 fallback works
+```
+
+### Latency Budget
 
 | Step | Estimated Latency | Notes |
 |------|-------------------|-------|
-| GET /api/session/opening (text + audio URL) | ~50-100ms | Same as v1, extended to return audio URL |
-| Fetch audio from Supabase Storage | ~50-200ms | Binary download, CDN-cacheable |
+| GET /api/session/opening (text + audio URL) | ~50-100ms | Same as v1, extended to return signed audio URL |
+| Fetch audio from Supabase Storage (signed URL) | ~50-200ms | Binary download via signed URL |
 | Browser audio decode + play | ~10-50ms | No server-side generation |
 | POST /api/session/bootstrap | ~100-200ms | Unchanged from v1, runs in parallel |
-| **Total time-to-first-audio** | **~100-300ms** | Comfortably under the <500ms target |
+| **Total time-to-first-audio (Tier 1)** | **~100-300ms** | Comfortably under the <500ms target |
+
+### Data Model
+
+<!-- TECH-DESIGN: v2 migration for audio storage columns and bucket creation -->
+
+**Migration:** `supabase/migrations/20260222_instant_conversations_v2.sql`
+
+```sql
+-- v2: Pre-stored audio for instant conversations
+
+-- 1. Add audio storage path column
+ALTER TABLE public.user_progress
+ADD COLUMN IF NOT EXISTS precomputed_opening_audio_path TEXT DEFAULT NULL;
+
+COMMENT ON COLUMN public.user_progress.precomputed_opening_audio_path IS
+  'Supabase Storage path for pre-generated L2/L3 opening audio file';
+
+-- 2. Add word timing metadata column (JSONB)
+ALTER TABLE public.user_progress
+ADD COLUMN IF NOT EXISTS precomputed_opening_word_timings JSONB DEFAULT NULL;
+
+COMMENT ON COLUMN public.user_progress.precomputed_opening_word_timings IS
+  'Word-level timing data and metadata for pre-generated opening audio. Shape: { timings: WordTiming[], timingSource, contentType }';
+
+-- 3. Create opening-audio storage bucket (private)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('opening-audio', 'opening-audio', false)
+ON CONFLICT (id) DO NOTHING;
+```
+
+**`precomputed_opening_word_timings` JSONB shape:**
+
+```json
+{
+  "timings": [
+    { "word": "Hey", "startMs": 0, "endMs": 150 },
+    { "word": "there", "startMs": 160, "endMs": 400 }
+  ],
+  "timingSource": "estimated",
+  "contentType": "audio/wav"
+}
+```
+
+**Storage Bucket:** `opening-audio` (private, no public access)
+
+**Storage Path Conventions:**
+
+| Type | Path Pattern | Example |
+|------|-------------|---------|
+| L1 audio | `l1/{illusionKey}.{ext}` | `l1/stress_relief.wav` |
+| L1 manifest | `l1/manifest.json` | `l1/manifest.json` |
+| L2/L3 audio | `l2l3/{userId}/opening.{ext}` | `l2l3/abc-123/opening.wav` |
+
+**L1 Manifest Format (`l1/manifest.json`):**
+
+```json
+{
+  "stress_relief": {
+    "audioPath": "l1/stress_relief.wav",
+    "contentType": "audio/wav",
+    "timings": [{ "word": "Hey", "startMs": 0, "endMs": 150 }],
+    "timingSource": "estimated"
+  },
+  "pleasure": { "..." : "..." },
+  "willpower": { "..." : "..." },
+  "focus": { "..." : "..." },
+  "identity": { "..." : "..." }
+}
+```
+
+The manifest is generated by the admin audio generation endpoint and cached server-side with a 5-minute TTL.
+
+**Audio File Format:** Audio is stored in whatever format the TTS provider returns natively (WAV for Groq, MPEG for InWorld/ElevenLabs). No transcoding. The content type is tracked in the manifest (L1) or JSONB column (L2/L3).
+
+**Lifecycle:**
+
+- L1 audio persists until explicitly regenerated via the admin endpoint (REQ-25)
+- L2/L3 audio: previous file is deleted from Storage before uploading the new one when the next pre-computation job runs (REQ-18, REQ-25)
+- L2/L3 audio files are deleted when a user's account is purged (REQ-27)
+
+**No new indexes needed.** The `user_progress` table has a `UNIQUE(user_id)` constraint, and the opening endpoint reads by `user_id` — already optimally indexed.
+
+### API Contracts
+
+<!-- TECH-DESIGN: v2 API endpoints — updated opening endpoint + admin generation endpoint -->
+
+#### GET `/api/session/opening` (renamed from `/api/session/opening-text`)
+
+Implements REQ-12 decision logic. Returns opening text, pre-stored audio URL, and word timings.
+
+**File:** `server/api/session/opening.get.ts` (renamed from `opening-text.get.ts`)
+
+**Auth:** `serverSupabaseUser()` (standard Supabase auth middleware)
+
+**Query Parameters:** (unchanged from v1)
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `illusionKey` | `IllusionKey` | Yes | The illusion for this session |
+| `illusionLayer` | `IllusionLayer` | Yes | The layer for this session |
+| `sessionType` | `SessionType` | Yes | Must be `'core'` for fast path |
+
+**Response (200):**
+
+```typescript
+{
+  text: string | null
+  source: 'static' | 'precomputed' | null
+  audioUrl: string | null           // Signed URL (5-min expiry) or null
+  wordTimings: WordTiming[] | null  // Array of { word, startMs, endMs }
+  contentType: string | null        // e.g. 'audio/wav', 'audio/mpeg'
+  timingSource: 'actual' | 'estimated' | null
+}
+```
+
+**Decision Logic (REQ-12, updated for v2):**
+
+1. If `sessionType !== 'core'` → return all nulls
+2. If `illusionLayer === 'intellectual'`:
+   - text from `ILLUSION_OPENING_MESSAGES[illusionKey]`
+   - Load L1 manifest from Storage (cached with 5-min TTL)
+   - If manifest has entry for this key → generate signed URL (5-min expiry), return audioUrl + wordTimings + contentType + timingSource
+   - If no manifest or no entry → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
+3. If `illusionLayer === 'emotional'` or `'identity'`:
+   - Read `precomputed_opening_text`, `precomputed_opening_audio_path`, `precomputed_opening_word_timings` from `user_progress`
+   - If audio_path exists → generate signed URL (5-min expiry), extract wordTimings/contentType/timingSource from JSONB column
+   - If no audio_path → audioUrl/wordTimings/contentType/timingSource null (text still returned for Tier 2)
+
+**L1 Manifest Caching:**
+
+```typescript
+let l1ManifestCache: L1Manifest | null = null
+let l1ManifestLoadedAt = 0
+const MANIFEST_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+async function getL1Manifest(supabase: SupabaseClient): Promise<L1Manifest | null> {
+  if (l1ManifestCache && Date.now() - l1ManifestLoadedAt < MANIFEST_TTL_MS) {
+    return l1ManifestCache
+  }
+
+  const { data, error } = await supabase.storage
+    .from('opening-audio')
+    .download('l1/manifest.json')
+
+  if (error || !data) return null
+
+  l1ManifestCache = JSON.parse(await data.text())
+  l1ManifestLoadedAt = Date.now()
+  return l1ManifestCache
+}
+```
+
+**Logging (REQ-15 v2):**
+
+```
+[instant-start] Opening resolved { illusionKey, illusionLayer, source, hasText, hasAudio }
+[instant-start] Opening not available { illusionKey, illusionLayer, reason }
+```
+
+#### POST `/api/admin/generate-opening-audio`
+
+<!-- TECH-DESIGN: Admin endpoint for L1 static audio generation -->
+
+Generates pre-stored audio for L1 illusion openings. Calls TTS, uploads to Storage, writes manifest.
+
+**File:** `server/api/admin/generate-opening-audio.post.ts`
+
+**Auth:** `X-Admin-Secret` header checked against `ADMIN_API_SECRET` env var
+
+**Request Body:**
+
+```typescript
+{
+  illusionKey?: IllusionKey  // If omitted, generate for all keys
+}
+```
+
+**Response (200):**
+
+```typescript
+{
+  results: Array<{
+    illusionKey: IllusionKey
+    success: boolean
+    audioPath?: string
+    contentType?: string
+    durationMs?: number
+    error?: string
+  }>
+  manifestUpdated: boolean
+}
+```
+
+**Server Logic:**
+
+1. Validate `X-Admin-Secret` header matches `ADMIN_API_SECRET` env var
+2. Determine target keys: specified key or all `Object.keys(ILLUSION_OPENING_MESSAGES)`
+3. For each key:
+   a. Get text from `ILLUSION_OPENING_MESSAGES[key]`
+   b. Call `getTTSProviderFromConfig().synthesize({ text })`
+   c. Determine extension from contentType (`audio/mpeg` → `.mp3`, else → `.wav`)
+   d. Upload audio buffer to Storage: `opening-audio/l1/{key}.{ext}` with `upsert: true`
+   e. Collect metadata: `{ audioPath, contentType, timings: wordTimings, timingSource }`
+4. Load existing manifest from Storage and merge with new results (always merge — preserves existing entries for keys that failed in this run)
+5. Upload updated manifest to Storage: `opening-audio/l1/manifest.json` with `upsert: true`
+6. Return results summary
+
+**Logging:**
+
+```
+[admin-audio] Generating L1 audio { keys: [...], provider }
+[admin-audio] Generated { illusionKey, audioPath, contentType, durationMs }
+[admin-audio] Failed { illusionKey, error }
+[admin-audio] Manifest updated { keyCount }
+```
+
+#### POST `/api/session/bootstrap` (unchanged from v1)
+
+No changes. Still creates conversation record and saves opening as first assistant message.
+
+### Component Architecture
+
+<!-- TECH-DESIGN: Client-side changes for v2 pre-stored audio playback -->
+
+**Two client files change:**
+
+1. `composables/useVoiceSession.ts` — new `playFromUrl()` method
+2. `composables/useVoiceChat.ts` — updated fast-start path with 3-tier logic + endpoint rename
+
+No changes to `SessionView.vue`, `useStreamingTTS.ts`, `useStreamingAudioQueue.ts`, or any other component/composable.
+
+#### New: `useVoiceSession.playFromUrl()`
+
+Plays audio from a URL (pre-stored in Supabase Storage) with word-by-word highlighting from stored timings. Reuses the same `HTMLAudioElement` + `setInterval` word tracking pattern as `playAIResponse()`.
+
+```typescript
+const playFromUrl = async (
+  url: string,
+  text: string,
+  timings: WordTiming[],
+  timingSource: 'actual' | 'estimated'
+): Promise<boolean> => {
+  error.value = null
+  isProcessing.value = false  // No TTS processing needed
+  isAudioReady.value = false
+  currentTranscript.value = text
+  currentWordIndex.value = -1
+  wordTimings = [...timings]
+
+  // Clean up previous audio
+  if (audioElement) {
+    audioElement.pause()
+    URL.revokeObjectURL(audioElement.src)
+  }
+
+  // Create audio element with signed URL directly (no base64, no TTS call)
+  audioElement = new Audio(url)
+
+  return new Promise((resolve) => {
+    batchAudioResolve = resolve
+
+    audioElement!.onloadedmetadata = () => {
+      // Scale estimated timings to actual audio duration (same as playAIResponse)
+      if (timingSource !== 'actual') {
+        const actualDurationMs = audioElement!.duration * 1000
+        if (wordTimings.length > 0 && actualDurationMs > 0) {
+          const estimatedDurationMs = wordTimings[wordTimings.length - 1].endMs
+          if (estimatedDurationMs > 0) {
+            const scaleFactor = actualDurationMs / estimatedDurationMs
+            wordTimings = wordTimings.map(t => ({
+              word: t.word,
+              startMs: Math.round(t.startMs * scaleFactor),
+              endMs: Math.round(t.endMs * scaleFactor)
+            }))
+          }
+        }
+      }
+      isAudioReady.value = true
+    }
+
+    audioElement!.onplay = () => {
+      isAISpeaking.value = true
+      playbackStartTime = Date.now()
+      startWordTracking()
+      // Resolve immediately when playback starts — the 3-second download
+      // timeout in startConversation() races against this resolution.
+      // Playback continues in the background; cleanup happens in onended.
+      resolve(true)
+    }
+
+    audioElement!.onended = () => {
+      // Cleanup only — does not gate the Promise (already resolved on onplay)
+      isAISpeaking.value = false
+      currentWordIndex.value = wordTimings.length - 1
+      stopWordTracking()
+    }
+
+    audioElement!.onerror = (e) => {
+      console.error('[useVoiceSession] Pre-stored audio playback error:', e)
+      error.value = 'Failed to play pre-stored audio'
+      isAISpeaking.value = false
+      stopWordTracking()
+      resolve(false)
+    }
+
+    audioElement!.play().catch((e) => {
+      console.error('[useVoiceSession] Pre-stored audio play() failed:', e)
+      error.value = 'Failed to start pre-stored audio playback'
+      isAISpeaking.value = false
+      resolve(false)
+    })
+  })
+}
+```
+
+<!-- READINESS-REVIEWED: playFromUrl resolves on onplay (playback started), not onended, so 3-second download timeout in startConversation works correctly -->
+
+**Key differences from `playAIResponse()`:** (1) No TTS API call, no base64 conversion — the browser fetches audio directly from the signed URL. (2) Resolves `true` when playback **starts** (`onplay`), not when it **ends** (`onended`). This is intentional: the 3-second download timeout in `startConversation()` races against this Promise, so it must resolve as soon as audio begins playing. The `onended` handler performs cleanup only.
+
+#### Modified: `useVoiceChat.startConversation()` (3-tier fast-start)
+
+The fast-start path is restructured for 3-tier fallback. The endpoint URL is updated from `/api/session/opening-text` to `/api/session/opening`.
+
+```typescript
+const startConversation = async (): Promise<boolean> => {
+  error.value = null
+  isLoading.value = true
+
+  try {
+    // === FAST-START PATH (core sessions only) ===
+    if (sessionType === 'core' && illusionKey) {
+      try {
+        const opening = await $fetch('/api/session/opening', {
+          method: 'GET',
+          query: { illusionKey, illusionLayer, sessionType }
+        })
+
+        if (opening.text) {
+          // Add message immediately so text displays during audio playback
+          messages.value.push({ role: 'assistant', content: opening.text })
+
+          // Bootstrap in background (non-blocking)
+          bootstrapWithRetry(opening.text).then(result => {
+            if (result?.conversationId) {
+              conversationId.value = result.conversationId
+            }
+          }).catch(() => {})
+
+          isLoading.value = false
+
+          // === Tier 1: Pre-stored audio ===
+          if (opening.audioUrl && opening.wordTimings && opening.contentType) {
+            const downloadStart = Date.now()
+            try {
+              const audioSuccess = await Promise.race([
+                voiceSession.playFromUrl(
+                  opening.audioUrl,
+                  opening.text,
+                  opening.wordTimings,
+                  opening.timingSource || 'estimated'
+                ),
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error('Audio download timeout')), 3000)
+                )
+              ])
+
+              if (audioSuccess) {
+                console.log('[useVoiceChat] Tier 1: pre-stored audio played', {
+                  illusionKey, illusionLayer,
+                  source: opening.source,
+                  downloadMs: Date.now() - downloadStart
+                })
+                return true
+              }
+            } catch (e: any) {
+              console.log('[useVoiceChat] Tier 1 failed, falling to Tier 2', {
+                error: e?.message,
+                downloadMs: Date.now() - downloadStart
+              })
+            }
+          }
+
+          // === Tier 2: Real-time TTS with pre-computed text ===
+          try {
+            const audioSuccess = await voiceSession.playAIResponse(opening.text)
+            if (audioSuccess) {
+              console.log('[useVoiceChat] Tier 2: real-time TTS played', {
+                illusionKey, illusionLayer, source: opening.source
+              })
+              return true
+            }
+          } catch (audioError: any) {
+            console.log('[useVoiceChat] Tier 2 failed, falling to Tier 3', {
+              error: audioError?.message
+            })
+          }
+
+          // Both audio tiers failed — remove message and fall through
+          messages.value.pop()
+          isLoading.value = true
+        }
+      } catch (e: any) {
+        console.log('[useVoiceChat] Fast-start path failed, falling to Tier 3', {
+          error: e?.data?.message || e?.message
+        })
+      }
+    }
+
+    // === Tier 3: Existing flow (full LLM+TTS) ===
+    // Existing streaming/non-streaming logic unchanged
+    if (enableStreamingTTS) {
+      // ... existing runStreamingWithResilience code ...
+    }
+    // ... existing non-streaming code ...
+  } catch (e) {
+    // ... existing error handling ...
+  }
+}
+```
+
+#### State Management During Fast-Start (v2)
+
+| State | Tier 1 Behavior | Tier 2 Behavior | Tier 3 Behavior |
+|-------|-----------------|-----------------|-----------------|
+| `isLoading` | Set to `false` before audio attempt | Same (already false) | Reset to `true` before fallback |
+| `messages` | Opening pushed immediately | Same (already pushed) | Popped on failure, re-added by existing flow |
+| `conversationId` | Set from bootstrap (background) | Same | Set from `/api/chat` response |
+| `currentTranscript` | Set by `playFromUrl()` | Set by `playAIResponse()` | Set by streaming/non-streaming flow |
+| `currentWordIndex` | Tracked by `playFromUrl()` | Tracked by `playAIResponse()` | Tracked by streaming/batch path |
+| `isAISpeaking` | Managed by `playFromUrl()` events | Managed by `playAIResponse()` events | Managed by existing flow |
+
+### Pre-Computation Job Changes
+
+<!-- TECH-DESIGN: Extended precomputeOpeningText() with audio generation -->
+
+**Modified file:** `server/utils/session/precompute-opening.ts`
+
+The existing `precomputeOpeningText()` function is extended to generate audio after text. The key change: **text is stored first** (before audio generation), so that if audio fails, the text is still available for Tier 2 fallback (REQ-20).
+
+**Updated flow (audio generation added after existing text storage):**
+
+```typescript
+export async function precomputeOpeningText(params: PrecomputeParams): Promise<void> {
+  // ... existing LLM text generation code (unchanged) ...
+
+  const openingText = response.content.trim()
+  if (!openingText) throw new Error('Empty response from LLM')
+
+  // Store text FIRST (REQ-20: text saved even if audio fails)
+  await supabase
+    .from('user_progress')
+    .update({
+      precomputed_opening_text: openingText,
+      precomputed_opening_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+
+  // === NEW: Audio generation (v2) ===
+  try {
+    // 1. Generate audio via TTS
+    const provider = getTTSProviderFromConfig()
+    const ttsResult = await provider.synthesize({ text: openingText })
+
+    // 2. Delete previous audio from Storage (REQ-18)
+    const { data: progress } = await supabase
+      .from('user_progress')
+      .select('precomputed_opening_audio_path')
+      .eq('user_id', userId)
+      .single()
+
+    if (progress?.precomputed_opening_audio_path) {
+      await supabase.storage
+        .from('opening-audio')
+        .remove([progress.precomputed_opening_audio_path])
+    }
+
+    // 3. Upload new audio to Storage
+    const ext = ttsResult.contentType === 'audio/mpeg' ? 'mp3' : 'wav'
+    const audioPath = `l2l3/${userId}/opening.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('opening-audio')
+      .upload(audioPath, ttsResult.audioBuffer, {
+        contentType: ttsResult.contentType,
+        upsert: true
+      })
+
+    if (uploadError) throw uploadError
+
+    // 4. Update user_progress with audio metadata
+    await supabase
+      .from('user_progress')
+      .update({
+        precomputed_opening_audio_path: audioPath,
+        precomputed_opening_word_timings: {
+          timings: ttsResult.wordTimings,
+          timingSource: ttsResult.timingSource,
+          contentType: ttsResult.contentType
+        }
+      })
+      .eq('user_id', userId)
+
+    console.log('[precompute-opening] Audio generated and stored', {
+      userId, illusionKey, nextLayer, audioPath,
+      contentType: ttsResult.contentType,
+      durationMs: ttsResult.estimatedDurationMs
+    })
+
+  } catch (audioError) {
+    // Audio generation/upload failed — text is already saved (REQ-20)
+    console.error('[precompute-opening] Audio generation failed (text still saved)', {
+      userId, illusionKey, nextLayer,
+      error: audioError instanceof Error ? audioError.message : String(audioError)
+    })
+
+    // Clear any stale audio references
+    await supabase
+      .from('user_progress')
+      .update({
+        precomputed_opening_audio_path: null,
+        precomputed_opening_word_timings: null
+      })
+      .eq('user_id', userId)
+      .catch(() => {}) // Best-effort cleanup
+  }
+}
+```
+
+### Error Handling & Fallback Summary
+
+<!-- TECH-DESIGN: v2 comprehensive error handling across all paths -->
+
+| Failure Point | Behavior | Tier Transition | Requirement |
+|--------------|----------|-----------------|-------------|
+| Opening endpoint fails (network/server error) | Fall through to Tier 3 | → 3 | REQ-6 |
+| Opening returns text but no audioUrl | Skip Tier 1, use Tier 2 (real-time TTS) | → 2 | REQ-6, REQ-12 |
+| Audio download times out (>3s) | Fall to Tier 2 (real-time TTS) | 1 → 2 | REQ-22 |
+| Audio download fails (network error) | Fall to Tier 2 | 1 → 2 | REQ-22 |
+| Audio unplayable (decode error) | Fall to Tier 2 | 1 → 2 | REQ-22 |
+| `playAIResponse()` fails (TTS error) | Fall to Tier 3 | 2 → 3 | REQ-6 |
+| Opening returns no text | Fall through to Tier 3 | → 3 | REQ-6, REQ-11, REQ-12 |
+| Bootstrap fails (all 3 retries) | Deferred creation on first `sendMessage()` | — | REQ-9 |
+| Pre-computation: audio generation fails | Text saved, audioUrl null at session start → Tier 2 | — | REQ-20 |
+| Pre-computation: audio upload fails | Same as generation failure | — | REQ-20 |
+| Pre-computation: both text & audio fail | Nothing stored → Tier 3 | — | REQ-6 |
+| L1 manifest not found (admin script not run) | audioUrl null → Tier 2 (text still returned) | → 2 | REQ-30 |
+| v2 deployed but no audio generated yet | Graceful fallback to Tier 2/3 | — | REQ-30 |
+
+**Key invariant:** The user never sees an error, degraded state, or different UI. The only difference is speed.
+
+### Security
+
+<!-- TECH-DESIGN: v2 security design -->
+
+- **`opening-audio` bucket:** Private (no public access). All client access through signed URLs generated server-side using service role (REQ-26)
+- **Signed URLs:** 5-minute expiry — used immediately at session start (REQ-21)
+- **GET `/api/session/opening`**: `serverSupabaseUser()` for auth, `serverSupabaseServiceRole()` for Storage signed URL generation and DB reads
+- **POST `/api/admin/generate-opening-audio`**: `X-Admin-Secret` header checked against `ADMIN_API_SECRET` env var. No Supabase user auth required (admin-only endpoint)
+- **Pre-computation job**: Runs within `complete-session.post.ts` which already authenticates the user
+- **Per-user audio isolation:** L2/L3 audio paths are scoped to `l2l3/{userId}/`, and access is mediated by signed URLs generated only for the authenticated user
+- **Account purge (REQ-27):** Per-user audio files deleted when account is purged
+
+### Observability
+
+<!-- TECH-DESIGN: v2 extended logging per REQ-15 -->
+
+**Server-side log events (new/updated):**
+
+| Tag | Event | Level | Data |
+|-----|-------|-------|------|
+| `[instant-start]` | Opening resolved | `log` | `{ illusionKey, illusionLayer, source, hasText, hasAudio }` |
+| `[instant-start]` | Opening not available | `log` | `{ illusionKey, illusionLayer, reason }` |
+| `[precompute-opening]` | Audio generated and stored | `log` | `{ userId, illusionKey, nextLayer, audioPath, contentType, durationMs }` |
+| `[precompute-opening]` | Audio generation failed (text saved) | `error` | `{ userId, illusionKey, nextLayer, error }` |
+| `[admin-audio]` | L1 audio generation started | `log` | `{ keys, provider }` |
+| `[admin-audio]` | L1 audio generated | `log` | `{ illusionKey, audioPath, contentType, durationMs }` |
+| `[admin-audio]` | L1 audio generation failed | `error` | `{ illusionKey, error }` |
+| `[admin-audio]` | Manifest updated | `log` | `{ keyCount }` |
+
+**Client-side log events (new/updated):**
+
+| Tag | Event | Data |
+|-----|-------|------|
+| `[useVoiceChat]` | Tier 1: pre-stored audio played | `{ illusionKey, illusionLayer, source, downloadMs }` |
+| `[useVoiceChat]` | Tier 1 failed, falling to Tier 2 | `{ error, downloadMs }` |
+| `[useVoiceChat]` | Tier 2: real-time TTS played | `{ illusionKey, illusionLayer, source }` |
+| `[useVoiceChat]` | Tier 2 failed, falling to Tier 3 | `{ error }` |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ADMIN_API_SECRET` | Yes (for admin endpoint) | Secret key for admin API authentication |
+
+### Files Changed
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `supabase/migrations/20260222_instant_conversations_v2.sql` | Add audio columns to `user_progress`, create `opening-audio` bucket |
+| `server/api/session/opening.get.ts` | Renamed opening endpoint with audio URL + word timings (replaces `opening-text.get.ts`) |
+| `server/api/admin/generate-opening-audio.post.ts` | Admin endpoint for L1 static audio generation |
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `composables/useVoiceSession.ts` | Add `playFromUrl()` method for pre-stored audio playback |
+| `composables/useVoiceChat.ts` | Restructure fast-start path for 3-tier logic, update endpoint URL |
+| `server/utils/session/precompute-opening.ts` | Extend with TTS generation, Storage upload, and audio metadata storage |
+| `types/database.types.ts` | Regenerated (auto-generated from schema) |
+
+**Deleted files:**
+
+| File | Reason |
+|------|--------|
+| `server/api/session/opening-text.get.ts` | Renamed to `opening.get.ts` |
+
+---
+
+<!-- TECH-DESIGN: v2 user stories with acceptance criteria -->
+
+## User Stories — v2
+
+### Phase 1: Foundation
+
+#### US-v2-1: Database Migration & Storage Bucket
+
+**Description:** As a developer, I want to add storage columns for pre-generated audio metadata and create the opening-audio Storage bucket so that the system can store and retrieve pre-generated audio files.
+
+**Acceptance Criteria:**
+
+1. Given the migration runs, when I inspect the `user_progress` table, then columns `precomputed_opening_audio_path` (TEXT, nullable) and `precomputed_opening_word_timings` (JSONB, nullable) exist
+2. Given existing `user_progress` rows exist, when the migration runs, then existing rows are not affected (both columns default to NULL)
+3. Given the migration runs, when I inspect Supabase Storage, then the `opening-audio` bucket exists and is private (not public)
+4. Given the migration has run, when I regenerate database types with `npm run db:types`, then `types/database.types.ts` includes the new columns
+
+**Technical Notes:**
+- File: `supabase/migrations/20260222_instant_conversations_v2.sql`
+- Uses `ADD COLUMN IF NOT EXISTS` and `ON CONFLICT DO NOTHING` for idempotency
+- Deploy migration to Supabase before deploying code
+
+**Dependencies:** None (foundation story)
+
+**Test Requirements:**
+- Manual: run migration against local Supabase, verify columns exist and bucket is created
+- Manual: verify `db:types` regeneration includes new columns
+
+**Estimated Complexity:** S — Two `ALTER TABLE` statements + bucket creation
+
+---
+
+### Phase 2: Audio Pre-Generation
+
+#### US-v2-2: L1 Admin Audio Generation Endpoint
+
+**Description:** As an admin, I want to generate and store audio files for all L1 illusion openings so that users get near-instant audio playback when starting L1 core sessions.
+
+**Acceptance Criteria:**
+
+1. Given a valid `X-Admin-Secret` header and no request body, when I call `POST /api/admin/generate-opening-audio`, then audio is generated for all 5 illusion keys in `ILLUSION_OPENING_MESSAGES`
+2. Given a valid `X-Admin-Secret` header and `{ illusionKey: "stress_relief" }` in the body, when I call the endpoint, then audio is generated only for the `stress_relief` key
+3. Given audio generation succeeds for a key, when I check Supabase Storage, then an audio file exists at `opening-audio/l1/{key}.{ext}` with the correct content type
+4. Given all audio is generated, when I check Supabase Storage, then a `manifest.json` file exists at `opening-audio/l1/manifest.json` containing entries for each generated key with `audioPath`, `contentType`, `timings`, and `timingSource`
+5. Given a single key is regenerated, when I check the manifest, then only that key's entry is updated — other entries are preserved from the existing manifest
+6. Given audio already exists for a key, when I regenerate it, then the existing file is overwritten (`upsert: true`)
+7. Given an invalid or missing `X-Admin-Secret` header, when I call the endpoint, then I receive a 401 error
+8. Given TTS generation fails for a key, when the endpoint continues, then the failure is logged and the results array shows `success: false` with the error for that key — other keys are still processed
+9. Given audio generation fails for a key during all-key regeneration, when the manifest is written, then the failed key's existing manifest entry is preserved (manifest is always merged with existing entries, not overwritten) — old audio remains accessible via Tier 1
+10. Given a valid admin secret but an `illusionKey` not in `ILLUSION_OPENING_MESSAGES`, when I call the endpoint, then I receive a 400 error with a descriptive message
+
+<!-- READINESS-REVIEWED: Added AC#9 (manifest merge on partial failure) and AC#10 (invalid illusionKey validation) -->
+
+**Technical Notes:**
+- File: `server/api/admin/generate-opening-audio.post.ts`
+- Uses `getTTSProviderFromConfig()` from `server/utils/tts` for TTS calls
+- Uses `serverSupabaseServiceRole()` for Storage operations
+- Manifest is read-then-merged when regenerating a single key (to preserve other entries)
+- New env var: `ADMIN_API_SECRET`
+
+**Dependencies:** US-v2-1 (bucket must exist)
+
+**Test Requirements:**
+- Unit test: all 5 keys generated when no illusionKey specified
+- Unit test: single key generated when illusionKey specified
+- Unit test: manifest written with correct structure
+- Unit test: manifest merged when single key regenerated
+- Unit test: invalid admin secret returns 401
+- Unit test: TTS failure for one key doesn't block others
+
+**Estimated Complexity:** M — TTS integration + Storage upload + manifest management
+
+---
+
+#### US-v2-3: Extend Pre-Computation Job for Audio
+
+**Description:** As the system, I want to generate and store audio alongside the pre-computed opening text for L2/L3 sessions so that the next session can use pre-stored audio playback.
+
+**Acceptance Criteria:**
+
+1. Given the pre-computation job generates text successfully, when the job continues, then it calls the TTS provider to generate audio from the text
+2. Given audio generation succeeds, when I check Supabase Storage, then an audio file exists at `opening-audio/l2l3/{userId}/opening.{ext}`
+3. Given audio upload succeeds, when I check `user_progress`, then `precomputed_opening_audio_path` contains the Storage path and `precomputed_opening_word_timings` contains the JSONB metadata (`{ timings, timingSource, contentType }`)
+4. Given a previous audio file exists in Storage (from a prior pre-computation), when the job runs, then the previous file is deleted before the new one is uploaded (REQ-18)
+5. Given audio generation fails but text generation succeeded, when I check `user_progress`, then `precomputed_opening_text` is stored but `precomputed_opening_audio_path` is null and `precomputed_opening_word_timings` is null (REQ-20)
+6. Given audio upload fails but text generation succeeded, when I check `user_progress`, then text is stored but audio fields are null (REQ-20)
+7. Given audio generation fails, when I check server logs, then the failure is logged with `[precompute-opening]` tag
+8. Given both text and audio succeed, when I check the pre-computation ordering, then text is stored in the database BEFORE audio generation begins (text-first for REQ-20 compliance)
+
+**Technical Notes:**
+- File: `server/utils/session/precompute-opening.ts`
+- Text stored first (existing update call), then audio generation attempted
+- Uses `getTTSProviderFromConfig().synthesize()` directly (no HTTP call)
+- Storage operations use the `supabase` client already passed to the function
+- On audio failure: set `precomputed_opening_audio_path` and `precomputed_opening_word_timings` to null (cleanup stale refs)
+- Extension determined by content type: `audio/mpeg` → `.mp3`, else → `.wav`
+
+**Dependencies:** US-v2-1 (bucket and columns must exist)
+
+**Test Requirements:**
+- Unit test: audio generated and uploaded after text
+- Unit test: previous audio deleted before new upload
+- Unit test: text saved even when audio generation fails (REQ-20)
+- Unit test: text saved even when audio upload fails (REQ-20)
+- Unit test: audio metadata stored correctly in JSONB column
+- Unit test: stale audio refs cleared on failure
+
+**Estimated Complexity:** M — TTS call + Storage upload/delete + error handling with text-first ordering
+
+---
+
+### Phase 3: Server — Opening Endpoint
+
+#### US-v2-4: Update Opening Endpoint with Audio URL
+
+**Description:** As the client application, I want the opening endpoint to return pre-stored audio URLs and word timings alongside the text so that I can play pre-stored audio at session start.
+
+**Acceptance Criteria:**
+
+1. Given a core L1 session with pre-generated audio (manifest exists), when I call `GET /api/session/opening`, then I receive `{ text, source: "static", audioUrl: "<signed-url>", wordTimings: [...], contentType, timingSource }`
+2. Given a core L1 session but no manifest (admin script not run yet), when I call the endpoint, then I receive `{ text, source: "static", audioUrl: null, wordTimings: null, contentType: null, timingSource: null }` — text available for Tier 2 fallback (REQ-30)
+3. Given a core L2 session with pre-stored audio (audio_path exists in user_progress), when I call the endpoint, then I receive the text + signed audio URL + word timings + content type + timing source
+4. Given a core L2 session without audio (audio_path is null), when I call the endpoint, then I receive text with null audio fields — Tier 2 fallback
+5. Given a non-core session, when I call the endpoint, then all fields are null (unchanged behavior)
+6. Given the endpoint generates a signed URL, then the URL expiry is 5 minutes (300 seconds) per REQ-21
+7. Given the L1 manifest was loaded within the last 5 minutes, when another request arrives, then the cached manifest is used (no Storage read)
+8. Given the old endpoint URL `/api/session/opening-text` is called, then it returns 404 (endpoint has been renamed)
+9. Given the manifest has an entry for the key but signed URL generation fails (Storage error), when I call the endpoint, then I receive `{ text, source, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }` — graceful Tier 2 fallback
+
+<!-- READINESS-REVIEWED: Added AC#9 (createSignedUrl failure → graceful Tier 2 fallback) -->
+
+**Technical Notes:**
+- File: `server/api/session/opening.get.ts` (new file, replacing `opening-text.get.ts`)
+- L1 manifest loaded from Storage with 5-min TTL cache (module-level variable)
+- Signed URLs generated via `supabase.storage.from('opening-audio').createSignedUrl(path, 300)`
+- For L2/L3: select now includes `precomputed_opening_audio_path` and `precomputed_opening_word_timings`
+- Delete old `server/api/session/opening-text.get.ts`
+
+**Dependencies:** US-v2-1 (reads new columns)
+
+**Test Requirements:**
+- Unit test: L1 with manifest → returns audio URL + timings
+- Unit test: L1 without manifest → returns text only
+- Unit test: L2/L3 with audio path → returns audio URL + timings
+- Unit test: L2/L3 without audio path → returns text only
+- Unit test: manifest caching (second call doesn't re-fetch from Storage)
+- Unit test: signed URL expiry is 300 seconds
+- All existing opening-text tests migrated to new endpoint name
+
+**Estimated Complexity:** M — Manifest loading + caching + signed URL generation + response extension
+
+---
+
+### Phase 4: Client — Pre-Stored Audio Playback
+
+#### US-v2-5: playFromUrl() Method in useVoiceSession
+
+**Description:** As the voice session composable, I want a method to play audio from a URL with stored word timings so that pre-stored audio has the same word-by-word highlighting experience as real-time TTS.
+
+**Acceptance Criteria:**
+
+1. Given a valid audio URL and word timings, when `playFromUrl()` is called, then the audio plays via an `HTMLAudioElement` and word-by-word highlighting tracks against `audioElement.currentTime`
+2. Given word timings with `timingSource: 'estimated'`, when the audio loads, then timings are scaled to match actual audio duration (same logic as `playAIResponse`)
+3. Given word timings with `timingSource: 'actual'`, when the audio loads, then timings are used as-is (no scaling)
+4. Given the audio URL fails to load (network error, 404), when the error fires, then `playFromUrl()` resolves with `false` and `isAISpeaking` is `false`
+5. Given audio playback begins normally, when the `onplay` event fires, then `playFromUrl()` resolves with `true` and `isAISpeaking` is `true`. The `onended` handler later sets `isAISpeaking` to `false` and `currentWordIndex` to the last word (cleanup only — does not gate the Promise)
+
+<!-- READINESS-REVIEWED: AC#5 updated — playFromUrl resolves on playback start, not end, so 3-second download timeout works correctly -->
+
+6. Given `playFromUrl()` is called while previous audio is playing, when the new audio starts, then the previous audio is stopped and cleaned up
+
+**Technical Notes:**
+- File: `composables/useVoiceSession.ts`
+- Signature: `playFromUrl(url: string, text: string, timings: WordTiming[], timingSource: 'actual' | 'estimated'): Promise<boolean>`
+- Reuses existing `audioElement`, `wordTimings`, `playbackStartTime`, `startWordTracking()`, `stopWordTracking()`
+- No TTS API call — sets `isProcessing = false` immediately
+- Sets `currentTranscript` to the provided text for UI display
+
+**Dependencies:** None (self-contained composable change)
+
+**Test Requirements:**
+- Unit test: audio plays from URL and resolves true
+- Unit test: word timing scaling for estimated timings
+- Unit test: no scaling for actual timings
+- Unit test: error handling for failed URL
+- Unit test: cleanup of previous audio element
+
+**Estimated Complexity:** S — Follows existing `playAIResponse` pattern, no new concepts
+
+---
+
+#### US-v2-6: 3-Tier Fast-Start in useVoiceChat
+
+**Description:** As a user starting a core session, I want the system to use pre-stored audio when available, fall back to real-time TTS when audio is unavailable, and fall back to the full flow as a last resort — so that I always get the fastest possible start.
+
+**Acceptance Criteria:**
+
+1. Given opening response has audioUrl + wordTimings + contentType (Tier 1), when starting a session, then `playFromUrl()` is called and audio plays within ~500ms
+2. Given Tier 1 audio download takes >3 seconds, when the timeout fires, then the system falls back to Tier 2 (`playAIResponse` with the pre-computed text)
+3. Given Tier 1 audio playback fails (decode error, network error), when the error occurs, then the system falls back to Tier 2
+4. Given opening response has text but no audioUrl (Tier 2), when starting a session, then `playAIResponse()` is called with the pre-computed text
+5. Given both Tier 1 and Tier 2 fail, when the fallbacks exhaust, then the message is popped, `isLoading` is reset, and the existing flow (Tier 3) is used
+6. Given opening response has no text (Tier 3), when starting a session, then the existing `runStreamingWithResilience` flow is used
+7. Given any tier is used, when the fallback tier is determined, then the tier used is logged with `[useVoiceChat]` tag including download latency for Tier 1 attempts (REQ-15 v2)
+8. Given the fast path is used, when bootstrap completes in the background, then `conversationId` is set (unchanged from v1)
+9. Given a non-core session, when starting, then the fast path is not attempted (unchanged from v1)
+10. Given the endpoint URL, when the client calls it, then it uses `/api/session/opening` (not the old `/api/session/opening-text`)
+
+**Technical Notes:**
+- File: `composables/useVoiceChat.ts`
+- 3-second download timeout via `Promise.race` wrapping `playFromUrl()`
+- Bootstrap runs in background (same as v1) — only called once regardless of tier
+- Message push and `isLoading = false` happen before any audio attempt (same as v1)
+- On total audio failure: pop message, set `isLoading = true`, fall through to existing flow
+- Tier 1 logs `downloadMs` for latency monitoring
+
+**Dependencies:** US-v2-4 (endpoint must return v2 response shape), US-v2-5 (`playFromUrl` must exist)
+
+**Test Requirements:**
+- Unit test: Tier 1 path (audioUrl present, playFromUrl succeeds)
+- Unit test: Tier 1 → Tier 2 fallback (download timeout)
+- Unit test: Tier 1 → Tier 2 fallback (playFromUrl returns false)
+- Unit test: Tier 2 path (no audioUrl, text present)
+- Unit test: Tier 2 → Tier 3 fallback (playAIResponse fails)
+- Unit test: Tier 3 path (no text)
+- Unit test: endpoint URL is `/api/session/opening`
+- Unit test: download latency logged for Tier 1
+- E2E test: Tier 1 happy path (mock opening with audioUrl)
+- E2E test: Tier 2 fallback (mock opening without audioUrl)
+- E2E test: Tier 3 fallback (mock opening returning null text)
+
+**Estimated Complexity:** L — Core feature logic with 3-tier fallback, timeout, and multiple error paths
+
+---
+
+### Phase 5: Lifecycle
+
+#### US-v2-7: Per-User Audio Cleanup on Account Purge
+
+**Description:** As the system, I want to delete per-user audio files from Storage when a user's account is purged so that no orphaned data remains (REQ-27).
+
+**Acceptance Criteria:**
+
+1. Given a user account is purged/deleted, when the purge process runs, then all files at `opening-audio/l2l3/{userId}/` are deleted from Storage
+2. Given the user has no audio files in Storage, when the purge process runs, then no errors occur (no-op)
+3. Given the deletion fails, when the purge continues, then the failure is logged but does not block account deletion
+
+**Technical Notes:**
+- Integrate with existing account purge logic (if it exists) or add to the relevant cleanup handler
+- Use `supabase.storage.from('opening-audio').list('l2l3/{userId}/')` then `.remove(paths)` pattern (same as ceremony preview cleanup in `save-final-recording.post.ts`)
+- L1 static audio is NOT deleted on account purge (not user-specific)
+
+**Dependencies:** US-v2-1 (storage paths must exist)
+
+**Test Requirements:**
+- Unit test: audio files deleted on account purge
+- Unit test: no error when no files exist
+- Unit test: deletion failure logged but doesn't block
+
+**Estimated Complexity:** S — Simple Storage list + delete, follows existing cleanup patterns
+
+---
+
+## Test Specification — v2
+
+<!-- TECH-DESIGN: v2 complete testing strategy -->
+
+### Unit Tests
+
+#### `tests/unit/server/api/session/opening.test.ts`
+
+Tests for `GET /api/session/opening` (replaces `opening-text.test.ts`):
+
+| Test Case | Setup | Assertion |
+|-----------|-------|-----------|
+| Returns static text + audio URL for L1 with manifest | Mock auth, mock manifest with `stress_relief` entry | `{ text, source: 'static', audioUrl: '<signed-url>', wordTimings: [...], contentType, timingSource }` |
+| Returns static text + null audio for L1 without manifest | Mock auth, manifest download returns error | `{ text, source: 'static', audioUrl: null, ... }` |
+| Returns precomputed text + audio URL for L2 with audio | Mock auth, mock `user_progress` with text + audio_path + word_timings | Full response with audioUrl |
+| Returns precomputed text + null audio for L2 without audio | Mock auth, mock `user_progress` with text but null audio fields | `{ text, source: 'precomputed', audioUrl: null, ... }` |
+| Returns null for L2 with no precomputed text | Mock auth, mock `user_progress` with all null | `{ text: null, source: null, ... }` |
+| Returns null for non-core session | Mock auth, query `sessionType=check_in` | All null |
+| Returns 401 for unauthenticated | No auth mock | HTTP 401 |
+| Returns 400 for invalid illusionKey | Mock auth, query `illusionKey=invalid` | HTTP 400 |
+| Caches manifest for 5 minutes | Mock auth, call twice within 5 min | Second call doesn't fetch manifest from Storage |
+| Signed URL has 300s expiry | Mock auth, L1 with manifest | `createSignedUrl` called with `300` |
+| Returns null audio when createSignedUrl fails | Mock auth, L1 with manifest, mock `createSignedUrl` throwing | `{ text, source: 'static', audioUrl: null, ... }` |
+
+**Mock strategy:** Mock `serverSupabaseUser()`, `serverSupabaseServiceRole()`. Mock Storage download for manifest, `createSignedUrl` for URLs. Use in-memory mock for Supabase queries.
+
+#### `tests/unit/server/api/admin/generate-opening-audio.test.ts`
+
+Tests for `POST /api/admin/generate-opening-audio`:
+
+| Test Case | Setup | Assertion |
+|-----------|-------|-----------|
+| Generates audio for all 5 keys | Valid admin secret, no body | 5 results all `success: true`, manifest written |
+| Generates audio for single key | Valid secret, body `{ illusionKey: 'stress_relief' }` | 1 result, manifest merged with existing |
+| Returns 401 for invalid secret | Wrong/missing `X-Admin-Secret` | HTTP 401 |
+| Handles TTS failure for one key | Mock TTS failing for `pleasure` | `pleasure: success: false`, other 4 succeed |
+| Writes manifest with correct structure | Valid secret | Manifest contains `audioPath`, `contentType`, `timings`, `timingSource` per key |
+| Overwrites existing audio | Audio already exists for key | Upload called with `upsert: true` |
+| Manifest preserves failed keys | Mock TTS failing for `pleasure`, existing manifest has `pleasure` entry | Updated manifest still has `pleasure` from previous run |
+| Returns 400 for invalid illusionKey | Valid secret, body `{ illusionKey: 'nonexistent' }` | HTTP 400 |
+
+**Mock strategy:** Mock `getTTSProviderFromConfig()`, Supabase Storage upload/download.
+
+#### `tests/unit/server/utils/session/precompute-opening.test.ts` (extended)
+
+New tests added to existing test file:
+
+| Test Case | Setup | Assertion |
+|-----------|-------|-----------|
+| Generates audio after text | Mock LLM + TTS succeeding | Audio uploaded to `l2l3/{userId}/opening.{ext}`, metadata stored |
+| Stores text before audio attempt | Mock LLM succeeding, TTS failing | `precomputed_opening_text` stored; audio fields null |
+| Deletes previous audio before upload | Mock existing `precomputed_opening_audio_path` | Storage `.remove()` called before `.upload()` |
+| Audio upload failure → text still saved | Mock LLM + TTS success, upload failure | Text stored, audio fields set to null |
+| Audio metadata stored correctly | Mock full success | `precomputed_opening_word_timings` contains `{ timings, timingSource, contentType }` |
+| Stale audio refs cleared on failure | Mock audio failure with existing audio path | `precomputed_opening_audio_path` and `word_timings` set to null |
+
+**Mock strategy:** Extend existing mocks. Add mock for `getTTSProviderFromConfig()` and Storage operations.
+
+#### `tests/unit/composables/useVoiceSession-playFromUrl.test.ts`
+
+New test file for `playFromUrl()`:
+
+| Test Case | Setup | Assertion |
+|-----------|-------|-----------|
+| Plays audio from URL and resolves on playback start | Mock Audio element with `onplay` event | Resolves `true` on `onplay`, `isAISpeaking` is `true` |
+| Scales estimated word timings | `timingSource: 'estimated'`, mock audio duration | Timings scaled to match actual duration |
+| Does not scale actual timings | `timingSource: 'actual'` | Timings used as-is |
+| Returns false on audio error | Mock Audio element error event | Resolves `false`, `isAISpeaking` is `false` |
+| Returns false on play() failure | Mock Audio play() rejecting | Resolves `false` |
+| Sets currentTranscript | Valid URL + text | `currentTranscript.value` equals provided text |
+| Cleans up previous audio | Call twice | First audio element paused and cleaned up |
+
+**Mock strategy:** Mock `HTMLAudioElement` (constructor, events, properties). Use fake timers for word tracking interval.
+
+#### `tests/unit/composables/useVoiceChat-instant-start.test.ts` (extended)
+
+Updated and extended for 3-tier logic:
+
+| Test Case | Setup | Assertion |
+|-----------|-------|-----------|
+| Tier 1: pre-stored audio plays | Mock opening with audioUrl, mock playFromUrl success | `playFromUrl` called, returns true |
+| Tier 1 → Tier 2: download timeout | Mock opening with audioUrl, mock playFromUrl hanging >3s | `playAIResponse` called as fallback |
+| Tier 1 → Tier 2: playFromUrl fails | Mock opening with audioUrl, mock playFromUrl returning false | `playAIResponse` called |
+| Tier 2: no audio URL | Mock opening with text but null audioUrl | `playAIResponse` called directly |
+| Tier 2 → Tier 3: TTS fails | Mock opening with text, mock playAIResponse failing | Falls through to streaming flow |
+| Tier 3: no text | Mock opening returning `{ text: null }` | `runStreamingWithResilience` called |
+| Endpoint URL is /api/session/opening | Any request | `$fetch` called with `/api/session/opening` |
+| Download latency logged | Tier 1 attempt | Log includes `downloadMs` |
+| Bootstrap called once regardless of tier | Any tier | `bootstrapWithRetry` called exactly once |
+| Non-core session skips fast path | `sessionType: 'check_in'` | Fast path not attempted |
+
+**Mock strategy:** Update existing mocks. Mock `$fetch` for new endpoint URL. Mock `voiceSession.playFromUrl()`. Use fake timers for download timeout.
+
+### E2E Tests
+
+#### `tests/e2e/instant-conversations-v2.spec.ts`
+
+| Test | Steps | Assertions |
+|------|-------|------------|
+| **Tier 1: pre-stored audio plays** | Mock `opening` returning text + audioUrl + timings. Mock audio URL returning audio binary. Mock `bootstrap` returning conversationId. Navigate to session. | Audio plays (no synthesize call). Word highlighting active. `conversationId` set. |
+| **Tier 2: text available, no audio** | Mock `opening` returning text + null audioUrl. Mock `synthesize` returning audio. Mock `bootstrap`. Navigate to session. | Synthesize called. Audio plays. Session works normally. |
+| **Tier 1 → Tier 2 fallback: audio URL fails** | Mock `opening` returning text + audioUrl (pointing to 500 error). Mock `synthesize` returning audio. Navigate to session. | First request to audio URL fails. Synthesize called as fallback. Session works. |
+| **Tier 3: neither available** | Mock `opening` returning `{ text: null }`. Mock `/api/chat` with streaming response. Navigate to session. | Falls back to full flow. Session starts normally (slower). |
+| **Non-core session skips fast path** | Navigate to check-in session. | `opening` endpoint not called. Current flow used. |
+
+**Mock strategy:** Use `page.route()` to intercept API calls. Mock `/api/session/opening`, `/api/voice/synthesize`, `/api/session/bootstrap`, audio URL, and `/api/chat`.
+
+**File location:** `tests/e2e/instant-conversations-v2.spec.ts`
+
+### Coverage Goals
+
+**Highest risk areas (deepest coverage):**
+
+1. `startConversation()` 3-tier fallback — all decision paths, timeout, and fallback triggers
+2. `playFromUrl()` — audio element lifecycle, word timing scaling
+3. `precomputeOpeningText()` audio extension — text-first ordering, failure isolation (REQ-20)
+4. Admin generation endpoint — manifest management, TTS error isolation
+
+**"Done" for testing:**
+
+- All v2 unit tests pass
+- All v2 E2E tests pass
+- Existing v1 tests updated for endpoint rename (no regressions)
+- Manual QA: L1 session starts in <500ms with pre-stored audio (Chrome DevTools timing)
+- Manual QA: trigger each fallback tier and verify no visible difference
+- Manual QA: run admin generation script and verify manifest + audio files in Storage
+
+---
+
+## Implementation Plan — v2
+
+<!-- TECH-DESIGN: v2 phased implementation ordering -->
+
+### Phase 1: Foundation (US-v2-1)
+
+Deploy the database migration and bucket creation first. Non-breaking — adding nullable columns and an empty bucket has no effect on existing v1 code.
+
+### Phase 2: Audio Pre-Generation (US-v2-2, US-v2-3) — parallelizable
+
+L1 admin script (US-v2-2) and L2/L3 pre-computation extension (US-v2-3) can be built independently. Neither depends on the other.
+
+### Phase 3: Server — Opening Endpoint (US-v2-4) — depends on Phase 1
+
+The opening endpoint update requires the new columns to exist. Can be built in parallel with Phase 2.
+
+### Phase 4: Client (US-v2-5, US-v2-6) — depends on Phase 3
+
+US-v2-5 (`playFromUrl`) can be built in parallel with Phases 2-3 (no server deps). US-v2-6 (3-tier fast-start) requires both US-v2-4 (endpoint) and US-v2-5 (`playFromUrl`).
+
+### Phase 5: Lifecycle (US-v2-7)
+
+Account purge cleanup. Low priority — can be built at any point after Phase 1.
+
+### Phase 6: Testing & QA
+
+E2E tests and manual QA after all code is deployed. Run admin script to generate L1 audio.
+
+**Parallel build opportunities:** Phases 2 (US-v2-2, US-v2-3), Phase 3, and US-v2-5 can all be built simultaneously.
+
+### Implementation Dependency Graph
+
+```
+US-v2-1 (Migration + Bucket)
+  ├── US-v2-2 (L1 Admin Script) ──────────────┐
+  ├── US-v2-3 (Pre-Computation Audio) ─────────┤
+  ├── US-v2-4 (Opening Endpoint) ──────────────┼── US-v2-6 (3-Tier Fast-Start)
+  ├── US-v2-5 (playFromUrl) ───────────────────┘
+  └── US-v2-7 (Account Purge Cleanup)
+```
 
 ---
 
@@ -1169,3 +2328,58 @@ US-1 (Migration)
 | 1.3 | 2026-02-19 | Requirements refinement: Refined REQ-2 (pre-computation trigger, prompt construction, job retry), REQ-6 (explicit L1 lookup failure coverage), REQ-9 (bounded retry: 3 retries, exponential backoff, 15s max), REQ-10 (persists until session completion, not deleted at bootstrap). Added REQ-12 (fast-start decision logic), REQ-13 (storage on user_progress table with lifecycle), REQ-14 (auth/security), REQ-15 (server-side logging). Resolved Open Question #1 (storage location). Reorganized requirements into categorized sections. |
 | 1.4 | 2026-02-19 | Technical design: Client-side orchestration architecture with 3-endpoint design (opening-text, bootstrap, existing synthesize). Pre-computation job triggered from complete-session. 6 user stories (US-1 through US-6) with acceptance criteria. Complete test specification (unit + E2E). Implementation dependency graph and phased plan. Status → Implementation Ready. |
 | **2.0** | **2026-02-20** | **New implementation cycle: Pre-stored audio.** v1 eliminated the LLM bottleneck but TTS remains several seconds — well above the <1s target. v2 eliminates TTS from the critical path by pre-generating and storing audio alongside text. Revised problem statement, goals (target <500ms), and success metrics. Moved "pre-generated audio" from non-goal to core approach. Added 3-tier fallback chain (pre-stored audio → real-time TTS → full LLM+TTS). Added REQ-16 through REQ-26 for audio generation, storage, retrieval, playback, and lifecycle. Supabase Storage for all audio (L1 static + L2/L3 per-user). Word timing mechanism deferred to technical design. v1 technical design, user stories, test spec, and implementation plan preserved as implemented reference. v2 technical design pending. |
+| 2.1 | 2026-02-21 | UX refinement pass on v2 PRD. Audited all 12 UX dimensions. Added REQ-27 (per-user audio deletion on account purge) for data privacy compliance. Confirmed L1 openings remain static for v2. All other dimensions clean — no UX changes needed beyond the data lifecycle requirement. |
+| 2.2 | 2026-02-21 | Requirements refinement pass on v2 PRD. Audited all 12 requirements dimensions against the UX contract. Updated REQ-17 (single illusion key targeting for L1 script), REQ-18 (explicit deletion of previous audio file from storage before uploading new one), REQ-20 (extended to cover audio upload failure alongside generation failure), REQ-21 (specified signed URLs as audio access mechanism), REQ-22 (added 3-second download timeout and clarified 'unplayable'), REQ-25 (clarified that audio lifecycle means deleting the actual file in storage, not just the DB reference), REQ-15 (added audio download latency tracking). Added REQ-28 (v2 migration for `precomputed_opening_audio_path` column), REQ-29 (manual audio regeneration on voice/provider change), REQ-30 (rollout safety — graceful fallback when no audio exists). Resolved Open Question #2 (voice change → manual regen). |
+| 2.3 | 2026-02-21 | Technical design: v2 complete architecture. Supabase Storage bucket (`opening-audio`, private). 3-tier fast-start client flow with `playFromUrl()` composable method and 3-second download timeout. Admin audio generation endpoint (`POST /api/admin/generate-opening-audio` with `X-Admin-Secret`). L1 `manifest.json` for static audio metadata with server-side 5-min TTL cache. Extended pre-computation job for L2/L3 audio (text-first storage for REQ-20). Opening endpoint renamed (`/api/session/opening`) with extended response (audioUrl, wordTimings, contentType, timingSource). Word timings: JSONB column on `user_progress` (L2/L3), manifest.json in Storage (L1). Audio stored in native provider format (no transcoding). 7 user stories (US-v2-1 through US-v2-7) with acceptance criteria. Complete test specification (unit + E2E). Implementation dependency graph and phased plan. Resolved Open Question #3 (word timing storage format). Status → Implementation Ready. |
+| 2.4 | 2026-02-21 | Readiness review. Fixed `playFromUrl()` Promise resolution semantics — resolves on `onplay` (playback started) instead of `onended` (playback finished), so the 3-second download timeout in `startConversation()` works correctly. Added US-v2-2 AC#9 (manifest always merges with existing entries on partial failure, preserving old audio for failed keys) and AC#10 (invalid illusionKey returns 400). Added US-v2-4 AC#9 (graceful Tier 2 fallback when createSignedUrl fails). Updated US-v2-5 AC#5 to match resolve-on-start semantics. Updated unit test tables for all affected stories. Status → Ready for Development. |
+
+---
+
+## Readiness Summary
+
+**Review Date:** 2026-02-21
+**Reviewer:** Readiness review (Definition of Ready audit)
+**Final Assessment:** Ready for Development
+
+**Audit Results:**
+
+| Layer | Gaps Found | Gaps Resolved |
+|-------|-----------|---------------|
+| Layer 1: UX → Requirements | 0 | 0 |
+| Layer 2: Requirements → Stories | 0 | 0 |
+| Layer 3: Stories → Acceptance Criteria | 4 | 4 |
+| **Total** | **4** | **4** |
+
+**Gaps Resolved:**
+
+1. **(Significant) `playFromUrl()` resolution semantics:** The specified code had `playFromUrl()` resolving on `onended` (~15-25s) but raced against a 3-second timeout — the timeout would always win, causing Tier 1 audio to be interrupted mid-playback and Tier 2 to restart. Fixed: `playFromUrl()` now resolves on `onplay` (playback started). US-v2-5 AC#5 and unit tests updated.
+2. **(Minor) Manifest merge on partial failure:** During all-key L1 regeneration, if some keys failed TTS, the manifest would lose their entries. Fixed: manifest always merges with existing entries, preserving old audio for failed keys. US-v2-2 AC#9 added.
+3. **(Minor) Invalid illusionKey validation:** Admin endpoint had no AC for invalid illusionKey in request body. Fixed: returns 400. US-v2-2 AC#10 added.
+4. **(Minor) createSignedUrl failure:** Opening endpoint had no AC for when signed URL generation fails. Fixed: graceful Tier 2 fallback (null audio fields). US-v2-4 AC#9 added.
+
+**Deferred Items:** None. All gaps resolved in this session.
+
+**Traceability Verification:**
+
+- [x] Every UX flow has requirements for all steps
+- [x] Every screen has requirements for all displayed data and interactive elements
+- [x] Every user action has a defined system response
+- [x] All conditional/branching logic is specified in requirements
+- [x] All states (loading, empty, error, success, partial) are covered
+- [x] All data sources and calculations are specified
+- [x] All validation rules are defined
+- [x] All default values and initial states are defined
+- [x] Every functional requirement maps to at least one user story
+- [x] No user story exceeds a reasonable implementation scope
+- [x] Story dependencies are documented and form an implementable sequence
+- [x] No orphan stories exist without a backing requirement
+- [x] Stories are independent enough to be developed and tested in isolation
+- [x] Stories collectively cover 100% of the requirements
+- [x] Every user story has acceptance criteria
+- [x] Happy path is covered for every story
+- [x] Validation and error scenarios are covered for every story with user input
+- [x] Edge cases are covered (empty, max, concurrent, first-time vs. returning)
+- [x] State transitions are explicitly stated
+- [x] Each criterion is specific and testable
+- [x] Criteria use consistent terminology across related stories
+- [x] Non-functional criteria are included where requirements mandate them

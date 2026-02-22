@@ -68,24 +68,20 @@ export default defineEventHandler(async (event) => {
     }
 
     // Cancel pending evidence bridge check-ins (non-blocking)
-    supabase
-      .from('check_in_schedule')
-      .update({
-        status: 'cancelled',
-        cancellation_reason: 'user_continued_immediately',
-      })
-      .eq('user_id', user.sub)
-      .eq('trigger_illusion_key', illusionKey)
-      .eq('check_in_type', 'evidence_bridge')
-      .in('status', ['scheduled', 'sent'])
-      .then(({ error }) => {
-        if (error) {
-          console.error('[instant-start] Failed to cancel evidence bridge check-ins:', error)
-        }
-      })
-      .catch((err) => {
-        console.error('[instant-start] Failed to cancel evidence bridge check-ins:', err)
-      })
+    Promise.resolve(
+      supabase
+        .from('check_in_schedule')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: 'user_continued_immediately',
+        })
+        .eq('user_id', user.sub)
+        .eq('trigger_illusion_key', illusionKey)
+        .eq('check_in_type', 'evidence_bridge')
+        .in('status', ['scheduled', 'sent'])
+    ).catch((err) => {
+      console.error('[instant-start] Failed to cancel evidence bridge check-ins:', err)
+    })
 
     console.log('[instant-start] Bootstrap success:', {
       conversationId,

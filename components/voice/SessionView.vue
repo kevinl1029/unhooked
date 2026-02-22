@@ -466,10 +466,9 @@ onMounted(async () => {
     await checkPermission()
 
     if (permissionState.value === 'granted') {
-      // Permission already granted, start conversation
+      await preInitAudio()
       await startConversation()
     } else if (permissionState.value === 'denied') {
-      // Permission denied, use text mode
       textMode.value = true
       await startConversation()
     } else {

@@ -1,6 +1,14 @@
 import { defineVitestConfig } from '@nuxt/test-utils/config'
+import { resolve } from 'path'
 
 export default defineVitestConfig({
+  resolve: {
+    alias: {
+      // Map the #supabase/server virtual module to a stub file so it can be resolved
+      // in unit tests. Tests use vi.mock('#supabase/server', factory) to override.
+      '#supabase/server': resolve(__dirname, 'tests/__mocks__/supabase-server.ts'),
+    },
+  },
   test: {
     environment: 'nuxt',
     environmentOptions: {

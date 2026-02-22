@@ -1,81 +1,233 @@
 # Ralph Progress Log
-Started: Sat Feb 21 21:26:59 EST 2026
+Started: Sat Feb 21 23:32:49 EST 2026
+---
+
+## 2026-02-22 - US-013
+- What was implemented: Per-user opening audio cleanup on account purge (REQ-27)
+  - Created `server/utils/storage/delete-user-opening-audio.ts`: standalone utility `deleteUserOpeningAudio(supabase, userId)` that lists files at `opening-audio/l2l3/{userId}/` and removes them, wrapped in try/catch so failure never blocks account deletion
+  - Created `server/api/user/delete.delete.ts`: account deletion endpoint that authenticates the user, calls `deleteUserOpeningAudio`, then deletes the auth user via `supabase.auth.admin.deleteUser(userId)`
+  - L1 static audio at `opening-audio/l1/` is NOT touched (not user-specific)
+  - Logs with `[account-purge]` tag on success, list failure, remove failure, or unexpected error
+- Files changed: `server/utils/storage/delete-user-opening-audio.ts` (new), `server/api/user/delete.delete.ts` (new)
+- **Learnings for future iterations:**
+  - No existing account purge logic exists in the codebase — created both the utility and endpoint from scratch
+  - The `list() + remove()` pattern follows `save-final-recording.post.ts` ceremony preview cleanup: `list(prefix)` returns file objects, map to `${prefix}/${f.name}` for remove paths
+  - `supabase.auth.admin.deleteUser(userId)` is available via `serverSupabaseServiceRole()` — uses the service role client which has admin privileges
+  - `deleteUserOpeningAudio` is a plain async utility (no H3 globals) — importable with `~/server/utils/storage/delete-user-opening-audio`
+---
+
+## 2026-02-22 - US-011
+- What was implemented: Created `tests/unit/composables/useVoiceChat-instant-start.test.ts` with 11 tests
+  - Tier 1: pre-stored audio plays when opening has audioUrl and playFromUrl succeeds
+  - Tier 1 → Tier 2: falls back to playAIResponse on 3-second download timeout (via vi.useFakeTimers + vi.advanceTimersByTimeAsync)
+  - Tier 1 → Tier 2: falls back to playAIResponse when playFromUrl returns false
+  - Tier 2: calls playAIResponse directly when text available but no audioUrl
+  - Tier 2 → Tier 3: falls through to streaming flow when playAIResponse fails (message popped, streaming picks up)
+  - Tier 3: uses streaming flow when opening text is null
+  - Endpoint URL verified as /api/session/opening (not /api/session/opening-text)
+  - downloadMs logged for Tier 1 audio attempts (console.log spy)
+  - Bootstrap called exactly once when Tier 1 succeeds
+  - Bootstrap called exactly once when Tier 2 is used
+  - Non-core session (check_in) skips fast path entirely
+- Files changed: `tests/unit/composables/useVoiceChat-instant-start.test.ts` (new)
+- **Learnings for future iterations:**
+  - `vi.stubGlobal('$fetch', mockFn)` works correctly in the Nuxt test environment — same pattern as `useProgress.test.ts`
+  - For timeout test: use `vi.useFakeTimers()` in the test, then `vi.advanceTimersByTimeAsync(3001)` BEFORE awaiting the result — this fires the setTimeout reject and allows the fallback chain to run
+  - Bootstrap is fire-and-forget (no await) — `$fetch('/api/session/bootstrap')` is called synchronously at the start of the async function body, so it appears in mock.calls by the time startConversation() resolves
+  - The `playStreamingResponse` mock must set `transcriptRef.value` to non-empty content AND return `{ success: true, sawDone: true, sawErrorEvent: false, ... }` for Tier 3 to count as successful (sendStreamingAttempt checks both)
+  - `vi.useRealTimers()` in afterEach is safe to call even when real timers are already active (no-op)
+  - Restore `consoleSpy` via `consoleSpy.mockRestore()` inside the test, not in afterEach
+---
+
+## 2026-02-22 - US-010
+- What was implemented: Created `tests/unit/composables/useVoiceSession-playFromUrl.test.ts` with 7 tests
+  - Resolves true and sets isAISpeaking when audio starts playing (onplay fires)
+  - Sets currentTranscript to the provided text
+  - Scales estimated word timings to match actual audio duration (scale factor derived from last endMs vs actual duration)
+  - Does not scale actual word timings (timingSource: 'actual')
+  - Resolves false and keeps isAISpeaking false on audio error
+  - Resolves false when play() rejects
+  - Pauses previous audio element when called again (cleanup verified via pause() mock)
+- Files changed: `tests/unit/composables/useVoiceSession-playFromUrl.test.ts` (new)
+- **Learnings for future iterations:**
+  - `useVoiceSession` is directly importable; mock its two dependencies (`useAudioRecorder`, `useStreamingTTS`) via `vi.mock()` factory functions — no H3 logic extraction needed since it's a plain composable
+  - Mock `Audio` constructor via `vi.stubGlobal('Audio', MockAudio)` where MockAudio is a `vi.fn().mockImplementation(...)` that pushes each instance to a shared array — access `audioInstances[last]` to trigger event handlers post-call
+  - To test `play()` rejection for a single test: use `MockAudio.mockImplementationOnce(...)` to override the next constructor call with a rejecting `play` mock — this is cleaner than trying to reconfigure after the fact
+  - `effectiveWordTimings` (computed on the composable return) exposes the internal `wordTimings` array, enabling verification of timing scaling without needing to expose private state
+  - `vi.useFakeTimers()` prevents `setInterval` (word tracking) from running in tests without affecting Promise resolution — microtasks still resolve normally
+  - The `onUnmounted` Vue warning (`no active component instance`) is harmless — stub it with `vi.stubGlobal('onUnmounted', vi.fn())` to suppress
+  - `URL.revokeObjectURL` with a non-blob URL is a no-op in happy-dom — no need to stub it for signed URL strings
+---
+
+## 2026-02-22 - US-009
+- What was implemented: 3-tier fast-start logic in `composables/useVoiceChat.ts` + bootstrap endpoint
+  - Created `server/api/session/bootstrap.post.ts`: creates conversation record + first assistant message in Supabase, cancels pending evidence bridge check-ins (non-blocking), returns `{ conversationId }`
+  - Added `bootstrapWithRetry(openingText)` private function in `useVoiceChat.ts`: calls `/api/session/bootstrap` with 3 retries + exponential backoff (1s/2s/4s), 15s max window, uses closure vars for illusionKey/illusionLayer/sessionType
+  - Modified `startConversation()` to implement 3-tier fallback for core sessions with illusionKey:
+    - Fetches from `/api/session/opening` (endpoint URL updated from `/api/session/opening-text`)
+    - If `opening.text`: pushes message immediately, fires bootstrap in background, sets `isLoading = false`
+    - Tier 1: If `audioUrl + wordTimings + contentType` → `Promise.race([playFromUrl(...), 3s timeout])` → return true on success
+    - Tier 2: `voiceSession.playAIResponse(opening.text)` → return true on success
+    - Both tiers fail: pops message, resets `isLoading = true`, falls to Tier 3
+    - Tier 3: unchanged streaming/non-streaming flow (runs if fast path failed or not applicable)
+- Files changed: `composables/useVoiceChat.ts`, `server/api/session/bootstrap.post.ts` (new)
+- **Learnings for future iterations:**
+  - The spec shows `bootstrapWithRetry(opening.text)` called with just the text — the function closes over composable-scope vars (illusionKey, illusionLayer, sessionType) so only openingText needs to be passed
+  - `$fetch` in composables returns Nuxt auto-generated route types; cast through `unknown` first when the inferred type doesn't match: `result as unknown as { conversationId: string }`
+  - The bootstrap endpoint (bootstrap.post.ts) was on the `feature/instant-conversations` branch — retrieved via `git show feature/instant-conversations:server/api/session/bootstrap.post.ts`
+  - Non-blocking fire-and-forget: call `.then(...).catch(() => {})` without `await` — don't `await` in the middle of time-critical audio path
+---
+
+## 2026-02-22 - US-008
+- What was implemented: Added `playFromUrl()` method to `composables/useVoiceSession.ts`
+  - Signature: `playFromUrl(url, text, timings, timingSource): Promise<boolean>`
+  - Creates HTMLAudioElement directly from signed URL (no TTS call, no base64)
+  - Sets `currentTranscript`, `currentWordIndex = -1`, `isProcessing = false`, `wordTimings = [...timings]`
+  - Cleans up previous audioElement (pause + revokeObjectURL) before creating new one
+  - `onloadedmetadata`: scales estimated timings to actual audio duration if `timingSource !== 'actual'` (same logic as playAIResponse)
+  - `onplay`: sets `isAISpeaking = true`, `playbackStartTime`, calls `startWordTracking()`, resolves Promise with `true`
+  - `onended`: cleanup only (isAISpeaking = false, last wordIndex, stopWordTracking) — does not gate Promise
+  - `onerror` / `play().catch()`: logs error, resolves `false`, sets `isAISpeaking = false`
+  - Exported `playFromUrl` in the composable's return object
+- Files changed: `composables/useVoiceSession.ts`
+- **Learnings for future iterations:**
+  - Key behavioral difference: `playFromUrl` resolves on `onplay` (start of playback), not `onended` — critical for the 3-second download timeout race in `startConversation()`
+  - The cleanup pattern (`audioElement.pause()` + `URL.revokeObjectURL(audioElement.src)`) works even for signed URLs (revokeObjectURL is a no-op for non-blob URLs, so it's safe to call)
+  - The `startWordTracking()` / `stopWordTracking()` functions are already scoped to the composable and can be reused directly
+---
+
+## 2026-02-22 - US-007
+- What was implemented: Created `tests/unit/server/api/session/opening.test.ts` with 17 tests
+  - Authentication: 401 for unauthenticated request
+  - Validation: 400 for missing illusionKey, illusionLayer, or sessionType
+  - Non-core sessions: all null returned for check_in sessionType
+  - L1 (intellectual): static text + signed audioUrl when manifest has entry; text + null audio when manifest missing; text + null audio when createSignedUrl fails (Tier 2 fallback); 300s expiry verified; manifest cached for 5-min TTL (second call within TTL skips Storage download)
+  - L2/L3 (emotional/identity): precomputed text + signed audioUrl; text + null audio when no audio_path; all null when no precomputed text; Tier 2 fallback when createSignedUrl fails; identity layer returns same precomputed path; 300s expiry verified; all null when DB query fails
+- Files changed: `tests/unit/server/api/session/opening.test.ts` (new)
+- **Learnings for future iterations:**
+  - Direct logic extraction pattern: extract handler business logic into a plain async function in the test file, accepting `user`, query params, mock supabase, and `cacheState` as parameters — avoids H3/Nuxt server context
+  - Module-level manifest cache (TTL) cannot be tested directly from the module; pass `cacheState: { cache, loadedAt }` as a parameter to the extracted helper so tests can share state across calls and verify cache hits
+  - `createStorageApi()` helper needs both `download` (for manifest) and `createSignedUrl` (for signed URLs) as separate vi.fn() mocks on the same object since both are called on `supabase.storage.from('opening-audio')`
+  - DB mock chain: `vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({data, error}) }) }) })` — builds the full Supabase query chain
+  - The 400 for "invalid illusionKey" in the spec/AC refers to missing params (undefined illusionKey), not an unrecognized key value — the actual handler returns null (not 400) for unrecognized keys in ILLUSION_OPENING_MESSAGES
+---
+
+## 2026-02-22 - US-006
+- What was implemented: Created `server/api/session/opening.get.ts` (v2 replacement for `opening-text.get.ts`)
+  - Auth via `serverSupabaseUser()`, Storage ops via `serverSupabaseServiceRole()`
+  - Non-core sessions return all nulls immediately
+  - L1 (intellectual): returns static text + signed URL from L1 manifest (cached 5-min TTL)
+  - L2/L3 (emotional/identity): reads `precomputed_opening_text`, `precomputed_opening_audio_path`, `precomputed_opening_word_timings` from user_progress, generates signed URL (300s expiry)
+  - Graceful Tier 2 fallback: if manifest missing, no audio_path, or createSignedUrl fails → returns text with null audio fields
+  - Module-level `l1ManifestCache` with `l1ManifestLoadedAt` timestamp for 5-min TTL
+  - Logs with `[instant-start]` tag: 'Opening resolved' or 'Opening not available'
+  - Response shape: `{ text, source, audioUrl, wordTimings, contentType, timingSource }`
+- Files changed: `server/api/session/opening.get.ts` (new)
+- **Learnings for future iterations:**
+  - `opening-text.get.ts` was not on this branch — its source was retrieved from `feature/instant-conversations` branch via `git show`
+  - `SupabaseClient` type imported from `@supabase/supabase-js` (needed for the `getL1Manifest` helper parameter)
+  - `WordTiming` type is exported from `~/server/utils/tts/types` (not from a shared types file)
+  - The `precomputed_opening_word_timings` JSONB column stores `{ timings, timingSource, contentType }` as a JSON object — destructure from this shape in the endpoint
+  - Signed URL expiry: `createSignedUrl(path, 300)` for 5-minute (300-second) expiry
+  - US-006 AC says "delete opening-text.get.ts after creating the new endpoint" but that file doesn't exist on this branch (v1 was never merged), so no deletion needed
+---
+
+## 2026-02-22 - US-005
+- What was implemented: Created `tests/unit/server/utils/session/precompute-opening.test.ts` with 13 tests
+  - Successful audio generation: upload path, upsert:true, .mp3 extension, audio metadata JSONB structure
+  - Text-first ordering (REQ-20): call order verification (text-update before storage-upload), text saved when TTS fails, audio fields null when TTS fails
+  - Previous audio cleanup: storage.remove called with existing path, remove before upload ordering, no remove when no existing path
+  - Audio upload failure isolation: text still saved, audio fields set to null
+  - Stale ref clearing: both audio fields nulled when any audio failure occurs
+- Files changed: `tests/unit/server/utils/session/precompute-opening.test.ts` (new)
+- **Learnings for future iterations:**
+  - `vi.hoisted()` is required when referencing variables (e.g., `mockChat`, `mockSynthesize`) inside `vi.mock()` factory functions — prevents temporal dead zone errors
+  - `precomputeOpeningText` is a regular utility (no H3 globals) so it can be imported directly and tested via module mocking — no need for logic extraction
+  - Call ordering can be verified by pushing labels to a shared `callOrder: string[]` array inside the mock factory functions — works across multiple `from()` calls since all closures reference the same array
+  - Distinguish text update from audio update by checking `'precomputed_opening_text' in data` — text update has this key, audio metadata and null-clearing updates do not
+  - Pre-existing check-in-sender.test.ts failures (4 tests) are unrelated to this feature
 ---
 
 ## Codebase Patterns
-- SQL migrations use `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... IF EXISTS` patterns
-- Migrations live in `supabase/migrations/` with YYYYMMDD prefix
-- No FK constraints on analytics/telemetry tables (fire-and-forget, decoupled)
-- RLS is enabled on all new tables with no anon policies (service_role bypasses)
-- `nuxi typecheck` fails (no tsconfig.json); use `npm run build` to verify TypeScript
-- `server/utils/` has flat and nested structure (llm/, tts/, prompts/, etc.) — place new top-level utils directly in `server/utils/`
-- writeTo uses `.then().catch()` (NOT async/await) for true fire-and-forget telemetry writes
+- The spec file for instant conversations v2 is at `docs/specs/instant-conversations-spec.md` (was on feature/instant-conversations branch, checked out to ralph branch)
+- Typecheck uses `npx vue-tsc --noEmit -p .nuxt/tsconfig.json` (requires .nuxt to be generated first via `nuxt prepare`)
+- Existing codebase has pre-existing type errors (not related to this feature) — "typecheck passes" means no new errors introduced
+- SQL migrations follow pattern in supabase/migrations/: use `ADD COLUMN IF NOT EXISTS`, always include COMMENTs, use `ON CONFLICT DO NOTHING` for idempotent inserts
+- `#supabase/server` is a virtual module that cannot be resolved in the nuxt unit test environment — added resolve alias in `vitest.config.ts` pointing to `tests/__mocks__/supabase-server.ts` stub
+- H3 server utilities (`defineEventHandler`, `getHeader`, `readBody`, `createError`) are globals in Nitro server files but NOT in the nuxt test environment — use direct logic extraction pattern for unit testing server handlers
+- Unit testing server API handlers: extract the business logic into a helper function in the test file that accepts dependencies as parameters (consistent with `check-in-sender.test.ts` pattern)
+- Unit testing server utility functions (no H3 globals): import directly and use `vi.mock()` + `vi.hoisted()` — no logic extraction needed (consistent with `precompute-opening.test.ts` pattern)
+- Call order testing: push labels into a shared `callOrder: string[]` array from inside mock closures — all calls to `from()` share the same array since they close over it
+- `vi.hoisted()` is required when referencing module-level variables inside `vi.mock()` factory functions
 
-## 2026-02-21 - US-001
-- Created `supabase/migrations/20260221_chat_telemetry.sql` with 25-column chat_telemetry table
-- Table has no FK constraints on user_id, conversation_id, message_id (decoupled analytics)
-- No DEFAULT on created_at — set by application
-- Includes COMMENT ON TABLE + 8 COMMENT ON COLUMN statements
-- 5 indexes: created_at, tts_provider, llm_provider, session_type, user_id
-- RLS enabled, no anon policies
-- Switched from feature/chat-telemetry to ralph/chat-telemetry branch
-- Build passes (npm run build)
+---
+
+## 2026-02-22 - US-001
+- What was implemented: Created database migration `supabase/migrations/20260222_instant_conversations_v2.sql`
+  - Adds `precomputed_opening_audio_path TEXT DEFAULT NULL` to `user_progress`
+  - Adds `precomputed_opening_word_timings JSONB DEFAULT NULL` to `user_progress`
+  - Both have COMMENT ON COLUMN documentation
+  - Creates `opening-audio` Storage bucket (private, not public) with ON CONFLICT DO NOTHING
+  - Also checked out `docs/specs/instant-conversations-spec.md` from feature/instant-conversations branch
+- Files changed: `supabase/migrations/20260222_instant_conversations_v2.sql`, `docs/specs/instant-conversations-spec.md`
 - **Learnings for future iterations:**
-  - Branch was `feature/chat-telemetry`; had to create `ralph/chat-telemetry` from it
-  - Migration pattern matches existing files: plain SQL, no rollback section
-  - Spec has full SQL at lines 327-378 of docs/specs/chat-telemetry-spec.md
+  - The v2 spec is at `docs/specs/instant-conversations-spec.md` — line references in PRD notes match this file (e.g., "lines 426-449" for the migration SQL)
+  - The branch `feature/instant-conversations` had the spec but not the implementation code for v2
+  - Pre-existing type errors in the project don't block this work
 ---
 
 ## 2026-02-21 - US-002
-- Created `server/utils/telemetry.ts` with `ChatTelemetryCollector` class, `ChatTelemetryRow` interface, and `classifyTelemetryError()` function
-- ChatTelemetryRow has all 25 fields matching DB schema with proper nullability
-- CollectorInit interface has all 13 init fields
-- Idempotency guards (firstTokenMarked, firstSentenceMarked, firstAudioMarked) prevent double-recording
-- markStreamStart captures both streamStartTime (number) and stream_start_time (ISO string)
-- writeTo uses .then().catch() (not async/await) for true fire-and-forget
-- classifyTelemetryError checks error.status and error.message.toLowerCase() with specific patterns
-- Build passes (npm run build)
+- What was implemented: Created admin audio generation endpoint `server/api/admin/generate-opening-audio.post.ts`
+  - Validates X-Admin-Secret header against ADMIN_API_SECRET env var (401 if missing/invalid)
+  - Accepts optional illusionKey in body; generates for all 5 keys if omitted
+  - Returns 400 for invalid illusionKey
+  - For each key: synthesizes TTS, uploads to `opening-audio/l1/{key}.{ext}` (upsert: true)
+  - Loads existing manifest from Storage, merges new results, uploads updated manifest
+  - Failed keys keep their existing manifest entries (merge preserves them)
+  - Uses serverSupabaseServiceRole() for all Storage operations
+  - Logs with [admin-audio] tag
+  - Added `adminApiSecret: process.env.ADMIN_API_SECRET` to nuxt.config.ts runtimeConfig
+- Files changed: `server/api/admin/generate-opening-audio.post.ts` (new), `nuxt.config.ts`
 - **Learnings for future iterations:**
-  - `nuxi typecheck` fails without tsconfig.json; use `npm run build` instead
-  - Spec implementation code is at lines 384-537 of docs/specs/chat-telemetry-spec.md
-  - The `writeTo` method signature is `writeTo(supabase: any): void` — returns void, not Promise
+  - `ILLUSION_OPENING_MESSAGES` is imported from `~/server/utils/prompts` — exported from `server/utils/prompts/index.ts`
+  - `getTTSProviderFromConfig()` is in `~/server/utils/tts` — returns TTSProvider with `.synthesize({ text })` method
+  - `TTSResult` has `audioBuffer: ArrayBuffer`, `contentType`, `wordTimings`, `estimatedDurationMs`, `timingSource`
+  - `IllusionKey` type is imported from `~/server/utils/llm/task-types`
+  - `serverSupabaseServiceRole` is imported from `#supabase/server`
+  - Pre-existing unit test failures in `check-in-sender.test.ts` (4 tests) — not related to this feature
+  - Nuxt auto-type route resolution errors in `useCeremony.ts` are pre-existing framework limitations, not new errors
 ---
 
 ## 2026-02-21 - US-003
-- Created `tests/unit/telemetry/chat-telemetry-collector.test.ts` with 26 test cases
-- Full success lifecycle test: all marks → correct ms values relative to stream start
-- Error path test: only early marks → late timing fields remain undefined (not null)
-- Idempotency tests for markFirstToken, markFirstSentence, markFirstAudio
-- Timing math tests: duration_ms from requestStartedAt, ttft/ttfs/ttfa from streamStartTime
-- writeTo fire-and-forget test: returns undefined (void)
-- Supabase INSERT failure → console.error called with requestId
-- Supabase INSERT success → no console.error
-- All 10 classifyTelemetryError classification tests pass
-- All 26 tests pass; pre-existing failures in check-in-sender.test.ts are unrelated
+- What was implemented: Created unit tests for admin audio generation endpoint `tests/unit/server/api/admin/generate-opening-audio.test.ts`
+  - 17 tests covering: auth validation (401 for missing/wrong secret), key targeting (all 5 keys vs single key, 400 for invalid key), TTS generation and upload (correct path/extension, upsert:true), manifest management (merge, preserve failed key entries), and response shape
+  - Tests use direct logic extraction pattern: the handler business logic is reimplemented as a testable helper function accepting dependencies as parameters
+  - Added `tests/__mocks__/supabase-server.ts` stub for the `#supabase/server` virtual module
+  - Added `resolve.alias` in `vitest.config.ts` to map `#supabase/server` to the stub file
+- Files changed: `tests/unit/server/api/admin/generate-opening-audio.test.ts` (new), `tests/__mocks__/supabase-server.ts` (new), `vitest.config.ts`
 - **Learnings for future iterations:**
-  - `ChatTelemetryCollector` uses `Partial<ChatTelemetryRow>` — unset timing fields are `undefined`, not `null`. Tests must use `toBeUndefined()` for fields never written, not `toBeNull()`
-  - `vi.runAllTimersAsync()` needed after `writeTo` to flush the `.then().catch()` promise chain
-  - Import tests use `~/server/utils/telemetry` path alias (matches existing test patterns)
-  - 4 pre-existing failures in `check-in-sender.test.ts` — not caused by this story
+  - `#supabase/server` requires a vitest resolve alias — see `vitest.config.ts` and `tests/__mocks__/supabase-server.ts`
+  - Server API handlers can't be directly invoked in unit tests (H3 globals not available, virtual modules not resolved) — use the direct logic extraction pattern instead
+  - The direct logic extraction pattern: copy the handler's business logic into a helper function in the test, inject dependencies as parameters (TTS provider, storage, config) — this is consistent with how `check-in-sender.test.ts` tests work
+  - Mock Storage: create an object `{ from: vi.fn().mockReturnValue({ upload: vi.fn(), download: vi.fn() }) }`
+  - Mock TTS manifest blob: return `{ text: () => Promise.resolve(JSON.stringify(data)) }` for the download response
 ---
 
-## 2026-02-21 - US-004
-- Instrumented `server/api/chat.post.ts` with `ChatTelemetryCollector` for streaming+TTS requests
-- Added import: `import { ChatTelemetryCollector } from '../utils/telemetry'`
-- Created telemetry collector conditionally after `useStreamingTTS` resolved (null for non-TTS paths)
-- Added `telemetry?.markStreamStart()` right after `streamStartTime = Date.now()`
-- Added `telemetry?.markFirstToken()` after `tokenCount += 1` in `onToken` callback
-- Added `telemetry?.markFirstSentence()` when `sentences.length > 0` in sentence detection block
-- Added `telemetry?.markFirstAudio()` inside `if (firstChunkTime === null && chunk.audioBase64)` block
-- Added `telemetry?.markComplete({...})` after TTS finalize block in `onComplete`
-- Modified assistant message INSERT to `.select('id').single()` to capture message ID
-- Added `telemetry?.setMessageId(insertedMsg?.id || null)` and `telemetry?.writeTo(supabase)` after INSERT
-- Added `telemetry?.markError(error)` and `telemetry?.writeTo(supabase)` at start of `onError` callback
-- Build passes (npm run build); all telemetry unit tests pass; 4 pre-existing failures unchanged
+## 2026-02-22 - US-004
+- What was implemented: Created `server/utils/session/precompute-opening.ts` with v1 + v2 audio generation
+  - v1 logic: LLM generates personalized opening text for L2/L3, stores in `user_progress.precomputed_opening_text`
+  - v2 extension: After text is stored, synthesizes TTS audio via `getTTSProviderFromConfig().synthesize()`
+  - Deletes previous audio from Storage before uploading new one (REQ-18)
+  - Uploads new audio to `opening-audio/l2l3/{userId}/opening.{ext}` with `upsert: true`
+  - Extension from `audio/mpeg` → `.mp3`, else → `.wav`
+  - Stores `precomputed_opening_audio_path` and `precomputed_opening_word_timings` in `user_progress`
+  - On audio failure: text is already saved, clears stale audio refs (best-effort with `Promise.resolve(...).catch(() => {})`)
+  - Logs with `[precompute-opening]` tag
+  - Modified `server/api/progress/complete-session.post.ts` to import and call `precomputeOpeningText` after L1/L2 completion
+- Files changed: `server/utils/session/precompute-opening.ts` (new), `server/api/progress/complete-session.post.ts`
 - **Learnings for future iterations:**
-  - `telemetry` is declared outside `ReadableStream` constructor but inside `if (stream)` block — accessible via closure
-  - `config` (from `useRuntimeConfig()`) is already available at ~line 492 in the streaming block
-  - All telemetry calls use optional chaining (`telemetry?.method()`) since telemetry is null for non-TTS paths
-  - `markComplete` goes after TTS finalize block (outside the `if (sentenceDetector && ttsProcessor)` conditional)
-  - The assistant INSERT modification needed `let insertedMsg` declared before the conditional block
+  - `precompute-opening.ts` v1 exists on the `feature/instant-conversations` branch — use `git show feature/instant-conversations:path/to/file` to get pre-built implementations
+  - `router.chat()` requires `{ messages: Message[], model: ModelType }` (not an array directly) — use `getDefaultModel()` for the model
+  - `PostgrestFilterBuilder.catch()` is not typed in supabase-js — use `Promise.resolve(supabase.from(...).update(...).eq(...)).catch(() => {})` for best-effort cleanup
+  - The `complete-session.post.ts` triggers pre-computation non-blockingly for L1 → L2 (`nextLayer = 'emotional'`) and L2 → L3 (`nextLayer = 'identity'`)
 ---

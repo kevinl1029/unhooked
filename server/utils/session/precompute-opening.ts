@@ -1,6 +1,6 @@
 /**
- * Pre-computation of opening text for L2/L3 sessions
- * Runs in background after L1/L2 session completion to eliminate LLM call at next session start
+ * Pre-computation of opening text and audio for L2/L3 sessions
+ * Runs in background after L1/L2 session completion to eliminate LLM+TTS calls at next session start
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -10,7 +10,8 @@ import { buildSessionContext, formatContextForPrompt } from '../personalization/
 import { buildCrossLayerContext, formatCrossLayerContext } from '../personalization/cross-layer-context'
 import { buildBridgeContext } from './bridge'
 import { buildSystemPrompt } from '../prompts'
-import { getModelRouter } from '../llm'
+import { getModelRouter, getDefaultModel } from '../llm'
+import { getTTSProviderFromConfig } from '../tts'
 
 interface PrecomputeParams {
   supabase: SupabaseClient
@@ -20,8 +21,9 @@ interface PrecomputeParams {
 }
 
 /**
- * Pre-compute opening text for next layer of an illusion
- * Stores result in user_progress.precomputed_opening_text
+ * Pre-compute opening text and audio for next layer of an illusion
+ * Stores text in user_progress.precomputed_opening_text (v1)
+ * Stores audio in Storage and metadata in user_progress (v2)
  */
 export async function precomputeOpeningText(params: PrecomputeParams): Promise<void> {
   const { supabase, userId, illusionKey, nextLayer } = params
@@ -82,10 +84,14 @@ Output ONLY the opening message text with no preamble, labels, or extra formatti
 
       // Call LLM to generate opening text
       const router = getModelRouter()
-      const response = await router.chat([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: generationPrompt }
-      ])
+      const model = getDefaultModel()
+      const response = await router.chat({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: generationPrompt }
+        ],
+        model
+      })
 
       const openingText = response.content.trim()
 
@@ -94,7 +100,7 @@ Output ONLY the opening message text with no preamble, labels, or extra formatti
         throw new Error('Empty response from LLM')
       }
 
-      // Store in user_progress
+      // Store text FIRST (REQ-20: text saved even if audio fails)
       const { error: updateError } = await supabase
         .from('user_progress')
         .update({
@@ -107,7 +113,78 @@ Output ONLY the opening message text with no preamble, labels, or extra formatti
         throw updateError
       }
 
-      console.log(`[precompute-opening] Success: userId=${userId}, illusionKey=${illusionKey}, nextLayer=${nextLayer}, textLength=${openingText.length}, attempt=${attempt + 1}`)
+      console.log(`[precompute-opening] Text stored: userId=${userId}, illusionKey=${illusionKey}, nextLayer=${nextLayer}, textLength=${openingText.length}, attempt=${attempt + 1}`)
+
+      // === NEW: Audio generation (v2) ===
+      try {
+        // 1. Generate audio via TTS
+        const provider = getTTSProviderFromConfig()
+        const ttsResult = await provider.synthesize({ text: openingText })
+
+        // 2. Delete previous audio from Storage (REQ-18)
+        const { data: progress } = await supabase
+          .from('user_progress')
+          .select('precomputed_opening_audio_path')
+          .eq('user_id', userId)
+          .single()
+
+        if (progress?.precomputed_opening_audio_path) {
+          await supabase.storage
+            .from('opening-audio')
+            .remove([progress.precomputed_opening_audio_path])
+        }
+
+        // 3. Upload new audio to Storage
+        const ext = ttsResult.contentType === 'audio/mpeg' ? 'mp3' : 'wav'
+        const audioPath = `l2l3/${userId}/opening.${ext}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('opening-audio')
+          .upload(audioPath, ttsResult.audioBuffer, {
+            contentType: ttsResult.contentType,
+            upsert: true
+          })
+
+        if (uploadError) throw uploadError
+
+        // 4. Update user_progress with audio metadata
+        await supabase
+          .from('user_progress')
+          .update({
+            precomputed_opening_audio_path: audioPath,
+            precomputed_opening_word_timings: {
+              timings: ttsResult.wordTimings,
+              timingSource: ttsResult.timingSource,
+              contentType: ttsResult.contentType
+            }
+          })
+          .eq('user_id', userId)
+
+        console.log('[precompute-opening] Audio generated and stored', {
+          userId, illusionKey, nextLayer, audioPath,
+          contentType: ttsResult.contentType,
+          durationMs: ttsResult.estimatedDurationMs
+        })
+
+      } catch (audioError) {
+        // Audio generation/upload failed — text is already saved (REQ-20)
+        console.error('[precompute-opening] Audio generation failed (text still saved)', {
+          userId, illusionKey, nextLayer,
+          error: audioError instanceof Error ? audioError.message : String(audioError)
+        })
+
+        // Clear any stale audio references (best-effort — don't throw if this fails)
+        await Promise.resolve(
+          supabase
+            .from('user_progress')
+            .update({
+              precomputed_opening_audio_path: null,
+              precomputed_opening_word_timings: null
+            })
+            .eq('user_id', userId)
+        ).catch(() => {})
+      }
+
       return // Success - exit
 
     } catch (error) {
