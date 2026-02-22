@@ -2,6 +2,26 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-006
+- What was implemented: Created `server/api/session/opening.get.ts` (v2 replacement for `opening-text.get.ts`)
+  - Auth via `serverSupabaseUser()`, Storage ops via `serverSupabaseServiceRole()`
+  - Non-core sessions return all nulls immediately
+  - L1 (intellectual): returns static text + signed URL from L1 manifest (cached 5-min TTL)
+  - L2/L3 (emotional/identity): reads `precomputed_opening_text`, `precomputed_opening_audio_path`, `precomputed_opening_word_timings` from user_progress, generates signed URL (300s expiry)
+  - Graceful Tier 2 fallback: if manifest missing, no audio_path, or createSignedUrl fails → returns text with null audio fields
+  - Module-level `l1ManifestCache` with `l1ManifestLoadedAt` timestamp for 5-min TTL
+  - Logs with `[instant-start]` tag: 'Opening resolved' or 'Opening not available'
+  - Response shape: `{ text, source, audioUrl, wordTimings, contentType, timingSource }`
+- Files changed: `server/api/session/opening.get.ts` (new)
+- **Learnings for future iterations:**
+  - `opening-text.get.ts` was not on this branch — its source was retrieved from `feature/instant-conversations` branch via `git show`
+  - `SupabaseClient` type imported from `@supabase/supabase-js` (needed for the `getL1Manifest` helper parameter)
+  - `WordTiming` type is exported from `~/server/utils/tts/types` (not from a shared types file)
+  - The `precomputed_opening_word_timings` JSONB column stores `{ timings, timingSource, contentType }` as a JSON object — destructure from this shape in the endpoint
+  - Signed URL expiry: `createSignedUrl(path, 300)` for 5-minute (300-second) expiry
+  - US-006 AC says "delete opening-text.get.ts after creating the new endpoint" but that file doesn't exist on this branch (v1 was never merged), so no deletion needed
+---
+
 ## 2026-02-22 - US-005
 - What was implemented: Created `tests/unit/server/utils/session/precompute-opening.test.ts` with 13 tests
   - Successful audio generation: upload path, upsert:true, .mp3 extension, audio metadata JSONB structure

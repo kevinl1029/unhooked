@@ -124,7 +124,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "File: server/api/session/opening.get.ts (new), deleting server/api/session/opening-text.get.ts. Full implementation details at spec lines 507-578. The manifest caching code is at lines 552-571. Signed URLs via supabase.storage.from('opening-audio').createSignedUrl(path, 300). The new endpoint preserves all v1 query params (illusionKey, illusionLayer, sessionType) and auth pattern. For the select query on user_progress, add precomputed_opening_audio_path and precomputed_opening_word_timings to the select. If createSignedUrl returns an error, gracefully fall back (audioUrl null) — don't throw. READ the existing opening-text.get.ts first to understand the v1 structure, then extend with v2 audio fields."
     },
     {
