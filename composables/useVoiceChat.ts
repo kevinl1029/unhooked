@@ -126,7 +126,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
           body: { illusionKey, illusionLayer, sessionType, openingText }
         })
         return result as unknown as { conversationId: string }
-      } catch (e) {
+      } catch (e: any) {
         const elapsed = Date.now() - startTime
         if (attempt >= maxRetries || elapsed >= maxWindowMs) {
           console.warn('[useVoiceChat] Bootstrap failed after retries', { attempt, elapsed })
@@ -424,6 +424,9 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     isLoading.value = true
 
     try {
+      const fastStartStartedAt = Date.now()
+      let fallbackReason: string | null = null
+
       // === FAST-START PATH (core sessions only) ===
       if (sessionType === 'core' && illusionKey) {
         try {
@@ -447,7 +450,7 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
 
             // === Tier 1: Pre-stored audio ===
             if (opening.audioUrl && opening.wordTimings && opening.contentType) {
-              const downloadStart = Date.now()
+              const tier1StartedAt = Date.now()
               try {
                 const audioSuccess = await Promise.race([
                   voiceSession.playFromUrl(
@@ -462,48 +465,87 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
                 ])
 
                 if (audioSuccess) {
-                  console.log('[useVoiceChat] Tier 1: pre-stored audio played', {
-                    illusionKey, illusionLayer,
-                    source: opening.source,
-                    downloadMs: Date.now() - downloadStart
+                  console.log('[useVoiceChat] Instant start tier used', {
+                    tier: 'tier1',
+                    illusionKey,
+                    illusionLayer,
+                    source: opening.source ?? null,
+                    downloadMs: Date.now() - tier1StartedAt,
+                    elapsedMs: Date.now() - fastStartStartedAt
                   })
                   return true
                 }
-              } catch (e: any) {
-                console.log('[useVoiceChat] Tier 1 failed, falling to Tier 2', {
-                  error: e?.message,
-                  downloadMs: Date.now() - downloadStart
+                fallbackReason = 'tier1_audio_unplayable'
+                console.warn('[useVoiceChat] Tier 1 failed', {
+                  reason: fallbackReason,
+                  downloadMs: Date.now() - tier1StartedAt,
+                  illusionKey,
+                  illusionLayer
                 })
+              } catch {
+                fallbackReason = 'tier1_download_timeout_or_error'
+                console.warn('[useVoiceChat] Tier 1 failed', {
+                  reason: fallbackReason,
+                  downloadMs: Date.now() - tier1StartedAt,
+                  illusionKey,
+                  illusionLayer
+                })
+                // Fall through to Tier 2
               }
+            } else {
+              fallbackReason = 'tier1_missing_audio_payload'
             }
 
             // === Tier 2: Real-time TTS with pre-computed text ===
             try {
               const audioSuccess = await voiceSession.playAIResponse(opening.text)
               if (audioSuccess) {
-                console.log('[useVoiceChat] Tier 2: real-time TTS played', {
-                  illusionKey, illusionLayer, source: opening.source
+                console.log('[useVoiceChat] Instant start tier used', {
+                  tier: 'tier2',
+                  illusionKey,
+                  illusionLayer,
+                  source: opening.source ?? null,
+                  elapsedMs: Date.now() - fastStartStartedAt,
+                  fallbackReason
                 })
                 return true
               }
-            } catch (audioError: any) {
-              console.log('[useVoiceChat] Tier 2 failed, falling to Tier 3', {
-                error: audioError?.message
+              fallbackReason = 'tier2_audio_unplayable'
+              console.warn('[useVoiceChat] Tier 2 failed', {
+                reason: fallbackReason,
+                illusionKey,
+                illusionLayer
               })
+            } catch {
+              fallbackReason = 'tier2_tts_error'
+              console.warn('[useVoiceChat] Tier 2 failed', {
+                reason: fallbackReason,
+                illusionKey,
+                illusionLayer
+              })
+              // Fall through to Tier 3
             }
 
             // Both audio tiers failed — remove message and fall through
             messages.value.pop()
             isLoading.value = true
+          } else {
+            fallbackReason = 'opening_text_unavailable'
           }
-        } catch (e: any) {
-          console.log('[useVoiceChat] Fast-start path failed, falling to Tier 3', {
-            error: e?.data?.message || e?.message
-          })
+        } catch {
+          fallbackReason = 'opening_request_failed'
+          // Fall through to Tier 3
         }
       }
 
       // === Tier 3: Existing flow (full LLM+TTS) ===
+      console.log('[useVoiceChat] Instant start tier used', {
+        tier: 'tier3',
+        illusionKey,
+        illusionLayer,
+        elapsedMs: Date.now() - fastStartStartedAt,
+        fallbackReason: fallbackReason || 'fast_start_not_applicable'
+      })
       if (enableStreamingTTS) {
         const success = await runStreamingWithResilience('text', {
           content: '',

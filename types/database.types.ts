@@ -146,6 +146,7 @@ export type Database = {
       }
       check_in_schedule: {
         Row: {
+          cancellation_reason: string | null
           check_in_type: string
           completed_at: string | null
           created_at: string | null
@@ -153,10 +154,12 @@ export type Database = {
           expired_at: string | null
           id: string
           magic_link_token: string | null
+          observation_assignment: string | null
           opened_at: string | null
           personalization_context: Json | null
           prompt_template: string
           response_conversation_id: string | null
+          retry_count: number
           scheduled_for: string
           status: string | null
           timezone: string
@@ -166,6 +169,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cancellation_reason?: string | null
           check_in_type: string
           completed_at?: string | null
           created_at?: string | null
@@ -173,10 +177,12 @@ export type Database = {
           expired_at?: string | null
           id?: string
           magic_link_token?: string | null
+          observation_assignment?: string | null
           opened_at?: string | null
           personalization_context?: Json | null
           prompt_template: string
           response_conversation_id?: string | null
+          retry_count?: number
           scheduled_for: string
           status?: string | null
           timezone?: string
@@ -186,6 +192,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cancellation_reason?: string | null
           check_in_type?: string
           completed_at?: string | null
           created_at?: string | null
@@ -193,10 +200,12 @@ export type Database = {
           expired_at?: string | null
           id?: string
           magic_link_token?: string | null
+          observation_assignment?: string | null
           opened_at?: string | null
           personalization_context?: Json | null
           prompt_template?: string
           response_conversation_id?: string | null
+          retry_count?: number
           scheduled_for?: string
           status?: string | null
           timezone?: string
@@ -237,8 +246,8 @@ export type Database = {
           id: string
           illusion_key: string | null
           illusion_layer: string | null
-          illusion_number: number | null
           model: string | null
+          observation_assignment: string | null
           session_abandoned_at: string | null
           session_completed: boolean | null
           session_type: string | null
@@ -253,8 +262,8 @@ export type Database = {
           id?: string
           illusion_key?: string | null
           illusion_layer?: string | null
-          illusion_number?: number | null
           model?: string | null
+          observation_assignment?: string | null
           session_abandoned_at?: string | null
           session_completed?: boolean | null
           session_type?: string | null
@@ -269,8 +278,8 @@ export type Database = {
           id?: string
           illusion_key?: string | null
           illusion_layer?: string | null
-          illusion_number?: number | null
           model?: string | null
+          observation_assignment?: string | null
           session_abandoned_at?: string | null
           session_completed?: boolean | null
           session_type?: string | null
@@ -287,7 +296,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "conversations_myth_key_fkey"
+            foreignKeyName: "conversations_illusion_key_fkey"
             columns: ["illusion_key"]
             isOneToOne: false
             referencedRelation: "illusions"
@@ -614,7 +623,7 @@ export type Database = {
           id: string
           longest_quit_duration: string | null
           preferred_name: string | null
-          previous_attempts: number | null
+          previous_attempts: string | null
           primary_reason: string
           product_types: string[]
           triggers: string[] | null
@@ -628,7 +637,7 @@ export type Database = {
           id?: string
           longest_quit_duration?: string | null
           preferred_name?: string | null
-          previous_attempts?: number | null
+          previous_attempts?: string | null
           primary_reason: string
           product_types: string[]
           triggers?: string[] | null
@@ -642,7 +651,7 @@ export type Database = {
           id?: string
           longest_quit_duration?: string | null
           preferred_name?: string | null
-          previous_attempts?: number | null
+          previous_attempts?: string | null
           primary_reason?: string
           product_types?: string[]
           triggers?: string[] | null
@@ -663,12 +672,12 @@ export type Database = {
           created_at: string | null
           current_illusion: number | null
           current_layer: string | null
-          email_unsubscribed_at: string | null
           id: string
           illusion_order: number[] | null
           illusions_completed: number[] | null
           last_reminded_at: string | null
           last_session_at: string | null
+          layer_progress: Json | null
           program_status: string | null
           started_at: string | null
           timezone: string | null
@@ -685,12 +694,12 @@ export type Database = {
           created_at?: string | null
           current_illusion?: number | null
           current_layer?: string | null
-          email_unsubscribed_at?: string | null
           id?: string
           illusion_order?: number[] | null
           illusions_completed?: number[] | null
           last_reminded_at?: string | null
           last_session_at?: string | null
+          layer_progress?: Json | null
           program_status?: string | null
           started_at?: string | null
           timezone?: string | null
@@ -707,12 +716,12 @@ export type Database = {
           created_at?: string | null
           current_illusion?: number | null
           current_layer?: string | null
-          email_unsubscribed_at?: string | null
           id?: string
           illusion_order?: number[] | null
           illusions_completed?: number[] | null
           last_reminded_at?: string | null
           last_session_at?: string | null
+          layer_progress?: Json | null
           program_status?: string | null
           started_at?: string | null
           timezone?: string | null

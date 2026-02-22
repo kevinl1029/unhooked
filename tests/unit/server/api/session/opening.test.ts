@@ -85,7 +85,7 @@ async function handleOpeningRequest({
   supabase,
   cacheState,
 }: {
-  user: { id: string } | null
+  user: { id: string; sub?: string } | null
   illusionKey: string | undefined
   illusionLayer: string | undefined
   sessionType: string | undefined
@@ -111,6 +111,7 @@ async function handleOpeningRequest({
     return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
   }
 
+  const authUserId = user.sub || user.id
   const storageApi = supabase.storage.from('opening-audio') as MockStorageApi
 
   // L1 (intellectual layer) — use static messages
@@ -148,7 +149,7 @@ async function handleOpeningRequest({
     const queryResult = supabase
       .from('user_progress')
       .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings')
-      .eq('user_id', user.id)
+      .eq('user_id', authUserId)
       .single() as Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
 
     const { data, error } = await queryResult
@@ -207,7 +208,7 @@ const L2_WORD_TIMINGS_JSON: OpeningWordTimingsJson = {
   contentType: 'audio/wav',
 }
 
-const TEST_USER = { id: 'user-123' }
+const TEST_USER = { id: 'legacy-user-id', sub: 'user-123' }
 
 function createStorageApi(opts: {
   manifestData?: L1Manifest | null
@@ -497,6 +498,38 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
   // -------------------------------------------------------------------------
 
   describe('L2/L3 (emotional/identity layers)', () => {
+    it('queries user_progress with user.sub when available', async () => {
+      const storageApi = createStorageApi()
+      const single = vi.fn().mockResolvedValue({
+        data: {
+          precomputed_opening_text: 'Welcome back.',
+          precomputed_opening_audio_path: null,
+          precomputed_opening_word_timings: null,
+        },
+        error: null,
+      })
+      const eq = vi.fn().mockReturnValue({ single })
+      const select = vi.fn().mockReturnValue({ eq })
+      const supabase = {
+        from: vi.fn().mockReturnValue({ select }),
+        storage: {
+          from: vi.fn().mockReturnValue(storageApi),
+        },
+      } as unknown as MockSupabase
+
+      await handleOpeningRequest({
+        user: TEST_USER,
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+        sessionType: 'core',
+        supabase,
+        cacheState,
+      })
+
+      expect(eq).toHaveBeenCalledWith('user_id', TEST_USER.sub)
+      expect(eq).not.toHaveBeenCalledWith('user_id', TEST_USER.id)
+    })
+
     it('returns precomputed text + audioUrl for L2 with audio_path in user_progress', async () => {
       const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
       const audioPath = 'opening-audio/l2l3/user-123/opening.wav'

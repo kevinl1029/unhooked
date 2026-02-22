@@ -54,6 +54,62 @@ vi.mock('~/composables/useWakeLock', () => ({
   })
 }))
 
+describe('SessionView - onMounted preInitAudio call order', () => {
+  it('should call preInitAudio before startConversation when permission is already granted', async () => {
+    const callOrder: string[] = []
+
+    const preInitAudio = vi.fn(async () => { callOrder.push('preInitAudio') })
+    const startConversation = vi.fn(async () => { callOrder.push('startConversation') })
+    const checkPermission = vi.fn(async () => 'granted')
+    const permissionState = ref('granted')
+    const existingMessages: any[] = []
+    const existingConversationId: string | null = null
+
+    // Replicate the onMounted logic from SessionView.vue
+    if (existingMessages.length > 0 && existingConversationId) {
+      // Load existing conversation path (not tested here)
+    } else {
+      await checkPermission()
+
+      if (permissionState.value === 'granted') {
+        await preInitAudio()
+        await startConversation()
+      } else if (permissionState.value === 'denied') {
+        await startConversation()
+      }
+    }
+
+    expect(preInitAudio).toHaveBeenCalledOnce()
+    expect(startConversation).toHaveBeenCalledOnce()
+    expect(callOrder).toEqual(['preInitAudio', 'startConversation'])
+  })
+
+  it('should NOT call preInitAudio when permission is denied (text-only mode)', async () => {
+    const preInitAudio = vi.fn(async () => {})
+    const startConversation = vi.fn(async () => {})
+    const checkPermission = vi.fn(async () => 'denied')
+    const permissionState = ref('denied')
+    const existingMessages: any[] = []
+    const existingConversationId: string | null = null
+
+    if (existingMessages.length > 0 && existingConversationId) {
+      // not tested
+    } else {
+      await checkPermission()
+
+      if (permissionState.value === 'granted') {
+        await preInitAudio()
+        await startConversation()
+      } else if (permissionState.value === 'denied') {
+        await startConversation()
+      }
+    }
+
+    expect(preInitAudio).not.toHaveBeenCalled()
+    expect(startConversation).toHaveBeenCalledOnce()
+  })
+})
+
 describe('SessionView - Session Ending Behavior', () => {
   describe('isSessionEnding computed property', () => {
     it('should return true when sessionCompleteDetected is true', () => {

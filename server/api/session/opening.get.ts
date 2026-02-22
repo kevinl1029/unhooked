@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
   const illusionKey = query.illusionKey as IllusionKey | undefined
   const illusionLayer = query.illusionLayer as IllusionLayer | undefined
   const sessionType = query.sessionType as SessionType | undefined
+  const authUserId = (user as any)?.sub || user.id
 
   // Validate required params
   if (!illusionKey || !illusionLayer || !sessionType) {
@@ -138,7 +139,7 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase
       .from('user_progress')
       .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings')
-      .eq('user_id', user.id)
+      .eq('user_id', authUserId)
       .single()
 
     if (error) {
@@ -146,6 +147,7 @@ export default defineEventHandler(async (event) => {
         illusionKey,
         illusionLayer,
         reason: 'DB error',
+        lookupUserId: authUserId,
       })
       return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
     }

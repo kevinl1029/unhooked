@@ -249,18 +249,15 @@ describe('useVoiceChat instant-start (3-tier fast-start)', () => {
     expect(oldEndpointCalls).toHaveLength(0)
   })
 
-  it('logs downloadMs for Tier 1 audio attempt', async () => {
-    const consoleSpy = vi.spyOn(console, 'log')
-
+  it('does not include debugTraceId in opening endpoint query', async () => {
     const chat = makeCoreChat()
     await chat.startConversation()
 
-    const hasDownloadMs = consoleSpy.mock.calls.some(call =>
-      call.some(arg => typeof arg === 'object' && arg !== null && 'downloadMs' in arg),
-    )
-    expect(hasDownloadMs).toBe(true)
-
-    consoleSpy.mockRestore()
+    const openingCall = dollarFetchMock.mock.calls.find(([url]) => url === '/api/session/opening')
+    expect(openingCall).toBeTruthy()
+    const options = openingCall?.[1] as { query?: Record<string, unknown> } | undefined
+    expect(options?.query).toBeTruthy()
+    expect(options?.query?.debugTraceId).toBeUndefined()
   })
 
   it('calls bootstrap exactly once when Tier 1 succeeds', async () => {
