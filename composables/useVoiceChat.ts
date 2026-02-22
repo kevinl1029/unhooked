@@ -114,6 +114,32 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     await new Promise(resolve => setTimeout(resolve, delay))
   }
 
+  const bootstrapWithRetry = async (openingText: string): Promise<{ conversationId: string } | null> => {
+    const maxRetries = 3
+    const maxWindowMs = 15_000
+    const startTime = Date.now()
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await $fetch('/api/session/bootstrap', {
+          method: 'POST',
+          body: { illusionKey, illusionLayer, sessionType, openingText }
+        })
+        return result as unknown as { conversationId: string }
+      } catch (e) {
+        const elapsed = Date.now() - startTime
+        if (attempt >= maxRetries || elapsed >= maxWindowMs) {
+          console.warn('[useVoiceChat] Bootstrap failed after retries', { attempt, elapsed })
+          return null
+        }
+        // Exponential backoff: 1s, 2s, 4s
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), maxWindowMs - elapsed)
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
+      }
+    }
+    return null
+  }
+
   const sendStreamingAttempt = async (
     inputModality: 'text' | 'voice',
     model: ModelType,
@@ -398,6 +424,86 @@ export const useVoiceChat = (options: VoiceChatOptions = {}) => {
     isLoading.value = true
 
     try {
+      // === FAST-START PATH (core sessions only) ===
+      if (sessionType === 'core' && illusionKey) {
+        try {
+          const opening = await $fetch('/api/session/opening', {
+            method: 'GET',
+            query: { illusionKey, illusionLayer, sessionType }
+          })
+
+          if (opening.text) {
+            // Add message immediately so text displays during audio playback
+            messages.value.push({ role: 'assistant', content: opening.text })
+
+            // Bootstrap in background (non-blocking)
+            bootstrapWithRetry(opening.text).then(result => {
+              if (result?.conversationId) {
+                conversationId.value = result.conversationId
+              }
+            }).catch(() => {})
+
+            isLoading.value = false
+
+            // === Tier 1: Pre-stored audio ===
+            if (opening.audioUrl && opening.wordTimings && opening.contentType) {
+              const downloadStart = Date.now()
+              try {
+                const audioSuccess = await Promise.race([
+                  voiceSession.playFromUrl(
+                    opening.audioUrl,
+                    opening.text,
+                    opening.wordTimings,
+                    opening.timingSource || 'estimated'
+                  ),
+                  new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Audio download timeout')), 3000)
+                  )
+                ])
+
+                if (audioSuccess) {
+                  console.log('[useVoiceChat] Tier 1: pre-stored audio played', {
+                    illusionKey, illusionLayer,
+                    source: opening.source,
+                    downloadMs: Date.now() - downloadStart
+                  })
+                  return true
+                }
+              } catch (e: any) {
+                console.log('[useVoiceChat] Tier 1 failed, falling to Tier 2', {
+                  error: e?.message,
+                  downloadMs: Date.now() - downloadStart
+                })
+              }
+            }
+
+            // === Tier 2: Real-time TTS with pre-computed text ===
+            try {
+              const audioSuccess = await voiceSession.playAIResponse(opening.text)
+              if (audioSuccess) {
+                console.log('[useVoiceChat] Tier 2: real-time TTS played', {
+                  illusionKey, illusionLayer, source: opening.source
+                })
+                return true
+              }
+            } catch (audioError: any) {
+              console.log('[useVoiceChat] Tier 2 failed, falling to Tier 3', {
+                error: audioError?.message
+              })
+            }
+
+            // Both audio tiers failed — remove message and fall through
+            messages.value.pop()
+            isLoading.value = true
+          }
+        } catch (e: any) {
+          console.log('[useVoiceChat] Fast-start path failed, falling to Tier 3', {
+            error: e?.data?.message || e?.message
+          })
+        }
+      }
+
+      // === Tier 3: Existing flow (full LLM+TTS) ===
       if (enableStreamingTTS) {
         const success = await runStreamingWithResilience('text', {
           content: '',
