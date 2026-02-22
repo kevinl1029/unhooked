@@ -103,7 +103,7 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/unit/server/utils/session/precompute-opening.test.ts. Test case table at spec lines 1348-1361. Extend existing mocks for the pre-computation function. Add mock for getTTSProviderFromConfig() returning { synthesize: vi.fn() } and Storage operations (.from().remove(), .from().upload()). Key verification: the ORDER of Supabase calls (text update BEFORE audio operations). Mock the supabase client chain. Run with: npm run test:unit."
     },
     {

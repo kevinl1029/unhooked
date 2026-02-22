@@ -2,6 +2,22 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-005
+- What was implemented: Created `tests/unit/server/utils/session/precompute-opening.test.ts` with 13 tests
+  - Successful audio generation: upload path, upsert:true, .mp3 extension, audio metadata JSONB structure
+  - Text-first ordering (REQ-20): call order verification (text-update before storage-upload), text saved when TTS fails, audio fields null when TTS fails
+  - Previous audio cleanup: storage.remove called with existing path, remove before upload ordering, no remove when no existing path
+  - Audio upload failure isolation: text still saved, audio fields set to null
+  - Stale ref clearing: both audio fields nulled when any audio failure occurs
+- Files changed: `tests/unit/server/utils/session/precompute-opening.test.ts` (new)
+- **Learnings for future iterations:**
+  - `vi.hoisted()` is required when referencing variables (e.g., `mockChat`, `mockSynthesize`) inside `vi.mock()` factory functions — prevents temporal dead zone errors
+  - `precomputeOpeningText` is a regular utility (no H3 globals) so it can be imported directly and tested via module mocking — no need for logic extraction
+  - Call ordering can be verified by pushing labels to a shared `callOrder: string[]` array inside the mock factory functions — works across multiple `from()` calls since all closures reference the same array
+  - Distinguish text update from audio update by checking `'precomputed_opening_text' in data` — text update has this key, audio metadata and null-clearing updates do not
+  - Pre-existing check-in-sender.test.ts failures (4 tests) are unrelated to this feature
+---
+
 ## Codebase Patterns
 - The spec file for instant conversations v2 is at `docs/specs/instant-conversations-spec.md` (was on feature/instant-conversations branch, checked out to ralph branch)
 - Typecheck uses `npx vue-tsc --noEmit -p .nuxt/tsconfig.json` (requires .nuxt to be generated first via `nuxt prepare`)
@@ -10,6 +26,9 @@ Started: Sat Feb 21 23:32:49 EST 2026
 - `#supabase/server` is a virtual module that cannot be resolved in the nuxt unit test environment — added resolve alias in `vitest.config.ts` pointing to `tests/__mocks__/supabase-server.ts` stub
 - H3 server utilities (`defineEventHandler`, `getHeader`, `readBody`, `createError`) are globals in Nitro server files but NOT in the nuxt test environment — use direct logic extraction pattern for unit testing server handlers
 - Unit testing server API handlers: extract the business logic into a helper function in the test file that accepts dependencies as parameters (consistent with `check-in-sender.test.ts` pattern)
+- Unit testing server utility functions (no H3 globals): import directly and use `vi.mock()` + `vi.hoisted()` — no logic extraction needed (consistent with `precompute-opening.test.ts` pattern)
+- Call order testing: push labels into a shared `callOrder: string[]` array from inside mock closures — all calls to `from()` share the same array since they close over it
+- `vi.hoisted()` is required when referencing module-level variables inside `vi.mock()` factory functions
 
 ---
 
