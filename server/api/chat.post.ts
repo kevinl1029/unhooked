@@ -21,6 +21,7 @@ import { createSequentialTTSProcessor } from '../utils/tts/sequential-processor'
 import { finalizeStreamingTTS } from '../utils/tts/finalize-streaming'
 import { getTTSProviderFromConfig } from '../utils/tts'
 import { extractObservationAssignment, stripChatControlTokens } from '~/utils/chat-control-tokens'
+import { ChatTelemetryCollector } from '../utils/telemetry'
 
 export default defineEventHandler(async (event) => {
   const stripControlTokens = (text: string) => stripChatControlTokens(text)
@@ -510,6 +511,22 @@ export default defineEventHandler(async (event) => {
     }
     const useStreamingTTS = streamTTS && !!resolvedTTSProvider
 
+    const telemetry = useStreamingTTS ? new ChatTelemetryCollector({
+      requestId,
+      requestStartedAt,
+      userId: user.sub,
+      conversationId: convId,
+      llmProvider: model,
+      llmModel: (model === 'groq' ? config.groqModel : config.geminiModel) || model,
+      ttsProvider: (config.ttsProvider as string) || 'unknown',
+      ttsVoice: config.groqTtsVoice || config.openaiTtsVoice || config.elevenlabsVoiceId || config.inworldVoiceId || 'default',
+      ttsMode: ttsStreamingMode,
+      sessionType,
+      isSessionStart: isNewConversation,
+      resilienceAttempt: resilienceAttempt ?? null,
+      resilienceRoute: resilienceRoute ?? null,
+    }) : null
+
     const encoder = new TextEncoder()
     const streamResponse = new ReadableStream({
       async start(controller) {
@@ -535,6 +552,7 @@ export default defineEventHandler(async (event) => {
                 audioChunkCount += 1
                 if (firstChunkTime === null && chunk.audioBase64) {
                   firstChunkTime = Date.now()
+                  telemetry?.markFirstAudio()
                 }
                 // This callback is invoked in strict order for each synthesized chunk
                 const data = JSON.stringify({ type: 'audio_chunk', chunk, conversationId: convId, requestId })
@@ -545,12 +563,14 @@ export default defineEventHandler(async (event) => {
           : null
 
         streamStartTime = Date.now()
+        telemetry?.markStreamStart()
         await router.chatStream(
           { messages: processedMessages, model },
           {
             onToken: (token) => {
               fullResponse += token
               tokenCount += 1
+              telemetry?.markFirstToken()
               tokenChars += token.length
 
               // Always send the token for text display
@@ -570,6 +590,9 @@ export default defineEventHandler(async (event) => {
                 }
 
                 const sentences = sentenceDetector.addToken(token)
+                if (sentences.length > 0) {
+                  telemetry?.markFirstSentence()
+                }
                 for (const sentence of sentences) {
                   // Remove control tokens before synthesis in case they appear near sentence boundaries.
                   const cleanSentence = stripControlTokens(sentence)
@@ -629,6 +652,12 @@ export default defineEventHandler(async (event) => {
                 })
               }
 
+              telemetry?.markComplete({
+                tokenCount,
+                sentenceCount: ttsProcessor?.getSentCount() ?? 0,
+                ttsMode: ttsProcessor?.getEffectiveMode() ?? ttsStreamingMode,
+              })
+
               // Check for ceremony-specific tokens
               const journeyGenerateToken = finalResponse.includes('[JOURNEY_GENERATE]')
 
@@ -649,15 +678,19 @@ export default defineEventHandler(async (event) => {
 
               const strippedFinalResponse = stripControlTokens(finalResponse)
               const shouldPersistAssistantMessage = strippedFinalResponse.length > 0
+              let insertedMsg: { id: string } | null = null
               if (shouldPersistAssistantMessage) {
-                await supabase.from('messages').insert({
+                const { data: msgData } = await supabase.from('messages').insert({
                   conversation_id: convId,
                   role: 'assistant',
                   content: finalResponse,
                   message_length: finalResponse.length,
                   time_since_last_message: null
-                })
+                }).select('id').single()
+                insertedMsg = msgData
               }
+              telemetry?.setMessageId(insertedMsg?.id || null)
+              telemetry?.writeTo(supabase)
 
               const durationMs = Date.now() - requestStartedAt
               console.log('[chat] Stream completed', {
@@ -745,6 +778,8 @@ export default defineEventHandler(async (event) => {
               controller.close()
             },
             onError: (error) => {
+              telemetry?.markError(error)
+              telemetry?.writeTo(supabase)
               const durationMs = Date.now() - requestStartedAt
               console.error('[chat] Stream error', {
                 requestId,
