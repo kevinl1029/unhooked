@@ -158,6 +158,9 @@ export default defineNuxtConfig({
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     stripePriceId: process.env.STRIPE_PRICE_ID,
 
+    // Admin API
+    adminApiSecret: process.env.ADMIN_API_SECRET,
+
     // Client-side (public)
     public: {
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
