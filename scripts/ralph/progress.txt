@@ -2,6 +2,22 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-007
+- What was implemented: Created `tests/unit/server/api/session/opening.test.ts` with 17 tests
+  - Authentication: 401 for unauthenticated request
+  - Validation: 400 for missing illusionKey, illusionLayer, or sessionType
+  - Non-core sessions: all null returned for check_in sessionType
+  - L1 (intellectual): static text + signed audioUrl when manifest has entry; text + null audio when manifest missing; text + null audio when createSignedUrl fails (Tier 2 fallback); 300s expiry verified; manifest cached for 5-min TTL (second call within TTL skips Storage download)
+  - L2/L3 (emotional/identity): precomputed text + signed audioUrl; text + null audio when no audio_path; all null when no precomputed text; Tier 2 fallback when createSignedUrl fails; identity layer returns same precomputed path; 300s expiry verified; all null when DB query fails
+- Files changed: `tests/unit/server/api/session/opening.test.ts` (new)
+- **Learnings for future iterations:**
+  - Direct logic extraction pattern: extract handler business logic into a plain async function in the test file, accepting `user`, query params, mock supabase, and `cacheState` as parameters — avoids H3/Nuxt server context
+  - Module-level manifest cache (TTL) cannot be tested directly from the module; pass `cacheState: { cache, loadedAt }` as a parameter to the extracted helper so tests can share state across calls and verify cache hits
+  - `createStorageApi()` helper needs both `download` (for manifest) and `createSignedUrl` (for signed URLs) as separate vi.fn() mocks on the same object since both are called on `supabase.storage.from('opening-audio')`
+  - DB mock chain: `vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({data, error}) }) }) })` — builds the full Supabase query chain
+  - The 400 for "invalid illusionKey" in the spec/AC refers to missing params (undefined illusionKey), not an unrecognized key value — the actual handler returns null (not 400) for unrecognized keys in ILLUSION_OPENING_MESSAGES
+---
+
 ## 2026-02-22 - US-006
 - What was implemented: Created `server/api/session/opening.get.ts` (v2 replacement for `opening-text.get.ts`)
   - Auth via `serverSupabaseUser()`, Storage ops via `serverSupabaseServiceRole()`

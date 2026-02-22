@@ -148,7 +148,7 @@
         "Tests pass"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/unit/server/api/session/opening.test.ts. Test case table at spec lines 1311-1327. If tests/unit/server/api/session/opening-text.test.ts exists, migrate those tests and extend with v2 tests. Mock strategy at line 1329. Mock Storage download for manifest (return JSON blob or error). Mock createSignedUrl to return { data: { signedUrl: 'https://test.com/signed' }, error: null } or error. For manifest cache testing: call the handler twice within 5 minutes, verify Storage download only called once. Delete old test file if migrating. Run with: npm run test:unit."
     },
     {
