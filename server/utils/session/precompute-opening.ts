@@ -12,6 +12,7 @@ import { buildBridgeContext } from './bridge'
 import { buildSystemPrompt } from '../prompts'
 import { getModelRouter, getDefaultModel } from '../llm'
 import { getTTSProviderFromConfig } from '../tts'
+import { buildOpeningPayloadHash } from './opening-payload-hash'
 
 interface PrecomputeParams {
   supabase: SupabaseClient
@@ -101,88 +102,104 @@ Output ONLY the opening message text with no preamble, labels, or extra formatti
         throw new Error('Empty response from LLM')
       }
 
-      // Store text FIRST (REQ-20: text saved even if audio fails)
-      const { error: updateError } = await supabase
+      // Read current audio path for post-publish cleanup.
+      const { data: progress } = await supabase
         .from('user_progress')
-        .update({
-          precomputed_opening_text: openingText,
-          precomputed_opening_at: new Date().toISOString()
-        })
+        .select('precomputed_opening_audio_path')
         .eq('user_id', userId)
+        .single()
 
-      if (updateError) {
-        throw updateError
-      }
+      const previousAudioPath: string | null = progress?.precomputed_opening_audio_path ?? null
 
-      console.log(`[precompute-opening] Text stored: userId=${userId}, illusionKey=${illusionKey}, nextLayer=${nextLayer}, textLength=${openingText.length}, attempt=${attempt + 1}`)
+      let audioPath: string | null = null
+      let uploadedAudioPath: string | null = null
+      let payloadHash: string | null = null
+      let wordTimingsPayload: Record<string, unknown> | null = null
 
-      // === NEW: Audio generation (v2) ===
       try {
-        // 1. Generate audio via TTS
-        const provider = getTTSProviderFromConfig()
-        const ttsResult = await provider.synthesize({ text: openingText })
+        const ttsProvider = getTTSProviderFromConfig()
+        const ttsResult = await ttsProvider.synthesize({ text: openingText })
+        const providerVersion = `${ttsResult.provider}:${ttsResult.timingSource}`
+        payloadHash = buildOpeningPayloadHash({
+          text: openingText,
+          illusionKey,
+          illusionLayer: nextLayer,
+          provider: ttsResult.provider,
+          voice: ttsResult.voice,
+          providerVersion,
+        })
 
-        // 2. Delete previous audio from Storage (REQ-18)
-        const { data: progress } = await supabase
-          .from('user_progress')
-          .select('precomputed_opening_audio_path')
-          .eq('user_id', userId)
-          .single()
-
-        if (progress?.precomputed_opening_audio_path) {
-          await supabase.storage
-            .from('opening-audio')
-            .remove([progress.precomputed_opening_audio_path])
-        }
-
-        // 3. Upload new audio to Storage
         const ext = ttsResult.contentType === 'audio/mpeg' ? 'mp3' : 'wav'
-        const audioPath = `l2l3/${userId}/opening.${ext}`
+        audioPath = `l2l3/${userId}/${payloadHash}.${ext}`
 
         const { error: uploadError } = await supabase.storage
           .from('opening-audio')
           .upload(audioPath, ttsResult.audioBuffer, {
             contentType: ttsResult.contentType,
-            upsert: true
+            upsert: true,
           })
 
         if (uploadError) throw uploadError
 
-        // 4. Update user_progress with audio metadata
-        await supabase
-          .from('user_progress')
-          .update({
-            precomputed_opening_audio_path: audioPath,
-            precomputed_opening_word_timings: {
-              timings: ttsResult.wordTimings,
-              timingSource: ttsResult.timingSource,
-              contentType: ttsResult.contentType
-            }
-          })
-          .eq('user_id', userId)
-
-        console.log('[precompute-opening] Audio generated and stored', {
-          userId, illusionKey, nextLayer, audioPath,
+        uploadedAudioPath = audioPath
+        wordTimingsPayload = {
+          timings: ttsResult.wordTimings,
+          timingSource: ttsResult.timingSource,
           contentType: ttsResult.contentType,
-          durationMs: ttsResult.estimatedDurationMs
-        })
-
+          payloadHash,
+          provider: ttsResult.provider,
+          voice: ttsResult.voice,
+          providerVersion,
+        }
       } catch (audioError) {
-        // Audio generation/upload failed — text is already saved (REQ-20)
-        console.error('[precompute-opening] Audio generation failed (text still saved)', {
-          userId, illusionKey, nextLayer,
-          error: audioError instanceof Error ? audioError.message : String(audioError)
+        // Text will still be published, but Tier 1 metadata is cleared.
+        console.error('[precompute-opening] Audio generation/upload failed; publishing text-only opening', {
+          userId,
+          illusionKey,
+          nextLayer,
+          error: audioError instanceof Error ? audioError.message : String(audioError),
         })
+      }
 
-        // Clear any stale audio references (best-effort — don't throw if this fails)
+      const publishPayload = {
+        precomputed_opening_text: openingText,
+        precomputed_opening_at: new Date().toISOString(),
+        precomputed_opening_audio_path: audioPath,
+        precomputed_opening_word_timings: wordTimingsPayload,
+        precomputed_opening_payload_hash: payloadHash,
+      }
+
+      const { error: publishError } = await supabase
+        .from('user_progress')
+        .update(publishPayload)
+        .eq('user_id', userId)
+
+      if (publishError) {
+        if (uploadedAudioPath) {
+          await Promise.resolve(
+            supabase.storage
+              .from('opening-audio')
+              .remove([uploadedAudioPath])
+          ).catch(() => {})
+        }
+        throw publishError
+      }
+
+      console.log('[precompute-opening] Opening published', {
+        userId,
+        illusionKey,
+        nextLayer,
+        hasAudio: !!audioPath,
+        payloadHash,
+        audioPath,
+        attempt: attempt + 1,
+      })
+
+      if (audioPath && previousAudioPath && previousAudioPath !== audioPath) {
         await Promise.resolve(
-          supabase
-            .from('user_progress')
-            .update({
-              precomputed_opening_audio_path: null,
-              precomputed_opening_word_timings: null
-            })
-            .eq('user_id', userId)
+          supabase.storage
+            .from('opening-audio')
+            .remove([previousAudioPath])
         ).catch(() => {})
       }
 

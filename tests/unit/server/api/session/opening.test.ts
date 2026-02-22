@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ILLUSION_OPENING_MESSAGES } from '~/server/utils/prompts'
 import type { IllusionKey } from '~/server/utils/llm/task-types'
 import type { WordTiming } from '~/server/utils/tts/types'
+import { buildOpeningPayloadHash } from '~/server/utils/session/opening-payload-hash'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,6 +32,10 @@ interface OpeningWordTimingsJson {
   timings: WordTiming[]
   timingSource: 'actual' | 'estimated'
   contentType: string
+  payloadHash?: string
+  provider?: string
+  voice?: string
+  providerVersion?: string | null
 }
 
 interface ManifestCacheState {
@@ -148,7 +153,7 @@ async function handleOpeningRequest({
   if (illusionLayer === 'emotional' || illusionLayer === 'identity') {
     const queryResult = supabase
       .from('user_progress')
-      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings')
+      .select('precomputed_opening_text, precomputed_opening_audio_path, precomputed_opening_word_timings, precomputed_opening_payload_hash')
       .eq('user_id', authUserId)
       .single() as Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
 
@@ -161,12 +166,47 @@ async function handleOpeningRequest({
     const text: string | null = (data?.precomputed_opening_text as string | undefined) ?? null
     const audioPath: string | null = (data?.precomputed_opening_audio_path as string | undefined) ?? null
     const wordTimingsJson: OpeningWordTimingsJson | null = (data?.precomputed_opening_word_timings as OpeningWordTimingsJson | undefined) ?? null
+    const payloadHash: string | null = (data?.precomputed_opening_payload_hash as string | undefined) ?? null
 
     if (!text) {
       return { text: null, source: null, audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
     }
 
-    if (audioPath && wordTimingsJson) {
+    if (audioPath || wordTimingsJson || payloadHash) {
+      let guardFailureReason: string | null = null
+      if (!audioPath) {
+        guardFailureReason = 'missing_audio_path'
+      } else if (!wordTimingsJson) {
+        guardFailureReason = 'missing_word_timings'
+      } else if (!payloadHash) {
+        guardFailureReason = 'missing_payload_hash'
+      } else if (!wordTimingsJson.payloadHash) {
+        guardFailureReason = 'missing_word_timings_payload_hash'
+      } else if (wordTimingsJson.payloadHash !== payloadHash) {
+        guardFailureReason = 'payload_hash_mismatch'
+      } else if (!wordTimingsJson.provider || !wordTimingsJson.voice) {
+        guardFailureReason = 'missing_tts_metadata'
+      } else {
+        const expectedHash = buildOpeningPayloadHash({
+          text,
+          illusionKey: illusionKey as IllusionKey,
+          illusionLayer: illusionLayer as 'emotional' | 'identity',
+          provider: wordTimingsJson.provider,
+          voice: wordTimingsJson.voice,
+          providerVersion: wordTimingsJson.providerVersion,
+        })
+
+        if (expectedHash !== payloadHash) {
+          guardFailureReason = 'payload_hash_recompute_mismatch'
+        } else if (!audioPath.includes(payloadHash)) {
+          guardFailureReason = 'audio_path_payload_hash_mismatch'
+        }
+      }
+
+      if (guardFailureReason) {
+        return { text, source: 'precomputed', audioUrl: null, wordTimings: null, contentType: null, timingSource: null }
+      }
+
       const { data: signedData, error: signedError } = await storageApi.createSignedUrl(audioPath, 300)
 
       if (!signedError && signedData?.signedUrl) {
@@ -206,9 +246,44 @@ const L2_WORD_TIMINGS_JSON: OpeningWordTimingsJson = {
   timings: [{ word: 'Welcome', startMs: 0, endMs: 200 }],
   timingSource: 'actual',
   contentType: 'audio/wav',
+  provider: 'groq',
+  voice: 'luna',
+  providerVersion: 'groq:actual',
 }
 
 const TEST_USER = { id: 'legacy-user-id', sub: 'user-123' }
+
+function createLinkedPrecomputedRow({
+  text,
+  illusionKey = 'stress_relief',
+  illusionLayer = 'emotional',
+  audioExt = 'wav',
+}: {
+  text: string
+  illusionKey?: IllusionKey
+  illusionLayer?: 'emotional' | 'identity'
+  audioExt?: 'wav' | 'mp3'
+}) {
+  const payloadHash = buildOpeningPayloadHash({
+    text,
+    illusionKey,
+    illusionLayer,
+    provider: L2_WORD_TIMINGS_JSON.provider!,
+    voice: L2_WORD_TIMINGS_JSON.voice!,
+    providerVersion: L2_WORD_TIMINGS_JSON.providerVersion,
+  })
+  const audioPath = `opening-audio/l2l3/user-123/${payloadHash}.${audioExt}`
+
+  return {
+    precomputed_opening_text: text,
+    precomputed_opening_audio_path: audioPath,
+    precomputed_opening_word_timings: {
+      ...L2_WORD_TIMINGS_JSON,
+      payloadHash,
+    },
+    precomputed_opening_payload_hash: payloadHash,
+  }
+}
 
 function createStorageApi(opts: {
   manifestData?: L1Manifest | null
@@ -532,12 +607,11 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
 
     it('returns precomputed text + audioUrl for L2 with audio_path in user_progress', async () => {
       const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
-      const audioPath = 'opening-audio/l2l3/user-123/opening.wav'
-      const userProgressRow = {
-        precomputed_opening_text: 'Welcome back.',
-        precomputed_opening_audio_path: audioPath,
-        precomputed_opening_word_timings: L2_WORD_TIMINGS_JSON,
-      }
+      const userProgressRow = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
       const supabase = createSupabase(storageApi, userProgressRow)
 
       const result = await handleOpeningRequest({
@@ -612,11 +686,11 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
         signedUrl: null,
         signedUrlError: { message: 'URL signing failed' },
       })
-      const userProgressRow = {
-        precomputed_opening_text: 'Welcome back.',
-        precomputed_opening_audio_path: 'opening-audio/l2l3/user-123/opening.wav',
-        precomputed_opening_word_timings: L2_WORD_TIMINGS_JSON,
-      }
+      const userProgressRow = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
       const supabase = createSupabase(storageApi, userProgressRow)
 
       const result = await handleOpeningRequest({
@@ -635,11 +709,11 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
 
     it('L3 (identity layer) also returns precomputed text + audioUrl', async () => {
       const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
-      const userProgressRow = {
-        precomputed_opening_text: 'Identity session text.',
-        precomputed_opening_audio_path: 'opening-audio/l2l3/user-123/opening.wav',
-        precomputed_opening_word_timings: L2_WORD_TIMINGS_JSON,
-      }
+      const userProgressRow = createLinkedPrecomputedRow({
+        text: 'Identity session text.',
+        illusionKey: 'identity',
+        illusionLayer: 'identity',
+      })
       const supabase = createSupabase(storageApi, userProgressRow)
 
       const result = await handleOpeningRequest({
@@ -658,12 +732,11 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
 
     it('generates signed URL with 300 second expiry for L2', async () => {
       const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
-      const audioPath = 'opening-audio/l2l3/user-123/opening.wav'
-      const userProgressRow = {
-        precomputed_opening_text: 'Welcome back.',
-        precomputed_opening_audio_path: audioPath,
-        precomputed_opening_word_timings: L2_WORD_TIMINGS_JSON,
-      }
+      const userProgressRow = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
       const supabase = createSupabase(storageApi, userProgressRow)
 
       await handleOpeningRequest({
@@ -675,7 +748,70 @@ describe('Opening endpoint logic (GET /api/session/opening)', () => {
         cacheState,
       })
 
-      expect(storageApi.createSignedUrl).toHaveBeenCalledWith(audioPath, 300)
+      expect(storageApi.createSignedUrl).toHaveBeenCalledWith(
+        userProgressRow.precomputed_opening_audio_path,
+        300,
+      )
+    })
+
+    it('suppresses Tier 1 when row hash is missing (consistency guard)', async () => {
+      const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
+      const linked = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
+      const userProgressRow = {
+        ...linked,
+        precomputed_opening_payload_hash: null,
+      }
+      const supabase = createSupabase(storageApi, userProgressRow)
+
+      const result = await handleOpeningRequest({
+        user: TEST_USER,
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+        sessionType: 'core',
+        supabase,
+        cacheState,
+      })
+
+      expect(result.text).toBe('Welcome back.')
+      expect(result.source).toBe('precomputed')
+      expect(result.audioUrl).toBeNull()
+      expect(storageApi.createSignedUrl).not.toHaveBeenCalled()
+    })
+
+    it('suppresses Tier 1 when payload hash does not match text (consistency guard)', async () => {
+      const storageApi = createStorageApi({ signedUrl: SIGNED_URL })
+      const linked = createLinkedPrecomputedRow({
+        text: 'Welcome back.',
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+      })
+      const userProgressRow = {
+        ...linked,
+        precomputed_opening_payload_hash: 'deadbeef',
+        precomputed_opening_word_timings: {
+          ...linked.precomputed_opening_word_timings,
+          payloadHash: 'deadbeef',
+        },
+      }
+      const supabase = createSupabase(storageApi, userProgressRow)
+
+      const result = await handleOpeningRequest({
+        user: TEST_USER,
+        illusionKey: 'stress_relief',
+        illusionLayer: 'emotional',
+        sessionType: 'core',
+        supabase,
+        cacheState,
+      })
+
+      expect(result.text).toBe('Welcome back.')
+      expect(result.source).toBe('precomputed')
+      expect(result.audioUrl).toBeNull()
+      expect(storageApi.createSignedUrl).not.toHaveBeenCalled()
     })
 
     it('returns all null when user_progress DB query fails', async () => {
