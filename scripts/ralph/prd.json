@@ -239,7 +239,7 @@
         "Tests pass"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/unit/composables/useVoiceChat-instant-start.test.ts. Test case table at spec lines 1379-1396. Mock strategy at line 1396. For the timeout test: make playFromUrl return a never-resolving promise, advance timers by 3000ms with vi.advanceTimersByTime(3000), verify fallback to Tier 2 (playAIResponse called). For all tests: mock $fetch to return different opening response shapes for each tier scenario. Follow existing test patterns in the file (if it exists) or in tests/unit/composables/. Run with: npm run test:unit."
     },
     {

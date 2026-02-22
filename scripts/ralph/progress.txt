@@ -2,6 +2,29 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-011
+- What was implemented: Created `tests/unit/composables/useVoiceChat-instant-start.test.ts` with 11 tests
+  - Tier 1: pre-stored audio plays when opening has audioUrl and playFromUrl succeeds
+  - Tier 1 → Tier 2: falls back to playAIResponse on 3-second download timeout (via vi.useFakeTimers + vi.advanceTimersByTimeAsync)
+  - Tier 1 → Tier 2: falls back to playAIResponse when playFromUrl returns false
+  - Tier 2: calls playAIResponse directly when text available but no audioUrl
+  - Tier 2 → Tier 3: falls through to streaming flow when playAIResponse fails (message popped, streaming picks up)
+  - Tier 3: uses streaming flow when opening text is null
+  - Endpoint URL verified as /api/session/opening (not /api/session/opening-text)
+  - downloadMs logged for Tier 1 audio attempts (console.log spy)
+  - Bootstrap called exactly once when Tier 1 succeeds
+  - Bootstrap called exactly once when Tier 2 is used
+  - Non-core session (check_in) skips fast path entirely
+- Files changed: `tests/unit/composables/useVoiceChat-instant-start.test.ts` (new)
+- **Learnings for future iterations:**
+  - `vi.stubGlobal('$fetch', mockFn)` works correctly in the Nuxt test environment — same pattern as `useProgress.test.ts`
+  - For timeout test: use `vi.useFakeTimers()` in the test, then `vi.advanceTimersByTimeAsync(3001)` BEFORE awaiting the result — this fires the setTimeout reject and allows the fallback chain to run
+  - Bootstrap is fire-and-forget (no await) — `$fetch('/api/session/bootstrap')` is called synchronously at the start of the async function body, so it appears in mock.calls by the time startConversation() resolves
+  - The `playStreamingResponse` mock must set `transcriptRef.value` to non-empty content AND return `{ success: true, sawDone: true, sawErrorEvent: false, ... }` for Tier 3 to count as successful (sendStreamingAttempt checks both)
+  - `vi.useRealTimers()` in afterEach is safe to call even when real timers are already active (no-op)
+  - Restore `consoleSpy` via `consoleSpy.mockRestore()` inside the test, not in afterEach
+---
+
 ## 2026-02-22 - US-010
 - What was implemented: Created `tests/unit/composables/useVoiceSession-playFromUrl.test.ts` with 7 tests
   - Resolves true and sets isAISpeaking when audio starts playing (onplay fires)
