@@ -519,7 +519,7 @@ export default defineEventHandler(async (event) => {
       llmProvider: model,
       llmModel: (model === 'groq' ? config.groqModel : config.geminiModel) || model,
       ttsProvider: (config.ttsProvider as string) || 'unknown',
-      ttsVoice: config.groqTtsVoice || config.openaiTtsVoice || config.elevenlabsVoiceId || config.inworldVoiceId || 'default',
+      ttsVoice: ({ groq: config.groqTtsVoice, openai: config.openaiTtsVoice, elevenlabs: config.elevenlabsVoiceId, inworld: config.inworldVoiceId } as Record<string, string | undefined>)[config.ttsProvider as string] || 'default',
       ttsMode: ttsStreamingMode,
       sessionType,
       isSessionStart: isNewConversation,
