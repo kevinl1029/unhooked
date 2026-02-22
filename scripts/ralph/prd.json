@@ -63,7 +63,7 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "File: tests/unit/server/api/admin/generate-opening-audio.test.ts. Test case table is in the spec at lines 1331-1346. Mock strategy: mock getTTSProviderFromConfig() and Supabase Storage. Follow existing test patterns from tests/unit/ directory. The mock TTS provider.synthesize() should return { audioBuffer: Buffer.from('test'), contentType: 'audio/wav', wordTimings: [{ word: 'Hey', startMs: 0, endMs: 150 }], timingSource: 'estimated', estimatedDurationMs: 5000 }. For manifest download mock, return existing manifest JSON or error for 'not found'. Run with: npm run test:unit."
     },
     {

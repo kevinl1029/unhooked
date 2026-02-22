@@ -7,6 +7,9 @@ Started: Sat Feb 21 23:32:49 EST 2026
 - Typecheck uses `npx vue-tsc --noEmit -p .nuxt/tsconfig.json` (requires .nuxt to be generated first via `nuxt prepare`)
 - Existing codebase has pre-existing type errors (not related to this feature) — "typecheck passes" means no new errors introduced
 - SQL migrations follow pattern in supabase/migrations/: use `ADD COLUMN IF NOT EXISTS`, always include COMMENTs, use `ON CONFLICT DO NOTHING` for idempotent inserts
+- `#supabase/server` is a virtual module that cannot be resolved in the nuxt unit test environment — added resolve alias in `vitest.config.ts` pointing to `tests/__mocks__/supabase-server.ts` stub
+- H3 server utilities (`defineEventHandler`, `getHeader`, `readBody`, `createError`) are globals in Nitro server files but NOT in the nuxt test environment — use direct logic extraction pattern for unit testing server handlers
+- Unit testing server API handlers: extract the business logic into a helper function in the test file that accepts dependencies as parameters (consistent with `check-in-sender.test.ts` pattern)
 
 ---
 
@@ -44,4 +47,19 @@ Started: Sat Feb 21 23:32:49 EST 2026
   - `serverSupabaseServiceRole` is imported from `#supabase/server`
   - Pre-existing unit test failures in `check-in-sender.test.ts` (4 tests) — not related to this feature
   - Nuxt auto-type route resolution errors in `useCeremony.ts` are pre-existing framework limitations, not new errors
+---
+
+## 2026-02-21 - US-003
+- What was implemented: Created unit tests for admin audio generation endpoint `tests/unit/server/api/admin/generate-opening-audio.test.ts`
+  - 17 tests covering: auth validation (401 for missing/wrong secret), key targeting (all 5 keys vs single key, 400 for invalid key), TTS generation and upload (correct path/extension, upsert:true), manifest management (merge, preserve failed key entries), and response shape
+  - Tests use direct logic extraction pattern: the handler business logic is reimplemented as a testable helper function accepting dependencies as parameters
+  - Added `tests/__mocks__/supabase-server.ts` stub for the `#supabase/server` virtual module
+  - Added `resolve.alias` in `vitest.config.ts` to map `#supabase/server` to the stub file
+- Files changed: `tests/unit/server/api/admin/generate-opening-audio.test.ts` (new), `tests/__mocks__/supabase-server.ts` (new), `vitest.config.ts`
+- **Learnings for future iterations:**
+  - `#supabase/server` requires a vitest resolve alias — see `vitest.config.ts` and `tests/__mocks__/supabase-server.ts`
+  - Server API handlers can't be directly invoked in unit tests (H3 globals not available, virtual modules not resolved) — use the direct logic extraction pattern instead
+  - The direct logic extraction pattern: copy the handler's business logic into a helper function in the test, inject dependencies as parameters (TTS provider, storage, config) — this is consistent with how `check-in-sender.test.ts` tests work
+  - Mock Storage: create an object `{ from: vi.fn().mockReturnValue({ upload: vi.fn(), download: vi.fn() }) }`
+  - Mock TTS manifest blob: return `{ text: () => Promise.resolve(JSON.stringify(data)) }` for the download response
 ---
