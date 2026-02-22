@@ -2,6 +2,25 @@
 Started: Sat Feb 21 23:32:49 EST 2026
 ---
 
+## 2026-02-22 - US-009
+- What was implemented: 3-tier fast-start logic in `composables/useVoiceChat.ts` + bootstrap endpoint
+  - Created `server/api/session/bootstrap.post.ts`: creates conversation record + first assistant message in Supabase, cancels pending evidence bridge check-ins (non-blocking), returns `{ conversationId }`
+  - Added `bootstrapWithRetry(openingText)` private function in `useVoiceChat.ts`: calls `/api/session/bootstrap` with 3 retries + exponential backoff (1s/2s/4s), 15s max window, uses closure vars for illusionKey/illusionLayer/sessionType
+  - Modified `startConversation()` to implement 3-tier fallback for core sessions with illusionKey:
+    - Fetches from `/api/session/opening` (endpoint URL updated from `/api/session/opening-text`)
+    - If `opening.text`: pushes message immediately, fires bootstrap in background, sets `isLoading = false`
+    - Tier 1: If `audioUrl + wordTimings + contentType` → `Promise.race([playFromUrl(...), 3s timeout])` → return true on success
+    - Tier 2: `voiceSession.playAIResponse(opening.text)` → return true on success
+    - Both tiers fail: pops message, resets `isLoading = true`, falls to Tier 3
+    - Tier 3: unchanged streaming/non-streaming flow (runs if fast path failed or not applicable)
+- Files changed: `composables/useVoiceChat.ts`, `server/api/session/bootstrap.post.ts` (new)
+- **Learnings for future iterations:**
+  - The spec shows `bootstrapWithRetry(opening.text)` called with just the text — the function closes over composable-scope vars (illusionKey, illusionLayer, sessionType) so only openingText needs to be passed
+  - `$fetch` in composables returns Nuxt auto-generated route types; cast through `unknown` first when the inferred type doesn't match: `result as unknown as { conversationId: string }`
+  - The bootstrap endpoint (bootstrap.post.ts) was on the `feature/instant-conversations` branch — retrieved via `git show feature/instant-conversations:server/api/session/bootstrap.post.ts`
+  - Non-blocking fire-and-forget: call `.then(...).catch(() => {})` without `await` — don't `await` in the middle of time-critical audio path
+---
+
 ## 2026-02-22 - US-008
 - What was implemented: Added `playFromUrl()` method to `composables/useVoiceSession.ts`
   - Signature: `playFromUrl(url, text, timings, timingSource): Promise<boolean>`

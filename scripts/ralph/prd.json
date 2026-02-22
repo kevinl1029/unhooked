@@ -194,7 +194,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "File: composables/useVoiceChat.ts. Full updated startConversation() code at spec lines 745-838. The Promise.race for download timeout wraps playFromUrl() and a setTimeout reject at 3000ms. Key state management table at lines 842-850. The existing v1 fast-start code is being restructured into the 3-tier version. Bootstrap is called once before any audio attempt. The opening response from the updated endpoint now includes audioUrl, wordTimings, contentType, timingSource. READ the existing startConversation() code first to understand the current structure, then restructure with the 3-tier logic from the spec."
     },
     {
