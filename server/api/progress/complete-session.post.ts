@@ -196,7 +196,7 @@ export default defineEventHandler(async (event) => {
       console.log('[precompute-opening] Slot invalidated', {
         userId: user.sub,
         illusionKey: effectiveIllusionKey,
-        nextLayer,
+        nextLayer: null,
         status: 'pending',
       })
 
