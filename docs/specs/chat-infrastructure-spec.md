@@ -1,8 +1,8 @@
 # Unhooked: Chat Infrastructure Specification
 ## (Originally: Phase 1.3)
 
-**Version:** 3.0  
-**Last Updated:** 2026-01-11  
+**Version:** 3.1
+**Last Updated:** 2026-02-25
 **Status:** Implemented
 **Document Type:** Technical Specification  
 **Legacy Reference:** Phase 1.3
@@ -15,7 +15,7 @@
 
 Build the LLM integration layer with a model router abstraction, conversational chat API, and persistence. This enables the core therapeutic conversations that power Unhooked.
 
-**Goal:** Users can have text-based conversations with an AI coach powered by Gemini, with full conversation history saved to Supabase.
+**Goal:** Users can have text-based conversations with an AI coach powered by configurable LLM providers (Gemini default, OpenAI and Groq available), with full conversation history saved to Supabase.
 
 **Prerequisites:** Authentication (Phase 1.2) complete â€” Users can sign up, log in, and access protected routes.
 - Authentication (Phase 1.2) complete Ã¢â‚¬â€ Supabase auth working
@@ -76,7 +76,7 @@ Based on architectural review, the following decisions have been made:
 2. **Conversation titles**: Simple truncation (first 50 chars of first message)
 3. **Conversation UX**: Auto-create conversations on first message
 4. **Data retention**: No deletion UI in Phase 1.3, but DELETE policy kept for future admin use
-5. **Model selection**: Hardcoded to Gemini Flash for now
+5. **Model selection**: Configurable via `DEFAULT_LLM_PROVIDER` env var; Gemini default, OpenAI and Groq available
 6. **System messages**: Provider-specific handling (schema supports 'system' role for Phase 2)
 7. **Usage tracking**: Token metadata captured but not exposed to users
 8. **Error handling**: Simple generic errors, improved streaming error messages
@@ -90,7 +90,7 @@ Based on architectural review, the following decisions have been made:
 16. **Auth refresh**: Assume Phase 1.2 handles token refresh
 17. **Message pagination**: Load all messages (optimized for <100 messages per conversation)
 18. **Data privacy**: Supabase RLS sufficient, plus GDPR data export documentation
-19. **Provider reliability**: Single provider, surface failures to user
+19. **Provider reliability**: Multi-provider with resilient failover (see `chat-resilience-retry-failover-spec.md`)
 20. **Multi-model future**: Model set per conversation at creation time
 21. **Conversation metadata**: Basic fields only (id, title, model, timestamps)
 22. **Testing**: Use real providers (no mock)
@@ -1304,3 +1304,4 @@ Then register them in `router.ts`. The chat API and UI don't need to change Ã¢
 | 1.0 | [Original] | Initial Phase 1.3 specification created |
 | 2.0 | 2026-01-11 | Changed terminology from "myths" to "illusions" where applicable; Added version control header |
 | 3.0 | 2026-01-11 | Renamed from "Phase 1.3" to "Chat Infrastructure Specification" for feature-based organization; Added legacy reference for git commit traceability; Updated status to Complete; Updated cross-references to use hybrid naming |
+| 3.1 | 2026-02-25 | Updated to reflect multi-provider support: OpenAI added as available provider alongside Gemini and Groq; Updated key design decisions #5 (model selection) and #19 (provider reliability) to reflect current architecture; See ADR-008 |

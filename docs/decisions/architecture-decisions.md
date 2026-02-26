@@ -1,8 +1,8 @@
 # Unhooked: Decision Records
 
-**Version:** 1.6
+**Version:** 1.7
 **Created:** 2026-01-19
-**Last Updated:** 2026-01-27  
+**Last Updated:** 2026-02-25
 **Document Type:** Architecture Decision Records (ADR)
 
 ---
@@ -571,6 +571,78 @@ Establish **server-side authority** for session completion handling:
 
 ---
 
+### ADR-008: Add OpenAI as Alternative LLM Chat Provider
+
+**Date:** 2026-02-25
+**Status:** Accepted
+**Decision Maker(s):** Kevin
+
+**Context:**
+
+Gemini is the primary LLM provider for all chat and background tasks. In production, Gemini has been experiencing significant reliability issues — HTTP 503 errors on up to 25% of all API calls on some days. While the existing chat resilience system (ADR primary/secondary failover per `chat-resilience-retry-failover-spec.md`) mitigates user-facing impact by retrying and falling back to Groq, the underlying Gemini instability is a risk to conversation quality and user trust.
+
+Currently:
+- **Gemini** — fully implemented, primary provider for chat and all background tasks
+- **Groq** — fully implemented, secondary/failback provider for chat
+- **OpenAI** — TTS only (raw HTTP fetch to `/v1/audio/speech`); no chat provider, no SDK installed
+- **Anthropic** — not implemented; types and env vars exist but code is stubbed out
+
+The existing provider abstraction (`LLMProvider` interface, `ModelRouter`, `TaskExecutor`) was designed for multi-provider support. The type system already includes `'openai'` in `ModelType` and `'gpt-4'`/`'gpt-4-turbo'` in `TaskModelType`. Adding a new chat provider is a matter of implementing the interface and registering it in the router.
+
+**Decision:**
+
+Add OpenAI as a fully supported alternative LLM chat provider:
+
+1. **Install the `openai` npm package** as a project dependency
+2. **Create `server/utils/llm/providers/openai.ts`** implementing the `LLMProvider` interface (chat + streaming), following the same pattern as `gemini.ts` and `groq.ts`
+3. **Uncomment and complete the OpenAI registration** in `server/utils/llm/router.ts`
+4. **Target models:**
+   - `gpt-4o` — maps to `gpt-4` task model type (pro-equivalent, for complex tasks)
+   - `gpt-4o-mini` — maps to `gpt-4-turbo` task model type (flash-equivalent, for fast tasks)
+5. **OpenAI becomes a configurable primary or secondary provider** via existing `CHAT_PRIMARY_PROVIDER` / `CHAT_SECONDARY_PROVIDER` env vars
+6. **No changes to the resilience/failover architecture** — OpenAI plugs into the existing 3-tier retry system
+
+**Rationale:**
+
+1. **Gemini reliability risk:** 503 error rates of up to 25% on some days are unacceptable for a therapeutic conversation app where trust and continuity matter. Having a production-quality alternative reduces single-provider dependency.
+
+2. **Minimal implementation effort:** The provider abstraction was designed for exactly this scenario. The work is ~80-100 lines of provider code plus SDK installation — no architectural changes needed.
+
+3. **OpenAI over Anthropic (for now):** OpenAI's API is the closest to the existing Groq integration (OpenAI-compatible format), meaning less message format conversion. Anthropic uses a different message format and would require more adaptation. OpenAI is also a more direct comparison to Gemini on cost/quality tradeoffs.
+
+4. **Groq remains the fast fallback:** Groq's strength is inference speed (10-100x faster). OpenAI's value is as a quality alternative to Gemini, not a speed play. The provider hierarchy becomes: Gemini (default) → OpenAI (quality alternative) → Groq (speed fallback).
+
+5. **Cost awareness:** `gpt-4o-mini` provides a cost-effective option for flash-tier tasks, while `gpt-4o` is reserved for pro-tier tasks requiring higher quality.
+
+**Alternatives Considered:**
+
+| Alternative | Why Rejected |
+|-------------|--------------|
+| **Add Anthropic instead of OpenAI** | Anthropic's message format differs more from the OpenAI standard used internally; higher integration effort. Can be added later. |
+| **Add both OpenAI and Anthropic simultaneously** | Unnecessary scope. Solve the immediate reliability problem first with the lower-effort integration. |
+| **Increase Groq's role as primary** | Groq excels at speed but uses open-source models (Llama, Mixtral) that may not match Gemini/OpenAI quality for therapeutic conversations requiring nuance and safety. |
+| **Wait for Gemini reliability to improve** | Reactive and outside our control. Better to have alternatives ready. |
+
+**Consequences:**
+
+- Install `openai` npm package
+- Create `server/utils/llm/providers/openai.ts` implementing `LLMProvider`
+- Update `server/utils/llm/router.ts` to register OpenAI provider
+- Update `.env.example` with OpenAI model configuration comments
+- Update `docs/guides/llm-configuration-guide.md` — move OpenAI from "Future" to "Available"
+- Update `docs/specs/chat-infrastructure-spec.md` — note OpenAI as supported provider
+- Add `OPENAI_API_KEY` and `OPENAI_MODEL` to Vercel environment variables for staging/production
+- Test with `CHAT_PRIMARY_PROVIDER=openai` in staging before production rollout
+
+**Related Documents:**
+- `docs/guides/llm-configuration-guide.md` — Provider configuration reference
+- `docs/specs/chat-infrastructure-spec.md` — Chat architecture
+- `docs/specs/chat-resilience-retry-failover-spec.md` — Failover architecture (unchanged)
+- `server/utils/llm/router.ts` — Provider registration
+- `server/utils/llm/types.ts` — Type definitions (already includes `'openai'`)
+
+---
+
 ## Index
 
 | ADR | Title | Status | Date |
@@ -582,6 +654,7 @@ Establish **server-side authority** for session completion handling:
 | 005 | Dashboard CTA Hierarchy — Single Primary Action Per State | Accepted | 2026-01-27 |
 | 006 | Deprecate `illusion_number` in Favor of `illusion_key` | Accepted | 2026-01-27 |
 | 007 | Session Completion — Server-Side Authority Pattern | Accepted | 2026-01-27 |
+| 008 | Add OpenAI as Alternative LLM Chat Provider | Accepted | 2026-02-25 |
 
 ---
 
@@ -596,3 +669,4 @@ Establish **server-side authority** for session completion handling:
 | 1.4 | 2026-01-27 | Added ADR-005 (Dashboard CTA Hierarchy — Single Primary Action Per State) |
 | 1.5 | 2026-01-27 | Added ADR-006 (Deprecate `illusion_number` in Favor of `illusion_key`) |
 | 1.6 | 2026-01-27 | Added ADR-007 (Session Completion — Server-Side Authority Pattern) |
+| 1.7 | 2026-02-25 | Added ADR-008 (Add OpenAI as Alternative LLM Chat Provider) |

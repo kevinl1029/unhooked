@@ -1,6 +1,6 @@
 # LLM Configuration Guide
 
-**Last Updated:** 2026-01-10 (Reverted to Gemini defaults)
+**Last Updated:** 2026-02-25 (Added OpenAI as available provider)
 
 ---
 
@@ -124,15 +124,22 @@ GROQ_MODEL=llama-3.1-8b-instant
 #   - mixtral-8x7b-32768 (32k context window)
 #   - gemma2-9b-it (lightweight)
 
+# === OpenAI Configuration (Available) ===
+OPENAI_API_KEY=sk-...
+# Optional: OpenAI API key
+# Get your key: https://platform.openai.com/api-keys
+
+OPENAI_MODEL=gpt-4o-mini
+# Optional: Default OpenAI model
+# Default: gpt-4o-mini
+# Options:
+#   - gpt-4o (highest quality, best for pro-tier tasks)
+#   - gpt-4o-mini (fast, cost-effective, good for flash-tier tasks)
+
 # === Anthropic Configuration (Future) ===
 ANTHROPIC_API_KEY=sk-ant-...
 # Optional: Anthropic Claude API key
 # Get your key: https://console.anthropic.com
-
-# === OpenAI Configuration (Future) ===
-OPENAI_API_KEY=sk-...
-# Optional: OpenAI API key
-# Get your key: https://platform.openai.com/api-keys
 ```
 
 ### Task-Specific Model Overrides
@@ -262,20 +269,32 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
 
 ---
 
-### OpenAI (Future)
+### OpenAI (Available)
 
 **Setup:**
 1. Get API key: https://platform.openai.com/api-keys
 2. Set `OPENAI_API_KEY` in `.env`
+3. (Optional) Set `OPENAI_MODEL` to override default (default: `gpt-4o-mini`)
+4. Set `DEFAULT_LLM_PROVIDER=openai` to use as primary, or configure as secondary via `CHAT_SECONDARY_PROVIDER=openai`
 
 **Available Models:**
-- `gpt-4o` - Latest GPT-4 Omni model
-- `gpt-4o-mini` - Faster, cheaper variant
-- `gpt-3.5-turbo` - Legacy fast model
+- `gpt-4o` - Highest quality, multimodal (recommended for pro-tier tasks)
+- `gpt-4o-mini` - Fast, cost-effective (default, recommended for flash-tier tasks)
+
+**Task Model Types:**
+- `gpt-4` - Maps to `gpt-4o`, used for complex tasks (conversation, conviction assessment, ceremony narrative)
+- `gpt-4-turbo` - Maps to `gpt-4o-mini`, used for fast tasks (moment detection, check-in personalization)
+
+**Strengths:**
+- High reliability and uptime
+- Strong instruction following
+- OpenAI-compatible API format (same as Groq)
+- Well-documented, widely supported
 
 **Best For:**
-- Specific tasks requiring GPT-4 capabilities
-- Testing/comparison purposes
+- Quality alternative when Gemini is experiencing reliability issues
+- Pro-tier tasks requiring nuanced therapeutic conversation
+- Production fallback alongside Groq
 
 ---
 
@@ -356,17 +375,36 @@ GROQ_MODEL=llama-3.1-8b-instant
 
 ---
 
-### Example 4: Multi-Provider Setup
+### Example 4: OpenAI Primary (Gemini Fallback)
+```bash
+DEFAULT_LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+
+CHAT_PRIMARY_PROVIDER=openai
+CHAT_SECONDARY_PROVIDER=gemini
+
+GEMINI_API_KEY=AI...
+# OpenAI handles chat, Gemini is failover
+```
+
+**Result**: High-reliability chat with OpenAI, Gemini as quality fallback
+
+---
+
+### Example 5: Multi-Provider Setup
 ```bash
 DEFAULT_LLM_PROVIDER=gemini
 GEMINI_API_KEY=AI...
 GROQ_API_KEY=gsk_...
+OPENAI_API_KEY=sk-...
 
-# Gemini is primary, Groq available as alternative
+# Gemini is primary, all others available
 # Switch providers by changing DEFAULT_LLM_PROVIDER
+# Configure failover via CHAT_PRIMARY_PROVIDER / CHAT_SECONDARY_PROVIDER
 ```
 
-**Result**: Flexibility to switch between providers
+**Result**: Maximum flexibility to switch between providers
 
 ---
 
@@ -545,6 +583,12 @@ GROQ_API_KEY=gsk_...
 | Model | Avg Latency | Best For |
 |-------|-------------|----------|
 | gemini-2.0-flash | 1-3s | All tasks |
+
+#### OpenAI (Available)
+| Model | Avg Latency | Best For |
+|-------|-------------|----------|
+| gpt-4o | 1-3s | Complex analysis, therapeutic conversation |
+| gpt-4o-mini | 500ms-1.5s | Fast tasks, classification, detection |
 
 #### Groq (Alternative)
 | Model | Avg Latency | Tokens/sec | Best For |
