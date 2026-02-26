@@ -1,6 +1,6 @@
 # Unhooked: Decision Records
 
-**Version:** 1.7
+**Version:** 1.8
 **Created:** 2026-01-19
 **Last Updated:** 2026-02-25
 **Document Type:** Architecture Decision Records (ADR)
@@ -597,10 +597,14 @@ Add OpenAI as a fully supported alternative LLM chat provider:
 2. **Create `server/utils/llm/providers/openai.ts`** implementing the `LLMProvider` interface (chat + streaming), following the same pattern as `gemini.ts` and `groq.ts`
 3. **Uncomment and complete the OpenAI registration** in `server/utils/llm/router.ts`
 4. **Target models:**
-   - `gpt-4o` — maps to `gpt-4` task model type (pro-equivalent, for complex tasks)
-   - `gpt-4o-mini` — maps to `gpt-4-turbo` task model type (flash-equivalent, for fast tasks)
-5. **OpenAI becomes a configurable primary or secondary provider** via existing `CHAT_PRIMARY_PROVIDER` / `CHAT_SECONDARY_PROVIDER` env vars
-6. **No changes to the resilience/failover architecture** — OpenAI plugs into the existing 3-tier retry system
+   - Standard: `gpt-4o` / `gpt-4o-mini` — maps to existing task model types
+   - Reasoning: `gpt-5-mini`, `gpt-5`, `o4-mini`, `o3-mini` — auto-detected and handled with parameter restrictions
+5. **Reasoning model compatibility:** The provider auto-detects reasoning models (o-series + gpt-5 family, excluding `-chat` variants) and:
+   - Strips unsupported parameters (`temperature`, `top_p`, `frequency_penalty`, `presence_penalty`)
+   - Converts `system` role messages to `developer` role (required by OpenAI reasoning models)
+   - Raises `max_completion_tokens` from 2k to 16k (reasoning/thinking tokens consume part of this budget)
+6. **OpenAI becomes a configurable primary or secondary provider** via existing `CHAT_PRIMARY_PROVIDER` / `CHAT_SECONDARY_PROVIDER` env vars
+7. **No changes to the resilience/failover architecture** — OpenAI plugs into the existing 3-tier retry system
 
 **Rationale:**
 
@@ -670,3 +674,4 @@ Add OpenAI as a fully supported alternative LLM chat provider:
 | 1.5 | 2026-01-27 | Added ADR-006 (Deprecate `illusion_number` in Favor of `illusion_key`) |
 | 1.6 | 2026-01-27 | Added ADR-007 (Session Completion — Server-Side Authority Pattern) |
 | 1.7 | 2026-02-25 | Added ADR-008 (Add OpenAI as Alternative LLM Chat Provider) |
+| 1.8 | 2026-02-25 | Updated ADR-008 with reasoning model support (gpt-5 family, o-series parameter restrictions) |

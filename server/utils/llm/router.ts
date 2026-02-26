@@ -1,6 +1,7 @@
 import type { LLMProvider, ModelType, ChatRequest, ChatResponse, StreamCallbacks } from './types'
 import { GeminiProvider } from './providers/gemini'
 import { GroqProvider } from './providers/groq'
+import { OpenAIProvider } from './providers/openai'
 
 export class ModelRouter {
   private providers: Map<ModelType, LLMProvider> = new Map()
@@ -12,23 +13,26 @@ export class ModelRouter {
     geminiModel?: string
     anthropicApiKey?: string
     openaiApiKey?: string
+    openaiModel?: string
   }) {
-    // Initialize Groq provider (primary)
+    // Initialize Groq provider
     if (config.groqApiKey) {
       this.providers.set('groq', new GroqProvider(config.groqApiKey, config.groqModel))
     }
 
-    // Initialize Gemini provider (fallback/testing)
+    // Initialize Gemini provider
     if (config.geminiApiKey) {
       this.providers.set('gemini', new GeminiProvider(config.geminiApiKey, config.geminiModel))
     }
 
-    // Claude and OpenAI providers will be added in future phases
+    // Initialize OpenAI provider
+    if (config.openaiApiKey) {
+      this.providers.set('openai', new OpenAIProvider(config.openaiApiKey, config.openaiModel))
+    }
+
+    // Claude provider will be added in a future phase
     // if (config.anthropicApiKey) {
     //   this.providers.set('claude', new ClaudeProvider(config.anthropicApiKey))
-    // }
-    // if (config.openaiApiKey) {
-    //   this.providers.set('openai', new OpenAIProvider(config.openaiApiKey))
     // }
   }
 

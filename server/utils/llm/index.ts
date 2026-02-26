@@ -13,7 +13,8 @@ export function getModelRouter(): ModelRouter {
       geminiApiKey: config.geminiApiKey,
       geminiModel: config.geminiModel,
       anthropicApiKey: config.anthropicApiKey,
-      openaiApiKey: config.openaiApiKey
+      openaiApiKey: config.openaiApiKey,
+      openaiModel: config.openaiModel,
     })
   }
   return router

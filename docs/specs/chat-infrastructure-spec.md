@@ -1267,18 +1267,15 @@ Export this as JSON or CSV from the Supabase dashboard and provide to the user.
 
 ---
 
-## Adding More Providers (Future)
+## Adding More Providers
 
-To add Claude or OpenAI, create new provider files:
+**OpenAI** is now fully implemented — see `server/utils/llm/providers/openai.ts` and ADR-008. The provider supports both standard models (gpt-4o, gpt-4o-mini) and reasoning models (gpt-5, gpt-5-mini, o-series) with automatic parameter adaptation.
+
+To add Claude, create a new provider file:
 
 ```typescript
 // server/utils/llm/providers/claude.ts
 export class ClaudeProvider implements LLMProvider {
-  // Implement chat() and chatStream()
-}
-
-// server/utils/llm/providers/openai.ts
-export class OpenAIProvider implements LLMProvider {
   // Implement chat() and chatStream()
 }
 ```
@@ -1305,3 +1302,4 @@ Then register them in `router.ts`. The chat API and UI don't need to change Ã¢
 | 2.0 | 2026-01-11 | Changed terminology from "myths" to "illusions" where applicable; Added version control header |
 | 3.0 | 2026-01-11 | Renamed from "Phase 1.3" to "Chat Infrastructure Specification" for feature-based organization; Added legacy reference for git commit traceability; Updated status to Complete; Updated cross-references to use hybrid naming |
 | 3.1 | 2026-02-25 | Updated to reflect multi-provider support: OpenAI added as available provider alongside Gemini and Groq; Updated key design decisions #5 (model selection) and #19 (provider reliability) to reflect current architecture; See ADR-008 |
+| 3.2 | 2026-02-25 | Updated "Adding More Providers" section: OpenAI now implemented (standard + reasoning models); Updated to reflect gpt-5 family and o-series reasoning model support |

@@ -1,6 +1,6 @@
 # LLM Configuration Guide
 
-**Last Updated:** 2026-02-25 (Added OpenAI as available provider)
+**Last Updated:** 2026-02-25 (OpenAI provider: added reasoning model support for gpt-5 family)
 
 ---
 
@@ -132,9 +132,16 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 # Optional: Default OpenAI model
 # Default: gpt-4o-mini
-# Options:
-#   - gpt-4o (highest quality, best for pro-tier tasks)
-#   - gpt-4o-mini (fast, cost-effective, good for flash-tier tasks)
+# Standard models (support temperature):
+#   - gpt-4o (high quality, multimodal)
+#   - gpt-4o-mini (fast, cost-effective)
+# Reasoning models (no temperature, use internal chain-of-thought):
+#   - gpt-5-mini (recommended reasoning model, 400k context)
+#   - gpt-5 (highest quality reasoning)
+#   - o4-mini (fast reasoning)
+#   - o3-mini (fast reasoning)
+# Note: Reasoning models automatically get higher token limits (16k vs 2k)
+# and system messages are converted to developer messages.
 
 # === Anthropic Configuration (Future) ===
 ANTHROPIC_API_KEY=sk-ant-...
@@ -277,9 +284,21 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
 3. (Optional) Set `OPENAI_MODEL` to override default (default: `gpt-4o-mini`)
 4. Set `DEFAULT_LLM_PROVIDER=openai` to use as primary, or configure as secondary via `CHAT_SECONDARY_PROVIDER=openai`
 
-**Available Models:**
-- `gpt-4o` - Highest quality, multimodal (recommended for pro-tier tasks)
-- `gpt-4o-mini` - Fast, cost-effective (default, recommended for flash-tier tasks)
+**Standard Models** (support `temperature`, `top_p`, `max_completion_tokens`):
+- `gpt-4o` - High quality, multimodal
+- `gpt-4o-mini` - Fast, cost-effective (default)
+
+**Reasoning Models** (no `temperature`/`top_p`; use internal chain-of-thought; `system` role auto-mapped to `developer`):
+- `gpt-5-mini` - Recommended reasoning model (400k context, cost-effective)
+- `gpt-5` - Highest quality reasoning (400k context)
+- `o4-mini` - Fast reasoning (200k context)
+- `o3-mini` - Fast reasoning (200k context)
+
+**Reasoning Model Behavior:**
+- The provider auto-detects reasoning models (o-series + gpt-5 family) and strips unsupported parameters
+- `max_completion_tokens` is raised to 16k for reasoning models (thinking tokens consume part of this budget)
+- System messages are automatically converted to `developer` role (required by OpenAI reasoning models)
+- Exception: `gpt-5.1-chat` variants are non-reasoning and support standard parameters
 
 **Task Model Types:**
 - `gpt-4` - Maps to `gpt-4o`, used for complex tasks (conversation, conviction assessment, ceremony narrative)
@@ -288,12 +307,13 @@ LLM_TASK_KEY_INSIGHT_SELECT_MODEL=
 **Strengths:**
 - High reliability and uptime
 - Strong instruction following
-- OpenAI-compatible API format (same as Groq)
+- Reasoning models excel at nuanced therapeutic conversation
 - Well-documented, widely supported
 
 **Best For:**
 - Quality alternative when Gemini is experiencing reliability issues
 - Pro-tier tasks requiring nuanced therapeutic conversation
+- Reasoning models for complex conviction assessment and ceremony narrative
 - Production fallback alongside Groq
 
 ---
@@ -585,10 +605,12 @@ OPENAI_API_KEY=sk-...
 | gemini-2.0-flash | 1-3s | All tasks |
 
 #### OpenAI (Available)
-| Model | Avg Latency | Best For |
-|-------|-------------|----------|
-| gpt-4o | 1-3s | Complex analysis, therapeutic conversation |
-| gpt-4o-mini | 500ms-1.5s | Fast tasks, classification, detection |
+| Model | Type | Avg Latency | Best For |
+|-------|------|-------------|----------|
+| gpt-4o | Standard | 1-3s | Complex analysis, therapeutic conversation |
+| gpt-4o-mini | Standard | 500ms-1.5s | Fast tasks, classification, detection |
+| gpt-5-mini | Reasoning | 3-8s | Nuanced reasoning, complex analysis (includes thinking time) |
+| gpt-5 | Reasoning | 5-15s | Highest quality reasoning (includes thinking time) |
 
 #### Groq (Alternative)
 | Model | Avg Latency | Tokens/sec | Best For |

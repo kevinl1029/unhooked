@@ -24,9 +24,9 @@ function getProviderModel(taskModel: TaskModelType): { provider: 'gemini' | 'cla
     case 'claude-haiku':
       return { provider: 'claude', model: 'claude-3-5-haiku-20241022' }
     case 'gpt-4':
-      return { provider: 'openai', model: 'gpt-4' }
+      return { provider: 'openai', model: 'gpt-4o' }
     case 'gpt-4-turbo':
-      return { provider: 'openai', model: 'gpt-4-turbo' }
+      return { provider: 'openai', model: 'gpt-4o-mini' }
     default:
       return { provider: 'gemini', model: 'gemini-2.0-flash' }
   }

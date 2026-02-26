@@ -113,9 +113,12 @@ export default defineNuxtConfig({
     geminiApiKey: process.env.GEMINI_API_KEY,
     geminiModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
 
+    // OpenAI Configuration
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+
     // Future Providers
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    openaiApiKey: process.env.OPENAI_API_KEY,
 
     // TTS Provider Configuration
     ttsProvider: process.env.TTS_PROVIDER || 'groq', // 'groq' | 'openai' | 'elevenlabs' | 'inworld'
