@@ -3,12 +3,14 @@ import type { LLMProvider, ChatRequest, ChatResponse, StreamCallbacks } from '..
 
 export class OpenAIProvider implements LLMProvider {
   name = 'openai'
+  modelId: string
   private client: OpenAI
   private modelName: string
 
   constructor(apiKey: string, modelName = 'gpt-4o-mini') {
     this.client = new OpenAI({ apiKey })
     this.modelName = modelName
+    this.modelId = modelName
   }
 
   // Reasoning models (o-series + gpt-5 family) don't support temperature, top_p,

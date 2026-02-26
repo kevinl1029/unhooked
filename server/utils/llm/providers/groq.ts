@@ -3,12 +3,14 @@ import type { LLMProvider, ChatRequest, ChatResponse, StreamCallbacks } from '..
 
 export class GroqProvider implements LLMProvider {
   name = 'groq'
+  modelId: string
   private client: Groq
   private modelName: string
 
   constructor(apiKey: string, modelName = 'openai/gpt-oss-20b') {
     this.client = new Groq({ apiKey })
     this.modelName = modelName
+    this.modelId = modelName
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {

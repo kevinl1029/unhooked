@@ -517,7 +517,7 @@ export default defineEventHandler(async (event) => {
       userId: user.sub,
       conversationId: convId,
       llmProvider: model,
-      llmModel: (model === 'groq' ? config.groqModel : config.geminiModel) || model,
+      llmModel: router.getModelId(model),
       ttsProvider: (config.ttsProvider as string) || 'unknown',
       ttsVoice: ({ groq: config.groqTtsVoice, openai: config.openaiTtsVoice, elevenlabs: config.elevenlabsVoiceId, inworld: config.inworldVoiceId } as Record<string, string | undefined>)[config.ttsProvider as string] || 'default',
       ttsMode: ttsStreamingMode,

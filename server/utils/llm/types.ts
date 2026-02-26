@@ -27,6 +27,7 @@ export interface StreamCallbacks {
 
 export interface LLMProvider {
   name: string
+  modelId: string
   chat(request: ChatRequest): Promise<ChatResponse>
   chatStream(request: ChatRequest, callbacks: StreamCallbacks): Promise<void>
 }

@@ -44,6 +44,11 @@ export class ModelRouter {
     return provider
   }
 
+  getModelId(model: ModelType): string {
+    const provider = this.providers.get(model)
+    return provider?.modelId || model
+  }
+
   listAvailableModels(): ModelType[] {
     return Array.from(this.providers.keys())
   }

@@ -3,12 +3,14 @@ import type { LLMProvider, ChatRequest, ChatResponse, StreamCallbacks, Message }
 
 export class GeminiProvider implements LLMProvider {
   name = 'gemini'
+  modelId: string
   private client: GoogleGenerativeAI
   private modelName: string
 
   constructor(apiKey: string, modelName = 'gemini-3-flash-preview') {
     this.client = new GoogleGenerativeAI(apiKey)
     this.modelName = modelName
+    this.modelId = modelName
   }
 
   private formatMessages(messages: Message[]) {
