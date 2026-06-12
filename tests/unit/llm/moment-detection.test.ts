@@ -8,15 +8,15 @@ import {
 
 describe('moment-detection', () => {
   describe('shouldAttemptDetection', () => {
-    it('returns false for messages with less than 20 words', () => {
+    it('returns false for messages with less than 10 words', () => {
       expect(shouldAttemptDetection('Hello')).toBe(false)
       expect(shouldAttemptDetection('This is a short message')).toBe(false)
-      expect(shouldAttemptDetection('One two three four five six seven eight nine ten')).toBe(false)
+      expect(shouldAttemptDetection('One two three four five six seven eight nine')).toBe(false)
     })
 
-    it('returns true for messages with 20 or more words', () => {
-      const twentyWords = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'
-      expect(shouldAttemptDetection(twentyWords)).toBe(true)
+    it('returns true for messages with 10 or more words', () => {
+      const tenWords = 'one two three four five six seven eight nine ten'
+      expect(shouldAttemptDetection(tenWords)).toBe(true)
     })
 
     it('returns true for longer messages', () => {

@@ -14,7 +14,7 @@ import type {
 import { ILLUSION_DATA, type IllusionKey } from '../task-types'
 
 // Minimum word count to trigger moment detection
-const MIN_WORD_COUNT = 20
+const MIN_WORD_COUNT = 10
 
 // Maximum detection calls per session
 const MAX_DETECTIONS_PER_SESSION = 20
