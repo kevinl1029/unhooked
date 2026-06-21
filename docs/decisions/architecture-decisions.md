@@ -1,8 +1,8 @@
 # Unhooked: Decision Records
 
-**Version:** 1.8
+**Version:** 1.9
 **Created:** 2026-01-19
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-06-20
 **Document Type:** Architecture Decision Records (ADR)
 
 ---
@@ -647,6 +647,65 @@ Add OpenAI as a fully supported alternative LLM chat provider:
 
 ---
 
+### ADR-009: Keep MP3 + Onset Compensation for Word Highlighting (over PCM)
+
+**Date:** 2026-06-20
+**Status:** Accepted
+**Decision Maker(s):** Kevin
+
+**Context:**
+
+Voice sessions highlight the AI's words one-by-one (karaoke style) as InWorld TTS audio plays. The highlight didn't perfectly track the spoken audio — it ran slightly ahead. Two hard constraints shaped the existing design and any fix: **low time-to-first-audio (TTFB)** and **low cost**.
+
+Root causes found:
+- **MP3 decoder priming silence.** The browser's `decodeAudioData` prepends ~tens of ms of silence to each decoded MP3 sentence buffer, but InWorld's word timestamps start at the real speech onset — so highlights led the audio, per sentence.
+- **Fragile client timeline reconstruction.** The highlight clock was rebuilt from a parallel cumulative-duration counter (`actualCumulativeMs`) that had to stay in lockstep with the Web Audio schedule across inter-sentence gaps and buffer underruns — any divergence caused drift.
+- **Coarse polling** (50ms `setInterval`) and a **stale model** (`inworld-tts-1`).
+
+Notably, InWorld bills **per character**, so audio encoding choice does **not** affect TTS cost — only the SSE payload size (and thus TTFB). InWorld also provides no client playback-sync reference implementation; their timestamp example just saves audio to a file and prints timings.
+
+**Decision:**
+
+Keep MP3 audio and compensate for its priming silence on the client, rather than switching to an encoder-delay-free format:
+
+1. **Onset compensation** — scan each decoded buffer for the first audible sample and offset that sentence's word times by it, cancelling MP3 priming.
+2. **Schedule-anchored timeline** — anchor each word's highlight time to the exact `AudioContext` time its buffer is scheduled to play (`scheduledTime`), eliminating the parallel cumulative counter and its drift.
+3. **requestAnimationFrame tracking** (~16ms) replaces the 50ms polling interval.
+4. **Upgrade default model to `inworld-tts-2`** for the most accurate word timestamps; handle the per-token WORD response (punctuation/whitespace as separate tokens) via token merging.
+
+**Rationale:**
+
+1. **Preserves both hard constraints.** MP3 stays the smallest payload (best TTFB), and since cost is per-character, nothing about cost changes from the encoding decision.
+2. **InWorld's own streaming example uses MP3.** Keeping MP3 stays on the path InWorld actually demonstrates for streaming + timestamps.
+3. **Onset compensation is self-correcting.** If a sentence has no priming, the detected onset ≈ the first word's start time, so no shift is applied.
+4. **Schedule-anchoring is correct by construction** — it reads ground truth (the actual buffer start time) instead of reconstructing it.
+
+**Alternatives Considered:**
+
+| Alternative | Why Rejected |
+|-------------|--------------|
+| **Switch to LINEAR16/WAV (PCM)** | No encoder delay, so timestamps map 1:1 with zero compensation — the "canonical" path InWorld's non-streaming examples use. But ~3× larger payload at 24kHz hurts TTFB on mobile. The onset fix achieves the same alignment without the TTFB cost. |
+| **Switch to FLAC** | Lossless + compressed (no encoder delay, smaller than PCM), but browser `decodeAudioData` support (esp. iOS Safari, which this code carefully supports) is riskier. |
+| **Patch the existing cumulative-counter bookkeeping** | Leaves the fragile dual-clock coupling in place; schedule-anchoring removes the drift class entirely for similar effort. |
+| **Keep `inworld-tts-1`** | Superseded model; newer models have more accurate timestamps and better quality at no cost penalty vs the 1.5-max tier. |
+
+**Consequences:**
+
+- Rework `composables/useStreamingAudioQueue.ts` (onset detection, schedule-anchored times, rAF loop; removed `actualCumulativeMs`/`inworldSentenceBaseMs`)
+- Rewrite `extractWordTimings` in `server/utils/tts/inworld.ts` for token merging; export it for testing; default model → `inworld-tts-2`
+- Update `nuxt.config.ts` default and `.env` / `.env.local` / `.env.example`
+- Add unit tests (token merging + onset anchoring); `localStorage.debugTiming='1'` enables per-sentence alignment logging
+- Update `docs/specs/voice-interface-spec.md` (Word Timing Alignment section) and `docs/guides/tts-cost-analysis.md` (current model + pricing)
+- Cost note: `inworld-tts-2` is pricier per character than `1.5-mini`; revisit if TTS cost becomes material
+
+**Related Documents:**
+- `docs/specs/voice-interface-spec.md` — Word Timing Alignment + InWorld Model Tier
+- `docs/guides/tts-cost-analysis.md` — Provider cost analysis
+- `composables/useStreamingAudioQueue.ts` — Highlight timeline + onset detection
+- `server/utils/tts/inworld.ts` — InWorld provider + `extractWordTimings`
+
+---
+
 ## Index
 
 | ADR | Title | Status | Date |
@@ -659,6 +718,7 @@ Add OpenAI as a fully supported alternative LLM chat provider:
 | 006 | Deprecate `illusion_number` in Favor of `illusion_key` | Accepted | 2026-01-27 |
 | 007 | Session Completion — Server-Side Authority Pattern | Accepted | 2026-01-27 |
 | 008 | Add OpenAI as Alternative LLM Chat Provider | Accepted | 2026-02-25 |
+| 009 | Keep MP3 + Onset Compensation for Word Highlighting (over PCM) | Accepted | 2026-06-20 |
 
 ---
 
@@ -675,3 +735,4 @@ Add OpenAI as a fully supported alternative LLM chat provider:
 | 1.6 | 2026-01-27 | Added ADR-007 (Session Completion — Server-Side Authority Pattern) |
 | 1.7 | 2026-02-25 | Added ADR-008 (Add OpenAI as Alternative LLM Chat Provider) |
 | 1.8 | 2026-02-25 | Updated ADR-008 with reasoning model support (gpt-5 family, o-series parameter restrictions) |
+| 1.9 | 2026-06-20 | Added ADR-009 (Keep MP3 + Onset Compensation for Word Highlighting; upgrade to inworld-tts-2) |

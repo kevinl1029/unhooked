@@ -1,8 +1,8 @@
 # Unhooked: Voice Interface Specification
 ## (Originally: Phase 3)
 
-**Version:** 3.3
-**Last Updated:** 2026-02-16
+**Version:** 3.4
+**Last Updated:** 2026-06-20
 **Status:** Implemented (TTS Streaming Modes: Ready for Development)
 **Document Type:** Technical Specification  
 **Legacy Reference:** Phase 3
@@ -66,7 +66,7 @@ User speaks Ã¢â€ â€™ OpenAI Whisper (STT) Ã¢â€ â€™ LLM (Ge
 |-----------|----------|-------|
 | Speech-to-Text | OpenAI Whisper API | $0.006/min |
 | LLM | Gemini (existing) | Per Chat Infrastructure spec |
-| Text-to-Speech (primary) | InWorld TTS | `inworld-tts-1` or `inworld-tts-1-max`; Dennis voice |
+| Text-to-Speech (primary) | InWorld TTS | `inworld-tts-2` (default); Dennis voice |
 | Text-to-Speech (fallback) | OpenAI TTS | Fallback if InWorld unavailable |
 | Text-to-Speech (alternatives) | ElevenLabs, Groq | Available via `ttsProvider` config |
 
@@ -149,14 +149,46 @@ runtimeConfig: {
 
 ### InWorld Model Tier
 
-The InWorld TTS provider supports two model tiers:
+The InWorld TTS provider supports the following model tiers (the legacy
+`inworld-tts-1` / `inworld-tts-1-max` models are superseded):
 
-| Model | Quality | Latency | Use Case |
-|-------|---------|---------|----------|
-| `inworld-tts-1` (default) | Standard | Lower | General use |
-| `inworld-tts-1-max` | Higher | Higher | When maximum prosodic quality is desired |
+| Model | Quality | Latency | Cost (on-demand) | Use Case |
+|-------|---------|---------|------------------|----------|
+| `inworld-tts-1.5-mini` | Good | Lowest | $25/1M chars | Lowest latency/cost |
+| `inworld-tts-1.5-max` | High | Higher | $35/1M chars | Maximum prosodic quality |
+| `inworld-tts-2` (default) | Highest | Higher | $35/1M chars | Best quality + most accurate word timestamps |
 
-Configured via `inworldModel` in `nuxt.config.ts`. Default is `inworld-tts-1`.
+Configured via `inworldModel` in `nuxt.config.ts`. Default is `inworld-tts-2`,
+chosen for the most accurate word-level timestamps (see Word Timing Alignment below).
+All tiers return word timestamps via `timestampType: 'WORD'`; on 1.5/2 the response
+returns one entry per *token* (words, punctuation, and whitespace as separate array
+elements), which the provider collapses into clean display words.
+
+### Word Timing Alignment
+
+Word-by-word highlighting is driven by InWorld's actual word timestamps, anchored to
+real audio playback for tight sync. Key implementation details:
+
+- **Schedule-anchored timeline.** Each word's highlight time is anchored to the exact
+  `AudioContext` time its decoded buffer is scheduled to play (`scheduledTime`), not a
+  separately-tracked cumulative-duration counter. This removes a class of drift between
+  the highlight clock and the Web Audio playback schedule.
+  ([composables/useStreamingAudioQueue.ts](../../composables/useStreamingAudioQueue.ts))
+- **MP3 onset compensation.** MP3 decoding prepends ~tens of ms of "priming" silence to
+  each decoded buffer, but InWorld's timestamps start at the real speech onset. The
+  client scans each buffer for the first audible sample and offsets that sentence's word
+  times by it, so highlights line up with actual sound. This keeps MP3 (smallest payload
+  / best TTFB; encoding does not affect InWorld's per-character cost) while achieving
+  precise alignment — InWorld provides no client playback-sync reference, only the raw
+  timestamps.
+- **requestAnimationFrame tracking.** The current word is recomputed each animation frame
+  (~16ms) against the anchored times, replacing the previous 50ms polling interval.
+- **Token merging.** Standalone punctuation tokens are appended to the preceding word
+  (`world` + `", "` → `world,`) and whitespace/empty tokens are dropped while extending
+  the prior word's end time, so punctuation never renders as a separate highlighted word.
+  ([server/utils/tts/inworld.ts](../../server/utils/tts/inworld.ts) `extractWordTimings`)
+- **Diagnostics.** Set `localStorage.debugTiming = '1'` in the browser to log per-sentence
+  `scheduledTime`, detected `onsetMs`, and word count for alignment verification.
 
 ### Sentence Detection
 
@@ -1908,6 +1940,7 @@ Well within the $199 price point (~0.6% of revenue).
 | 3.1 | 2026-02-16 | Added TTS Synthesis Modes section (sentence-batch vs true-streaming); Updated provider table to multi-provider architecture (InWorld primary, OpenAI fallback); Added provider fallback chain requirement; Documented SSE audio_chunk event contract for chat-integrated TTS; Added per-sentence failure handling; Added TTS streaming modes acceptance criteria; Requirements refinement session for quality vs latency tradeoff |
 | 3.2 | 2026-02-16 | Technical design refinement: Added Implementation Architecture section with design decisions, mode routing logic, observability implementation, and files changed. Added 5 user stories with acceptance criteria (Given/When/Then), technical notes, dependencies, and complexity estimates. Added test specification with unit test cases for SequentialTTSProcessor mode routing and integration test cases for chat endpoint TTS wiring. |
 | 3.3 | 2026-02-16 | Readiness review: Updated SSE done event contract to include `ttsMode` field. Added invalid config value handling requirement and AC (Story 1 AC #4). Added `getEffectiveMode()` method ACs to Story 2 (ACs #6-8). Pinned effective mode exposure mechanism. Added 4 test cases (3 unit for getEffectiveMode, 1 integration for invalid config). |
+| 3.4 | 2026-06-20 | Word-by-word highlighting alignment improvements: upgraded default InWorld model to `inworld-tts-2` (updated provider table and model tier section to current lineup). Added Word Timing Alignment section documenting schedule-anchored highlight timeline, MP3 onset compensation, requestAnimationFrame tracking, and token merging for the per-token WORD response format. Added `localStorage.debugTiming` diagnostics. |
 
 ---
 

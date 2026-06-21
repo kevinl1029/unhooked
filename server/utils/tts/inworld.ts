@@ -34,10 +34,27 @@ interface InworldStreamResponse {
 
 const INWORLD_API_BASE = 'https://api.inworld.ai'
 
+// Matches a token that contains at least one letter or number (i.e. a real word).
+// Anything else (",", ". ", " ", "") is punctuation/whitespace.
+const HAS_ALPHANUMERIC = /[\p{L}\p{N}]/u
+
 /**
- * Extract word timings from InWorld timestamp info
+ * Extract word timings from InWorld timestamp info.
+ *
+ * On the 1.5/2 models the WORD response returns one entry per *token* — words,
+ * punctuation, AND whitespace as separate array elements, e.g.
+ *   ["", "Hello", " ", "world", ", ", "this", ...]
+ * We collapse that into clean, displayable words:
+ *   - Word tokens become their own timing entry.
+ *   - Punctuation tokens (",", ". ") are appended to the previous word for display
+ *     ("world" + ", " -> "world,") and extend its endMs.
+ *   - Whitespace/empty tokens are dropped but still extend the previous word's endMs
+ *     so a word stays highlighted through trailing pauses.
+ * Leading punctuation/whitespace with no preceding word is discarded.
+ *
+ * Exported for unit testing.
  */
-function extractWordTimings(timestampInfo?: InworldTimestampInfo): WordTiming[] {
+export function extractWordTimings(timestampInfo?: InworldTimestampInfo): WordTiming[] {
   const wordTimings: WordTiming[] = []
 
   if (timestampInfo?.wordAlignment) {
@@ -45,14 +62,33 @@ function extractWordTimings(timestampInfo?: InworldTimestampInfo): WordTiming[] 
 
     if (words && words.length > 0) {
       for (let i = 0; i < words.length; i++) {
-        const word = words[i]
-        if (!word || word.trim() === '') continue
+        const token = words[i]
+        if (token === undefined || token === null) continue
 
-        wordTimings.push({
-          word,
-          startMs: Math.round((wordStartTimeSeconds[i] || 0) * 1000),
-          endMs: Math.round((wordEndTimeSeconds[i] || 0) * 1000)
-        })
+        const endMs = Math.round((wordEndTimeSeconds[i] || 0) * 1000)
+
+        if (HAS_ALPHANUMERIC.test(token)) {
+          // A real word — start a new timing entry.
+          wordTimings.push({
+            word: token,
+            startMs: Math.round((wordStartTimeSeconds[i] || 0) * 1000),
+            endMs
+          })
+          continue
+        }
+
+        // Punctuation or whitespace — fold into the preceding word.
+        const prev = wordTimings[wordTimings.length - 1]
+        if (!prev) continue // leading punctuation/whitespace with no word yet
+
+        const punctuation = token.trim()
+        if (punctuation) {
+          prev.word += punctuation
+        }
+        // Extend the word's highlight through the punctuation/pause.
+        if (endMs > prev.endMs) {
+          prev.endMs = endMs
+        }
       }
     }
   }
@@ -63,7 +99,7 @@ function extractWordTimings(timestampInfo?: InworldTimestampInfo): WordTiming[] 
 export function createInworldProvider(
   apiKey: string,
   defaultVoiceId: string = 'Dennis',
-  model: string = 'inworld-tts-1'
+  model: string = 'inworld-tts-2'
 ): TTSProvider {
   // Shared request body builder
   const buildRequestBody = (text: string, voice: string) => ({

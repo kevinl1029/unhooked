@@ -59,12 +59,23 @@ class MockAudioContext {
   decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     // Return a minimal mock AudioBuffer
     const duration = Math.max(0.1, arrayBuffer.byteLength / (this.sampleRate * 2))
+    const length = Math.floor(duration * this.sampleRate)
+    const sampleRate = this.sampleRate
+    // Simulate leading silence (MP3 "priming") followed by audible samples so
+    // onset detection has something to find. Default 0 => all-zero buffer.
+    const onsetSample = Math.floor(mockOnsetSec * sampleRate)
     return Promise.resolve({
       duration,
-      length: Math.floor(duration * this.sampleRate),
+      length,
       numberOfChannels: 1,
-      sampleRate: this.sampleRate,
-      getChannelData: () => new Float32Array(Math.floor(duration * this.sampleRate)),
+      sampleRate,
+      getChannelData: () => {
+        const arr = new Float32Array(length)
+        if (mockOnsetSec > 0) {
+          for (let i = onsetSample; i < length; i++) arr[i] = 0.5
+        }
+        return arr
+      },
       copyFromChannel: vi.fn(),
       copyToChannel: vi.fn(),
     } as unknown as AudioBuffer)
@@ -85,6 +96,8 @@ class MockAudioContext {
 // Track which MockAudioContext instances are created
 let createdContexts: MockAudioContext[] = []
 let startSuspended = false
+// Simulated audio onset (seconds) for decoded buffers; 0 => all-zero (no onset).
+let mockOnsetSec = 0
 
 // Generate a valid minimal WAV base64 string
 function createMinimalWavBase64(durationMs = 100): string {
@@ -144,6 +157,7 @@ describe('useStreamingAudioQueue - iOS Safari AudioContext fix', () => {
     vi.clearAllMocks()
     createdContexts = []
     startSuspended = false
+    mockOnsetSec = 0
 
     // Install mock AudioContext globally
     vi.stubGlobal('AudioContext', class extends MockAudioContext {
@@ -552,6 +566,46 @@ describe('useStreamingAudioQueue - iOS Safari AudioContext fix', () => {
 
       expect(allWordTimings.value.length).toBe(2)
       expect(createdContexts[0]).toBe(ctx) // Same context throughout
+    })
+  })
+
+  describe('InWorld (audio/mpeg) onset anchoring', () => {
+    function makeInworldChunk(overrides: Partial<AudioChunk> = {}): AudioChunk {
+      return makeChunk({
+        contentType: 'audio/mpeg',
+        audioBase64: createMinimalWavBase64(1000),
+        wordTimings: [
+          { word: 'Hello', startMs: 0, endMs: 400 },
+          { word: 'world', startMs: 500, endMs: 900 },
+        ],
+        text: 'Hello world',
+        ...overrides,
+      })
+    }
+
+    it('anchors word times to schedule start with no shift when there is no priming', async () => {
+      mockOnsetSec = 0 // all-zero buffer => onset not found => no shift
+      const { initialize, enqueueChunk, allWordTimings } = useStreamingAudioQueue()
+      await initialize()
+
+      await enqueueChunk(makeInworldChunk())
+
+      // currentTime=0 => scheduledTime=0, playbackStartTime=0 => timings unchanged
+      expect(allWordTimings.value[0].startMs).toBe(0)
+      expect(allWordTimings.value[1].startMs).toBe(500)
+    })
+
+    it('shifts all word times by the detected onset to cancel MP3 priming silence', async () => {
+      mockOnsetSec = 0.05 // 50ms of leading silence before audible audio
+      const { initialize, enqueueChunk, allWordTimings } = useStreamingAudioQueue()
+      await initialize()
+
+      await enqueueChunk(makeInworldChunk())
+
+      // Every word shifted forward by the 50ms onset, preserving inter-word spacing
+      expect(allWordTimings.value[0].startMs).toBe(50)
+      expect(allWordTimings.value[1].startMs).toBe(550)
+      expect(allWordTimings.value[1].endMs).toBe(950)
     })
   })
 })
