@@ -50,9 +50,10 @@ This report compares the cost of text-to-speech providers for the Unhooked app, 
 ## TTS Provider Pricing
 
 ### Inworld TTS (Current Provider)
-- **Model:** inworld-tts-1.5-max
-- **Pricing:** $10 per 1M characters
-- **Billing:** Pure pay-per-use, no subscription
+- **Model:** inworld-tts-2 (as of 2026-06-20; upgraded from inworld-tts-1.5-max for the most accurate word-level timestamps — see the Word Timing Alignment section of the [voice interface spec](../specs/voice-interface-spec.md))
+- **Pricing:** inworld-tts-2 is $35/1M characters on-demand, dropping toward $10–$12.50/1M at higher subscription/enterprise tiers. inworld-tts-1.5-mini remains the cheapest at $25/1M on-demand (~$5/1M at scale).
+- **Billing:** Pay-per-use (on-demand) or tiered subscription
+- **Note:** The per-conversation and full-program figures below were computed against inworld-tts-1.5-max at $10/1M and are retained as a baseline. Multiply by the model/tier rate above to project inworld-tts-2 costs (e.g. ~3.5× the figures below at the on-demand $35/1M rate, roughly unchanged at enterprise scale).
 
 ### ElevenLabs
 

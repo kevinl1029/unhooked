@@ -129,7 +129,7 @@ export default defineNuxtConfig({
     openaiTtsVoice: process.env.OPENAI_TTS_VOICE || 'nova',
     inworldApiKey: process.env.INWORLD_API_KEY,
     inworldVoiceId: process.env.INWORLD_VOICE_ID || 'Dennis',
-    inworldModel: process.env.INWORLD_MODEL || 'inworld-tts-1', // 'inworld-tts-1' | 'inworld-tts-1-max'
+    inworldModel: process.env.INWORLD_MODEL || 'inworld-tts-2', // 'inworld-tts-1.5-mini' | 'inworld-tts-1.5-max' | 'inworld-tts-2'
     ttsStreamingMode: process.env.TTS_STREAMING_MODE || 'sentence-batch', // 'sentence-batch' | 'true-streaming'
 
     supabaseUrl: process.env.SUPABASE_URL,
