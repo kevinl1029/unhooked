@@ -62,6 +62,8 @@ Features that have been built and are live.
 | Document | Description |
 |----------|-------------|
 | [analytics-spec.md](specs/analytics-spec.md) | Analytics and event tracking for market validation funnel |
+| [drift-protection-spec.md](specs/drift-protection-spec.md) | Post-ceremony relapse prevention for the low-salience "why not" drift window (days 10–30): drift model, inoculation, reconstruction sessions, asymmetry ledger |
+| [re-entry-spec.md](specs/re-entry-spec.md) | Getting back after a relapse: a ~10-minute re-entry session built from the user's own material, with no program restart or re-staged ceremony |
 
 ## Decisions
 
